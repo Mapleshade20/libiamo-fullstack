@@ -720,7 +720,9 @@
 		"exNoTurns": "No turns left.",
 		"exTurnsLeft": "Turns left",
 		"exUnavailable": "Not available in this simulation.",
-		"auAgree": "Signing up means you accept the"
+		"auAgree": "Signing up means you accept the",
+		"rvSaving": "Saving your reviews. Please wait before leaving.",
+		"rvDiscard": "Discard pending ratings and reload"
 	},
 	"zh-CN": {
 		"next": "下一处",
@@ -1443,6 +1445,8 @@
 		"exNoTurns": "没有剩余回合了。",
 		"exTurnsLeft": "剩余回合",
 		"exUnavailable": "这个模拟里用不了。",
-		"auAgree": "注册即表示你同意"
+		"auAgree": "注册即表示你同意",
+		"rvSaving": "正在保存复习记录，请等保存完成后再离开。",
+		"rvDiscard": "放弃待保存的评分并重新加载"
 	}
 }

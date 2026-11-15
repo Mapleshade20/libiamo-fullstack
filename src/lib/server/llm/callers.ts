@@ -42,12 +42,14 @@ export type LearnerScope = {
 	fresh?: boolean;
 };
 export async function learnerCaller(scope: LearnerScope): Promise<Caller> {
-	const key = await keyOf(scope.user.id);
-	const route = key?.route ?? null;
+	const resolve = async () => {
+		const key = await keyOf(scope.user.id);
+		const route = key?.route ?? null;
+		return { route, grader: route ? graderFor(route.provider, route.model) : undefined, decision: key?.decision };
+	};
 	return new Caller({
-		route,
-		grader: route ? graderFor(route.provider, route.model) : undefined,
-		decision: key?.decision,
+		...(await resolve()),
+		resolve,
 		lanes: scope.lanes,
 		cache,
 		fresh: scope.fresh,

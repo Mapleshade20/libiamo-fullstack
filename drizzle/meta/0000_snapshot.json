@@ -1,5 +1,5 @@
 {
-  "id": "a0d2d1bb-b601-4ce7-a2c7-dc937a9fb77c",
+  "id": "03bd62d0-6ac1-4eb9-9bb3-d2fbb35b7111",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1420,6 +1420,42 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "llm_call_user_created_idx": {
+          "name": "llm_call_user_created_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "llm_call_prompt_idx": {
+          "name": "llm_call_prompt_idx",
+          "columns": [
+            {
+              "expression": "prompt_hash",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -1448,6 +1484,19 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
+        },
+        "llm_call_prompt_hash_llm_prompt_hash_fk": {
+          "name": "llm_call_prompt_hash_llm_prompt_hash_fk",
+          "tableFrom": "llm_call",
+          "tableTo": "llm_prompt",
+          "columnsFrom": [
+            "prompt_hash"
+          ],
+          "columnsTo": [
+            "hash"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1471,6 +1520,12 @@
           "primaryKey": true,
           "notNull": true
         },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "text": {
           "name": "text",
           "type": "text",
@@ -1478,8 +1533,38 @@
           "notNull": true
         }
       },
-      "indexes": {},
-      "foreignKeys": {},
+      "indexes": {
+        "llm_prompt_user_idx": {
+          "name": "llm_prompt_user_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "llm_prompt_user_id_user_id_fk": {
+          "name": "llm_prompt_user_id_user_id_fk",
+          "tableFrom": "llm_prompt",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -1877,6 +1962,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "assignment": {
+          "name": "assignment",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "place": {
           "name": "place",
           "type": "text",
@@ -2065,6 +2156,22 @@
             }
           ],
           "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "piece_notes_retry_idx": {
+          "name": "piece_notes_retry_idx",
+          "columns": [
+            {
+              "expression": "notes_requested_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"piece\".\"notes_requested_at\" is not null",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -2480,6 +2587,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "request_id": {
+          "name": "request_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "elapsed_seconds": {
           "name": "elapsed_seconds",
           "type": "integer",
@@ -2552,7 +2665,15 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "review_log_request_id_unique": {
+          "name": "review_log_request_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "request_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {
         "review_log_rating_check": {
@@ -2864,11 +2985,18 @@
           "primaryKey": false,
           "notNull": false
         },
-        "original_hash": {
-          "name": "original_hash",
+        "input_hash": {
+          "name": "input_hash",
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "generation": {
+          "name": "generation",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "uuidv7()"
         },
         "made_at": {
           "name": "made_at",

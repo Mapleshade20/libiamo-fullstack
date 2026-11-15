@@ -4,6 +4,8 @@ import { app } from "#lib/account/app.svelte.ts";
 import { reducedMotion } from "#lib/components/common/motion.ts";
 import { createPlay } from "#lib/components/stickers/play.svelte.ts";
 import Sticker from "#lib/components/stickers/Sticker.svelte";
+import { sandboxed } from "#lib/components/tour/sandbox.svelte.ts";
+import { tourScenarios } from "#lib/components/tour/scenarios.ts";
 import Button from "#lib/components/ui/button/button.svelte";
 import { hasScenarios } from "#lib/constants.ts";
 import { nameOf, tx } from "#lib/i18n/tx.ts";
@@ -24,7 +26,7 @@ let { head }: { head: string } = $props();
 const follow = $derived(followUp());
 const openPiece = $derived(myWriting().find((w) => w.open));
 // Four at most: continue, follow-up, then scenarios; the "+" card only when there is room.
-const offered = $derived(hasScenarios(app.lang) ? await shelfScenarios(app.lang) : []);
+const offered = $derived(sandboxed() ? tourScenarios(app.lang) : hasScenarios(app.lang) ? await shelfScenarios(app.lang) : []);
 const prompts = $derived(offered.slice(0, 4 - (openPiece ? 1 : 0) - (follow ? 1 : 0)));
 const roomForAdd = $derived((openPiece ? 1 : 0) + (follow ? 1 : 0) + prompts.length < 4);
 const deck = $derived(await dueNow());

@@ -32,6 +32,8 @@ export type Recorder = (r: CallRecord) => void;
 
 export type CallerInit = {
 	route: Route | null;
+	/** Resolve credentials at call time; a revision can outlive a change of key or model. */
+	resolve?: () => Promise<Pick<CallerInit, "route" | "grader" | "decision">>;
 	/** How grading asks (lib/llm/providers.ts graderFor). */
 	grader?: "g2" | "g3";
 	/** The model that answers decisions on the route's key (lib/llm/providers.ts decisionModelFor); none: the chat model. */
@@ -60,6 +62,12 @@ export class Caller {
 	get lanes() {
 		return this.init.lanes;
 	}
+	async resolved() {
+		if (!this.init.resolve) return this;
+		const current = await this.init.resolve();
+		Object.assign(this.init, current);
+		return new Caller({ ...this.init, ...current, resolve: undefined }, this.purpose, this.background);
+	}
 	/** The same caller, for another purpose (a guess stays a guess). */
 	for(purpose: string) {
 		return new Caller(this.init, purpose, this.background);
@@ -83,7 +91,7 @@ export type CallOptions = {
 export type CallResult = { text: string; usage: Usage; ms: number; cached: boolean; costUsd: number };
 
 export async function chat(messages: Message[], opts: CallOptions): Promise<CallResult> {
-	const ai = opts.ai;
+	const ai = await opts.ai.resolved();
 	const route = ai.route;
 	if (!route) throw new LimitError("nokey");
 	const effort = opts.effort ?? "medium";

@@ -79,6 +79,23 @@ describe("signing up", () => {
 });
 
 describe("signing in", () => {
+	it("refuses direct email changes, even with a valid session; the reauthenticated server command can request one", async () => {
+		const { client, auth, signInWithUser } = await instance();
+		await signUp(client, "ada@example.test", "plum orchard lantern 47");
+		const ctx = await auth.$context;
+		const found = await ctx.internalAdapter.findUserByEmail("ada@example.test");
+		expect(found).toBeTruthy();
+		await ctx.internalAdapter.updateUser(found?.user.id as string, { emailVerified: true });
+		const { headers } = await signInWithUser("ada@example.test", "plum orchard lantern 47");
+		const before = sent.length;
+		const direct = await client.changeEmail({ newEmail: "attacker@example.test", fetchOptions: { headers } });
+		expect(direct.error?.code).toBe("REAUTHENTICATION_REQUIRED");
+		expect(sent).toHaveLength(before);
+		const internal = await auth.api.changeEmail({ headers, body: { newEmail: "ada-new@example.test", callbackURL: "/settings?emailChanged" } });
+		expect(internal.status).toBe(true);
+		expect(sent.at(-1)?.to).toBe("ada-new@example.test");
+	});
+
 	it("asks the store to grant the admin role when there is a list", async () => {
 		env.ADMIN_EMAILS = ["ada@example.test"];
 		const { client, auth } = await instance();

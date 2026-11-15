@@ -2,6 +2,7 @@
 import type { Component } from "svelte";
 import { account } from "#lib/account/account.svelte.ts";
 import { app } from "#lib/account/app.svelte.ts";
+import { refreshQuery } from "#lib/client/refresh.ts";
 import type { ExchangeApi } from "#lib/components/exchange/actions.ts";
 import ConversationReadReceipt from "#lib/components/exchange/ConversationReadReceipt.svelte";
 import type { SurfaceProps } from "#lib/components/exchange/controller.svelte.ts";
@@ -56,7 +57,7 @@ const api: ExchangeApi = {
 		if (ex !== null) await finishPlace(ex);
 	},
 	async refresh() {
-		await place.refresh();
+		await refreshQuery(place);
 	},
 	async hint(input) {
 		const ex = exchangeId();
@@ -67,7 +68,7 @@ const api: ExchangeApi = {
 		const ex = exchangeId();
 		if (ex === null) return;
 		const r = await readInPlace({ exchangeId: ex, messageId });
-		if (r.worldScheduled) await place.refresh();
+		if (r.worldScheduled) await refreshQuery(place);
 	},
 };
 const Surface = $derived(view ? SURFACES[view.place] : null);

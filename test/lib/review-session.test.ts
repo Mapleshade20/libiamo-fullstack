@@ -50,3 +50,28 @@ test("the server's answer to a rating says what the card's next ratings do", () 
 	s.settle(it, { queue: "learning", outcomes: { ...fresh, good: leave(1) } });
 	assert.deepEqual(s.intervals(it), ["1m", "6m", "1d", "4d"]);
 });
+
+test("a learning card cannot be rated again with unconfirmed outcomes, or finish before confirmation", () => {
+	const s = createSitting([{ id: "a", queue: "new" as const, outcomes: fresh }], () => 0);
+	const it = s.rate("good", true);
+	assert.ok(it);
+	assert.equal(s.current, undefined);
+	assert.equal(s.waiting, 1);
+	assert.equal(s.rate("good", true), undefined);
+	s.settle(it, { queue: "learning", outcomes: { ...fresh, good: leave(1) } });
+	s.rate("good", true);
+	assert.equal(s.waiting, 1);
+	s.settle(it, { queue: "review", outcomes: known });
+	assert.equal(s.waiting, 0);
+	assert.equal(s.current, undefined);
+	assert.equal(s.done.length, 1);
+});
+
+test("the server's queue corrects an optimistic prediction", () => {
+	const s = createSitting([{ id: "a", queue: "new" as const, outcomes: fresh }], () => 0);
+	const it = s.rate("good", true);
+	assert.ok(it);
+	s.settle(it, { queue: "review", outcomes: known });
+	assert.deepEqual(s.counts(), { new: 0, learning: 0, review: 0 });
+	assert.equal(s.done.length, 1);
+});

@@ -9,15 +9,17 @@ import { tip } from "#lib/components/common/tip.ts";
 import RateMark from "#lib/components/review/RateMark.svelte";
 import ReviewFace from "#lib/components/review/ReviewFace.svelte";
 import FocusBar from "#lib/components/shell/FocusBar.svelte";
-import { practised, sandboxed } from "#lib/components/tour/sandbox.svelte.ts";
+import { toast } from "#lib/components/shell/toast.svelte.ts";
+import { practised, rateTourCard, sandboxed } from "#lib/components/tour/sandbox.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
 import { tx } from "#lib/i18n/tx.ts";
 import { rate as sendRating } from "#lib/notebook/notebook.remote.ts";
 import { deckNow } from "#lib/notebook/notebook.svelte.ts";
 import type { ReviewCard } from "#lib/notebook/types.ts";
 import { hintOf, type Verdict, verdictOf } from "#lib/review/check.ts";
+import { ratingSender } from "#lib/review/sender.ts";
 import { createSitting, type Item, RATINGS, type Rating } from "#lib/review/session.ts";
-import { goto } from "$app/navigation";
+import { beforeNavigate, goto } from "$app/navigation";
 
 /*
  * Review: one card at a time, Anki's way. The learner answers first (the field says what to write), then the card
@@ -44,7 +46,7 @@ $effect(() => {
 });
 const counts = $derived((void v, sitting.counts()));
 const reviewed = $derived((void v, sitting.done.length));
-const finished = $derived(!item);
+const finished = $derived((void v, !item && sitting.waiting === 0));
 const next = $derived((void v, item ? sitting.intervals(item) : []));
 const progress = $derived(reviewed / Math.max(1, reviewed + counts.new + counts.learning + counts.review));
 const TONE: Record<Rating, string> = { again: "--bad", hard: "--warn", good: "--ok", easy: "--cool" };
@@ -87,24 +89,41 @@ function check(text: string) {
 }
 /* Ratings go to the server one after another (each sees the last one's card, so the one that empties the queue
    knows it), while the page moves on at once. */
-let sending: Promise<unknown> = Promise.resolve();
+type Job = { it: Item<ReviewCard>; rating: Rating; verdict: Verdict | null; seconds: number; requestId: string };
+const sending = ratingSender<Job>(
+	async ({ it, ...rating }) => {
+		const s = await sendRating({ id: it.card.id, ...rating });
+		sitting.settle(it, s);
+	},
+	() => {
+		v++;
+		void focusNow();
+	},
+);
+const failed = $derived((void v, sending.failed));
+let discarding = false;
+function reloadSaved() {
+	discarding = true;
+	location.reload();
+}
+beforeNavigate(({ cancel }) => {
+	if (!discarding && !sandboxed() && sitting.waiting > 0) {
+		cancel();
+		toast(tx("rvSaving"));
+	}
+});
 function send(it: Item<ReviewCard>, r: Rating, verdict: Verdict | null, seconds: number) {
 	if (sandboxed()) {
+		sitting.settle(it, rateTourCard(it.card.id, r));
 		if (!sitting.current) practised("reviewed");
 		return;
 	}
-	sending = sending
-		.then(() => sendRating({ id: it.card.id, rating: r, verdict, seconds }))
-		.then((s) => {
-			sitting.settle(it, s);
-			v++;
-		})
-		.catch((e) => console.error("a rating was not saved", e));
+	sending.enqueue({ it, rating: r, verdict, seconds, requestId: crypto.randomUUID() });
 }
 function rate(r: Rating) {
-	if (!shown) return;
+	if (!shown || failed) return;
 	const verdict = shown.given.trim() ? shown.verdict : "none";
-	const it = sitting.rate(r);
+	const it = sitting.rate(r, !sandboxed());
 	if (it) send(it, r, verdict, Math.min(86_400, Math.round((Date.now() - shownAt) / 1000)));
 	v++;
 	shown = null;
@@ -162,6 +181,15 @@ onMount(() => {
 		</div>
 	</FocusBar>
 	<main class="wrap">
+		{#if failed}
+			<div role="alert">
+				<p>{tx("auSomethingWrong")}</p>
+				<Button onclick={() => sending.retry()}>{tx("tryAgain")}</Button>
+				<Button variant="secondary" class="h-auto min-h-10 max-w-full whitespace-normal py-2" onclick={reloadSaved}>{tx("rvDiscard")}</Button>
+			</div>
+		{:else if !item && !finished}
+			<div role="status" aria-busy="true">{tx("rvSaving")}</div>
+		{/if}
 		{#if finished}
 			<section class="study summary in">
 				<h1>{tx("rvDone")}</h1>

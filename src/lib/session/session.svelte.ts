@@ -3,6 +3,7 @@ import { app } from "#lib/account/app.svelte.ts";
 import ChoiceCard from "#lib/components/session/ChoiceCard.svelte";
 import FixCard from "#lib/components/session/FixCard.svelte";
 import NoteCard from "#lib/components/session/NoteCard.svelte";
+import { captureTourState } from "#lib/components/tour/lifetime.ts";
 import { practised, sandboxed } from "#lib/components/tour/sandbox.svelte.ts";
 import { isAppLang } from "#lib/constants.ts";
 import { loadLang, t } from "#lib/i18n/index.svelte.ts";
@@ -255,14 +256,22 @@ export class Session {
 	}
 
 	/* ---------- Server ---------- */
+	private currentChapter = captureTourState();
+	private disposed = false;
+	private active = () => !this.disposed && this.currentChapter();
 	private async api<T>(action: string, body: object = {}): Promise<T> {
+		if (!this.active()) throw new Cancelled();
 		needKey();
 		const r = await fetch(`/api/s/${this.sid}/${action}`, {
 			method: "POST",
 			headers: { "content-type": "application/json" },
 			body: JSON.stringify(body),
+		}).catch((e) => {
+			if (!this.active()) throw new Cancelled();
+			throw e;
 		});
 		const v = await r.json().catch(() => ({}));
+		if (!this.active()) throw new Cancelled();
 		// The server says what stopped a model call: no key, the key refused, or a failure a retry may fix.
 		if (!r.ok) throw v.code === "nokey" || v.code === "refused" ? new LimitError(v.code) : new Error(v.error || this.tt("error"));
 		return v as T;
@@ -271,12 +280,12 @@ export class Session {
 	private marking = false;
 	private dirty = false;
 	private mark() {
-		if (sandboxed()) return;
+		if (!this.active() || sandboxed()) return;
 		this.dirty = true;
 		if (this.marking) return;
 		this.marking = true;
 		(async () => {
-			while (this.dirty) {
+			while (this.dirty && this.active()) {
 				this.dirty = false;
 				const page: Bookmark = { phase: this.phase === 2 ? 2 : 1, answers: this.answers, ...(this.p2mark ? { p2: this.p2mark } : {}) };
 				await fetch(`/api/s/${this.sid}/progress`, {
@@ -317,6 +326,7 @@ export class Session {
 	/* ---------- Running ---------- */
 	/** From the start, or back where the revision was. */
 	async start() {
+		if (!this.active()) return;
 		const r = this.resumed;
 		if (!r) return this.run(0);
 		if (r.scene) await this.applyScene(r.scene);
@@ -328,6 +338,7 @@ export class Session {
 		this.run(at);
 	}
 	stop() {
+		this.disposed = true;
 		this.clock.next();
 		this.answer = null;
 		this.go = null;

@@ -1,49 +1,55 @@
+import { error } from "@sveltejs/kit";
 import { and, eq, inArray } from "drizzle-orm";
 import { LEARNABLE } from "#lib/constants.ts";
 import type { ScenarioView } from "#lib/scenario/types.ts";
 import { SITE_OF } from "#lib/scenario/types.ts";
-import type { TranslationVersion } from "#lib/scenario/versions.ts";
+import { live, type TranslationVersion } from "#lib/scenario/versions.ts";
 import { db } from "#lib/server/db/index.ts";
 import { piece, scenario, scenarioSource } from "#lib/server/db/schema.ts";
 import type { Lang } from "#lib/server/revision/draft.ts";
 import { takePlan } from "#lib/server/scenario/plans.ts";
-import { scenarioViewOf } from "#lib/server/scenario/scenarios.ts";
+import { Assignment, sourceIdentity } from "./identity.ts";
 
-/*
- * The translation sheet. The learner writes on it as long as they like: the draft is the piece's text (`writing`), saved
- * as they type, so it is there on another device and on the shelf. "Done" starts the revision on the same piece, and
- * the server hands it the source the sheet showed and the original, which never reaches the page (the passes compare
- * the learner's version with it).
- */
 type SheetUser = { id: string; nativeLanguage?: string | null; tutorLanguage: string };
-
+type Writer = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+const openFor = (userId: string, scenarioId: string) =>
+	and(eq(piece.userId, userId), eq(piece.scenarioId, scenarioId), inArray(piece.state, ["writing", "revising"]));
 export type SheetView = {
 	scenario: ScenarioView;
-	/** The learner's piece of it, while it is on the sheet (null before anything is written). */
+	language: string;
+	binding: { sourceId: string; generation: string };
 	pieceId: string | null;
 	draft: string;
-	/** The piece has gone into its revision: the page sends the learner there. */
 	revising: boolean;
 };
 
-async function openPieceOf(userId: string, scenarioId: string) {
-	const [row] = await db
-		.select({ id: piece.id, text: piece.text, state: piece.state, kind: piece.kind })
-		.from(piece)
-		.where(and(eq(piece.userId, userId), eq(piece.scenarioId, scenarioId), inArray(piece.state, ["writing", "revising"])));
-	return row ?? null;
+function view(id: string, a: Assignment): ScenarioView {
+	return {
+		id,
+		kind: "translation",
+		place: "translation",
+		site: SITE_OF.translation,
+		minutes: a.minutes,
+		title: a.version.title,
+		line: a.version.line,
+		state: "new",
+		publishedAt: a.publishedAt,
+		introduction: a.version.introduction,
+		situationLang: a.native,
+		situation: {
+			kind: "translate",
+			brief: a.title,
+			source: a.source,
+			sourceLang: a.native,
+			glossary: a.glossary,
+			where: a.version.where,
+			readers: a.version.readers,
+		},
+	};
 }
 
-export async function sheetOf(u: SheetUser, scenarioId: string, language: string): Promise<SheetView | null> {
-	const view = await scenarioViewOf(u, scenarioId, language);
-	if (view?.situation.kind !== "translate") return null;
-	const open = await openPieceOf(u.id, scenarioId);
-	return { scenario: view, pieceId: open?.id ?? null, draft: open?.text ?? "", revising: open?.state === "revising" };
-}
-
-/** The source this learner translates from: the scenario's, in the language learnt and their own, once it is ready. */
-async function sourceFor(scenarioId: string, language: string, native: string) {
-	const [row] = await db
+async function sourceFor(w: Writer, scenarioId: string, language: string, native: string) {
+	const [row] = await w
 		.select({ s: scenario, src: scenarioSource })
 		.from(scenario)
 		.innerJoin(scenarioSource, eq(scenarioSource.scenarioId, scenario.id))
@@ -56,25 +62,48 @@ async function sourceFor(scenarioId: string, language: string, native: string) {
 				eq(scenarioSource.native, native),
 				inArray(scenarioSource.state, ["checked", "confirmed"]),
 			),
-		);
-	return row ?? null;
+		)
+		.for("share");
+	if (!row) return null;
+	const version = (row.s.versions as Record<string, TranslationVersion>)[language];
+	if (!live(version) || row.src.inputHash !== sourceIdentity(version, row.s.workId)) return null;
+	return Assignment.parse({
+		version,
+		language,
+		native,
+		sourceId: row.src.id,
+		generation: row.src.generation,
+		title: row.src.title,
+		minutes: row.s.minutes,
+		publishedAt: (row.s.publishedAt ?? row.s.createdAt).getTime(),
+		source: row.src.text,
+		glossary: row.src.glossary,
+	});
 }
 
-/**
- * Keeps the sheet's draft: the piece is created with the first words (the plan typed on the scenario page as its
- * background) and its text replaced after. A piece already in its revision is left alone.
- */
-export async function saveSheet(u: SheetUser, input: { scenarioId: string; language: string; text: string }) {
-	const native = u.nativeLanguage ?? "en";
-	const found = await sourceFor(input.scenarioId, input.language, native);
-	if (!found || !(LEARNABLE as readonly string[]).includes(input.language)) return null;
-	const v = (found.s.versions as Record<string, TranslationVersion>)[input.language];
+/** Existing drafts keep their assignment, even after edits, withdrawal or a language switch. */
+export async function sheetOf(u: SheetUser, scenarioId: string, language: string): Promise<SheetView | null> {
+	const [open] = await db.select().from(piece).where(openFor(u.id, scenarioId));
+	const a = open ? Assignment.parse(open.assignment) : await sourceFor(db, scenarioId, language, u.nativeLanguage ?? "en");
+	if (!a) return null;
+	return {
+		scenario: view(scenarioId, a),
+		language: a.language,
+		binding: { sourceId: a.sourceId, generation: a.generation },
+		pieceId: open?.id ?? null,
+		draft: open?.text ?? "",
+		revising: open?.state === "revising",
+	};
+}
+
+/** The first save must refer to the source displayed; later saves use the immutable assignment. */
+export async function saveSheet(u: SheetUser, input: { scenarioId: string; language: string; text: string; sourceId: string; generation: string }) {
+	if (!(LEARNABLE as readonly string[]).includes(input.language)) return null;
 	return db.transaction(async (tx) => {
-		const [open] = await tx
-			.select({ id: piece.id, state: piece.state })
-			.from(piece)
-			.where(and(eq(piece.userId, u.id), eq(piece.scenarioId, input.scenarioId), inArray(piece.state, ["writing", "revising"])))
-			.for("update");
+		const [open] = await tx.select().from(piece).where(openFor(u.id, input.scenarioId)).for("update");
+		const a = open ? Assignment.parse(open.assignment) : await sourceFor(tx, input.scenarioId, input.language, u.nativeLanguage ?? "en");
+		if (!a || a.language !== input.language || a.sourceId !== input.sourceId || a.generation !== input.generation)
+			error(409, "The assignment changed. Reload it before saving.");
 		if (open) {
 			if (open.state === "writing") await tx.update(piece).set({ text: input.text }).where(eq(piece.id, open.id));
 			return { id: open.id, created: false };
@@ -84,45 +113,46 @@ export async function saveSheet(u: SheetUser, input: { scenarioId: string; langu
 			.insert(piece)
 			.values({
 				userId: u.id,
-				language: input.language,
+				language: a.language,
 				kind: "translation",
 				scenarioId: input.scenarioId,
-				sourceId: found.src.id,
+				sourceId: a.sourceId,
+				assignment: a,
 				place: SITE_OF.translation,
-				title: v?.title ?? "",
+				title: a.version.title,
 				text: input.text,
-				background: await takePlan(tx, u.id, input.scenarioId, input.language),
-				tutorLanguage: u.tutorLanguage === "target" ? input.language : native,
+				background: await takePlan(tx, u.id, input.scenarioId, a.language),
+				tutorLanguage: u.tutorLanguage === "target" ? a.language : a.native,
 				state: "writing",
 			})
 			.onConflictDoNothing()
 			.returning({ id: piece.id });
-		return p ? { id: p.id, created: true } : null;
+		if (!p) error(409, "This scenario was opened in another tab. Reload before saving.");
+		return { id: p.id, created: true };
 	});
 }
 
-/** What the revision of a translation piece is handed: the source it was written from, the original, the scenario. */
+/** Only this server-held assignment supplies the original to the revision. */
 export async function translationFor(userId: string, pieceId: string) {
-	const [row] = await db
-		.select({ p: piece, s: scenario, src: scenarioSource })
+	const [p] = await db
+		.select()
 		.from(piece)
-		.innerJoin(scenario, eq(scenario.id, piece.scenarioId))
-		.innerJoin(scenarioSource, eq(scenarioSource.id, piece.sourceId))
 		.where(and(eq(piece.id, pieceId), eq(piece.userId, userId), eq(piece.kind, "translation")));
-	if (!row) return null;
-	const v = (row.s.versions as Record<string, TranslationVersion>)[row.p.language];
-	if (!v) return null;
+	if (!p) return null;
+	const a = Assignment.parse(p.assignment);
+	const v = a.version;
 	return {
 		translation: {
-			source: row.src.text,
+			source: a.source,
 			original: v.original,
-			glossary: row.src.glossary as { term: string; shown: string; gloss: string }[],
+			glossary: a.glossary,
 			context: v.introduction,
 			where: v.where,
 			readers: v.readers,
-			target: row.p.language as Lang,
+			target: a.language as Lang,
 		},
-		background: [v.introduction, row.p.background && `My plan: ${row.p.background}`].filter(Boolean).join("\n\n"),
-		scenario: { id: row.s.id, title: v.title, site: SITE_OF.translation },
+		background: [v.introduction, p.background && `My plan: ${p.background}`].filter(Boolean).join("\n\n"),
+		scenario: { id: p.scenarioId, title: v.title, site: SITE_OF.translation },
+		lang: a.language,
 	};
 }

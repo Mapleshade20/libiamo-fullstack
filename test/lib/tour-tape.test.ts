@@ -33,3 +33,25 @@ test("nothing off the tape reaches the network; what is not a model call goes th
 	stopTape();
 	assert.deepEqual(reached, ["/api/i18n/en"]);
 });
+
+test("accidental remote queries and writes fail closed; replaying a chapter resets consumed responses", async () => {
+	const before = reached.length;
+	playTape(tape, { pace: 0 });
+	await assert.rejects(g.window.fetch("/_app/remote/hash/scenarioView?arg=x"), /live application data/);
+	await assert.rejects(post("/_app/remote/hash/saveDraft", "{}"), /live application data/);
+	assert.equal(reached.length, before);
+	assert.equal((await post("/api/gate")).status, 200);
+	playTape(tape, { pace: 0 });
+	assert.equal((await post("/api/gate")).status, 200);
+	stopTape();
+});
+
+test("a delayed response from a previous playback cannot enter the next chapter", async () => {
+	playTape([{ ...tape[2], ms: 30 }], { pace: 1 });
+	const late = post("/api/gate");
+	const rejected = assert.rejects(late, { name: "AbortError" });
+	playTape(tape, { pace: 0 });
+	await rejected;
+	assert.equal((await post("/api/gate")).status, 200);
+	stopTape();
+});

@@ -26,9 +26,9 @@ const focused = (id: string | null | undefined) => !!id?.startsWith("/(focus)");
 const trip = (path = "") => path.replace(/^\/(live|collect)\/[^/]+$/, "/$1");
 onNavigate((nav) => {
 	if (!document.startViewTransition || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-	if (nav.from?.url.pathname === nav.to?.url.pathname) return;
+	if (nav.from?.url?.pathname === nav.to?.url?.pathname) return;
 	const html = document.documentElement;
-	html.dataset.vt = `${trip(nav.from?.url.pathname)}>${trip(nav.to?.url.pathname)}`;
+	html.dataset.vt = `${trip(nav.from?.url?.pathname)}>${trip(nav.to?.url?.pathname)}`;
 	const [a, b] = [focused(nav.from?.route.id), focused(nav.to?.route.id)];
 	if (a !== b) html.dataset.side = b ? "out" : "in";
 	return new Promise((resolve) => {

@@ -112,7 +112,7 @@ Weeks in a row and "met your aim" are derived on read.
 | Table | Columns |
 |---|---|
 | `scenario` | `id text`, `kind` (`exchange`/`translation`), `place` (`ao3`/`reddit`/`email`/`discord`/`imessage`/`translation`), `status` (`draft`/`published`/`withdrawn`), `minutes`, `urgency`, `max_turns`, `work_id` (translations: whose name table), `versions jsonb`, `created_by`, `published_at`, timestamps |
-| `scenario_source` | `id`, `scenario_id`, `language` (the version translated into), `native` (the learner language it is written in), `text`, `glossary jsonb`, `state` (`pending`/`checked`/`notes`/`confirmed`/`failed`), `notes jsonb`, `original_hash`, `made_at`; unique `(scenario_id, language, native)` |
+| `scenario_source` | `id`, `scenario_id`, `language` (the version translated into), `native` (the learner language it is written in), `text`, `glossary jsonb`, `state` (`pending`/`checked`/`notes`/`confirmed`/`failed`), `notes jsonb`, `input_hash` (the full version and work), `generation uuid`, `made_at`; unique `(scenario_id, language, native)` |
 | `work` | `id text`, `title`, `wikidata`, `wikis jsonb`, `manual jsonb` |
 | `name_rendering` | `work_id`, `locale`, `term`, `kind` (`name`/`term`), `rendering`, `status` (`pending`/`confirmed`), `origin`, `url`, `why`, `candidates jsonb`; pk `(work_id, locale, term)` |
 | `issue` | `id text`, `date`, `title` Local, `line` Local, `tone`, `deep`, timestamps |
@@ -141,7 +141,7 @@ receives; it drops `notes`, `others` and `followed`.
 
 | Table | Columns |
 |---|---|
-| `piece` | `id uuid`, `user_id`, `language`, `kind` (`own`/`scenario`/`translation`), `scenario_id`, `source_id`, `place`, `title`, `text`, `background`, `context`, `tutor_language` (the language code in force), `detail` (`needed`/`more`), `provider`, `model`, `state` (`writing`/`revising`/`finished`/`set_aside`), `final`, `closing`, `reader`, `leftovers jsonb`, `authentic`, `learned jsonb`, `finished_at`, `notes_requested_at`, `posted` (`yes`/`not_yet`/`no`), `asked_at`, `again_text`, `again_at`, `sha`, timestamps |
+| `piece` | `id uuid`, `user_id`, `language`, `kind` (`own`/`scenario`/`translation`), `scenario_id`, `source_id`, `assignment jsonb` (a translation's immutable version, source and languages), `place`, `title`, `text`, `background`, `context`, `tutor_language` (the language code in force), `detail` (`needed`/`more`), `provider`, `model`, `state` (`writing`/`revising`/`finished`/`set_aside`), `final`, `closing`, `reader`, `leftovers jsonb`, `authentic`, `learned jsonb`, `finished_at`, `notes_requested_at`, `posted` (`yes`/`not_yet`/`no`), `asked_at`, `again_text`, `again_at`, `sha`, timestamps |
 | `piece_revision` | `piece_id` pk, `version`, `state jsonb`, `updated_at` |
 | `piece_step` | `piece_id`, `seq`, `action`, `body jsonb`, `response jsonb`, `error`, `ms`, `at`; pk `(piece_id, seq)` |
 
@@ -173,7 +173,7 @@ stored id has to keep matching.
 |---|---|
 | `reading` | `id uuid`, `user_id`, `language`, `text`, `place`, `created_at` |
 | `note` | `id uuid`, `user_id`, `language`, `kind` (`own`/`collected`), `piece_id`, `reading_id`, `phrase`, `meaning`, `meaning_language`, `usage`, `register`, `why`, `examples jsonb` (`{ t, n?, span? }[]`), `sentence`, `marked`, `was`, `also text[]`, `fsrs jsonb`, `due`, `deleted_at`, timestamps; index `(user_id, due)` where not deleted |
-| `review_log` | `id`, `note_id`, `user_id`, `rating` 1–4, `verdict`, `elapsed_seconds`, `prev jsonb`, `next jsonb`, `reviewed_at` |
+| `review_log` | `id`, `note_id`, `user_id`, `request_id uuid` unique (retries cannot rate twice), `rating` 1–4, `verdict`, `elapsed_seconds`, `prev jsonb`, `next jsonb`, `reviewed_at` |
 
 `due` repeats the card's due time as a column so the queue is an index scan. A new note is due from the learner's next
 local day. Which face a card shows follows from its review count; no rotation is stored.
@@ -183,7 +183,7 @@ local day. Which face a card shows follows from its review count; no rotation is
 | Table | Columns |
 |---|---|
 | `llm_call` | `id uuid`, `user_id`, `piece_id`, `step_seq`, `purpose`, `tag`, `provider`, `model`, `effort`, `state` (`done`/`failed`/`repaired`/`discarded`), `background`, `prompt_hash`, `messages jsonb`, `output`, `error`, `prompt_tokens`, `completion_tokens`, `reasoning_tokens`, `cache_read`, `cache_write`, `cost_usd`, `latency_ms`, `created_at` |
-| `llm_prompt` | `hash` pk, `text` (a system prompt, stored once) |
+| `llm_prompt` | `hash` pk, `user_id` nullable (service calls have none), `text` (a system prompt, deduplicated per owner; may contain learner text) |
 | `session_case` | `id`, `piece_id`, `step_seq`, `note`, `created_by`, `status` (`open`/`fixed`/`wontfix`), `commit`, `created_at`, `closed_at` |
 
 `llm_call` replaces `llm_trace`; the operations monitor's hourly query (`deploy/podman/ops/operations.py`) is changed
@@ -285,10 +285,11 @@ intervals come from the scheduler's preview.
 
 ### 6.6 The tour
 
-The tour keeps its director, script and content. Its data is typed as the pages' own `PageData`: a universal load on
-each page the tour visits returns the sandbox's data while the tour plays, and the tape answers every request the
-pages send (the session's actions, the gate, collecting, form actions). No tour request reaches the database or a
-model.
+The tour keeps its director, script, presentation fixtures and recorded tapes. Pages read their own view types from
+the browser-only sandbox while it plays; the tape answers model requests and refuses accidental remote-function
+access. Neither live recommendations nor learner history supplies tour content. A new chapter invalidates old
+timers, responses and continuations; exiting leaves focused pages before releasing the sandbox. No tour data request
+reaches the database or a model. See `docs/design/2026-11-15-rebuild-reliability.md` for the audit repairs.
 
 ### 6.7 Access
 

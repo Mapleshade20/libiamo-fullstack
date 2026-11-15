@@ -114,6 +114,10 @@ export function createAuthOptions(store: AuthStore) {
 		},
 		hooks: {
 			before: createAuthMiddleware(async (ctx) => {
+				// Only the settings command may request this: it verifies the password (or a fresh passwordless
+				// session) first. Better Auth's public endpoint otherwise accepts any valid, even old, session.
+				if (ctx.path === "/change-email" && ctx.request)
+					throw new APIError("FORBIDDEN", { code: "REAUTHENTICATION_REQUIRED", message: "Change your email from settings." });
 				// A signed-in learner asking for the link that sets their first password has passed it already.
 				const signedInLink = ctx.path === "/request-password-reset" && !!(await getSessionFromCtx(ctx).catch(() => null));
 				if (captcha && ctx.request && CAPTCHA_PROTECTED_PATHS.includes(ctx.path) && !signedInLink) {

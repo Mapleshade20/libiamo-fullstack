@@ -1,12 +1,13 @@
 <script lang="ts">
 import X from "@lucide/svelte/icons/x";
-import { onMount, tick } from "svelte";
+import { onDestroy, onMount, tick } from "svelte";
 import { fly, slide } from "svelte/transition";
 import { app } from "#lib/account/app.svelte.ts";
 import LimitNotice from "#lib/components/common/LimitNotice.svelte";
 import { reducedMotion } from "#lib/components/common/motion.ts";
 import FocusBar from "#lib/components/shell/FocusBar.svelte";
 import { toast } from "#lib/components/shell/toast.svelte.ts";
+import { captureTourState } from "#lib/components/tour/lifetime.ts";
 import { keepCollected, sandboxed, tourReading } from "#lib/components/tour/sandbox.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
 import { isAppLang } from "#lib/constants.ts";
@@ -24,6 +25,9 @@ import { page } from "$app/state";
  * about a phrase, and asking it more, speak the tutor's. Every phrase is kept the moment it is filled in. The passage
  * was kept as a reading when it was sent from the home page (the tour's, in its sandbox), so the page opens again.
  */
+const currentChapter = captureTourState();
+let disposed = false;
+const active = () => !disposed && currentChapter();
 const found = sandboxed() ? tourReading(page.params.id ?? "") : await readingById(page.params.id ?? "");
 const SETUP = found ? { passage: found.passage, lang: found.lang, native: app.prefs.native, feedback: app.prefs.feedback } : null;
 onMount(() => {
@@ -90,6 +94,7 @@ const nextWord = (i: number) => {
 const batch = `${Date.now()}`;
 const readingId = sandboxed() ? undefined : found?.id;
 const forget = (ids: (string | undefined)[]) => {
+	if (!active()) return;
 	const gone = ids.filter((x): x is string => !!x);
 	if (gone.length && !sandboxed()) removeNotes(gone).catch(() => {});
 };
@@ -99,7 +104,7 @@ function sentenceOf(m: Mark) {
 }
 /** The tour's phrases go to its sandbox (the server kept the learner's as they were filled in). */
 function store() {
-	if (!sandboxed() || !SETUP) return;
+	if (!active() || !sandboxed() || !SETUP) return;
 	keepCollected(
 		batch,
 		marks
@@ -123,12 +128,17 @@ function store() {
 /* Filling in: every change waits a moment, then all marks not filled in yet go in one call. Asking again after a
    failure asks for a fresh reply, not the cached one that failed. */
 let fillTimer: ReturnType<typeof setTimeout> | undefined;
+onDestroy(() => {
+	disposed = true;
+	clearTimeout(fillTimer);
+});
 let retries = 0;
 const queueFill = () => {
 	clearTimeout(fillTimer);
 	fillTimer = setTimeout(fill, 900);
 };
 async function fill() {
+	if (!active()) return;
 	const todo = marks.filter((m) => !m.data && !m.busy);
 	if (!todo.length) return;
 	for (const m of todo) {
@@ -146,6 +156,7 @@ async function fill() {
 		});
 		await answered(r);
 		const got = (await r.json()) as { items: (Item & { n: number; id?: string })[] };
+		if (!active()) return;
 		const stale: (string | undefined)[] = [];
 		for (const s of sent) {
 			const it = got.items?.find((x) => x.n === s.n);
@@ -162,6 +173,7 @@ async function fill() {
 		}
 		forget(stale);
 	} catch (e) {
+		if (!active()) return;
 		// No key, or a refused one, is said once, above the kept phrases; a failed call is said on each phrase it left empty.
 		const k = stopOf(e);
 		if (k !== "error") stopped = k;
@@ -241,6 +253,7 @@ function drop(m: Mark) {
 	toast(ui("colRemoved", { phrase: m.data?.phrase ?? textOf(m) }));
 }
 async function askAbout(m: Mark, q: string) {
+	if (!active()) return;
 	if (!m.data) return;
 	m.thread.push({ q, a: null });
 	const turn = m.thread[m.thread.length - 1];
@@ -254,10 +267,12 @@ async function askAbout(m: Mark, q: string) {
 		})
 			.then(answered)
 			.then((x: Response) => x.json());
+		if (!active()) return;
 		turn.a = r.answer ?? tx("colFailed");
 	} catch (e) {
 		const k = stopOf(e);
 		if (k !== "error") stopped = k;
+		if (!active()) return;
 		turn.a = tx("colFailed");
 	}
 	await tick();

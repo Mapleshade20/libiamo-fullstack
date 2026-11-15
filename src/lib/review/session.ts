@@ -18,15 +18,20 @@ export function createSitting<C extends Card>(cards: C[], now = () => Date.now()
 	const main = all.filter((i) => i.queue !== "learning");
 	const learning = all.filter((i) => i.queue === "learning");
 	const done: Item<C>[] = [];
+	const pending = new Set<Item<C>>();
 	const next = (): Item<C> | undefined => {
 		learning.sort((a, b) => a.due - b.due);
-		if (learning[0] && learning[0].due <= now()) return learning[0];
-		return main[0] ?? learning[0];
+		const ready = learning.find((i) => !pending.has(i));
+		if (ready && ready.due <= now()) return ready;
+		return main[0] ?? ready;
 	};
 	let current = next();
 	return {
 		get current() {
 			return current;
+		},
+		get waiting() {
+			return pending.size;
 		},
 		get done() {
 			return done;
@@ -41,7 +46,7 @@ export function createSitting<C extends Card>(cards: C[], now = () => Date.now()
 		/** The buttons' labels for the card shown. */
 		intervals: (i: Item<C>) => (["again", "hard", "good", "easy"] as const).map((r) => i.outcomes[r].label),
 		/** Rates the card shown and moves on; returns it (its rating is sent with it). */
-		rate(r: RatingName) {
+		rate(r: RatingName, awaiting = false) {
 			const it = current;
 			if (!it) return;
 			const o = it.outcomes[r];
@@ -55,12 +60,22 @@ export function createSitting<C extends Card>(cards: C[], now = () => Date.now()
 				it.due = now() + o.inMs;
 				learning.push(it);
 			} else done.push(it);
+			if (awaiting) pending.add(it);
 			current = next();
 			return it;
 		},
 		/** The server's word on a rated card: where it is, and what rating it next does. */
 		settle(it: Item<C>, s: { queue: QueueKind; outcomes: Record<RatingName, Outcome> }) {
 			it.outcomes = s.outcomes;
+			pending.delete(it);
+			for (const list of [main, learning, done]) {
+				const at = list.indexOf(it);
+				if (at >= 0) list.splice(at, 1);
+			}
+			it.queue = s.queue;
+			if (s.queue === "learning") learning.push(it);
+			else done.push(it);
+			if (!current || current === it) current = next();
 		},
 	};
 }

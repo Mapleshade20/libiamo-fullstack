@@ -40,9 +40,15 @@ export const removeNotes = command(z.array(noteId).max(50), async (ids) => {
 
 /** A rating. The page goes on without waiting; this says where the card is now, for one that stays in the sitting. */
 export const rate = command(
-	z.object({ id: noteId, rating: z.enum(RATINGS), verdict: z.enum(VERDICTS).nullable(), seconds: z.number().int().min(0).max(86_400) }),
-	async ({ id, rating, verdict, seconds }) => {
-		const r = await rateNote(learner(), id, rating, verdict, seconds);
+	z.object({
+		id: noteId,
+		requestId: z.uuid(),
+		rating: z.enum(RATINGS),
+		verdict: z.enum(VERDICTS).nullable(),
+		seconds: z.number().int().min(0).max(86_400),
+	}),
+	async ({ id, requestId, rating, verdict, seconds }) => {
+		const r = await rateNote(learner(), id, rating, verdict, seconds, new Date(), requestId);
 		if (r.cleared) await week().refresh();
 		return { queue: r.queue, outcomes: r.outcomes };
 	},

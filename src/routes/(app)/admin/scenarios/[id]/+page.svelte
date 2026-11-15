@@ -254,7 +254,8 @@ $effect(() => {
 	const t = setInterval(() => scenarioOne(d.id).refresh(), 10_000);
 	return () => clearInterval(t);
 });
-const sourceAct = (fn: typeof remake, sourceId: string) => fn({ scenarioId: d.id, sourceId }).catch(() => toast("Could not do that"));
+const sourceAct = (fn: typeof remake, sourceId: string, generation: string) =>
+	fn({ scenarioId: d.id, sourceId, generation }).catch(() => toast("Could not do that"));
 </script>
 
 <div class="adm-page">
@@ -552,12 +553,18 @@ const sourceAct = (fn: typeof remake, sourceId: string) => fn({ scenarioId: d.id
 										<span class="adm-tag {STATE[r.state].tone}">{STATE[r.state].label}</span>
 										<span class="grow"></span>
 										{#if r.state !== "pending"}
-											<button type="button" class="adm-icon" aria-label="Make again" use:tip={"Make again"} onclick={() => sourceAct(remake, r.id)}>
+											<button
+												type="button"
+												class="adm-icon"
+												aria-label="Make again"
+												use:tip={"Make again"}
+												onclick={() => sourceAct(remake, r.id, r.generation)}
+											>
 												<RotateCcw class="size-4" aria-hidden="true" />
 											</button>
 										{/if}
 										{#if r.state === "checked" || (r.state === "notes" && !n.names?.length)}
-											<Button size="sm" onclick={() => sourceAct(confirm, r.id)}>Confirm</Button>
+											<Button size="sm" onclick={() => sourceAct(confirm, r.id, r.generation)}>Confirm</Button>
 										{/if}
 									</div>
 									{#if n.names?.length}

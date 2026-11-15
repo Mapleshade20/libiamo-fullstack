@@ -720,7 +720,9 @@
 		"exNoTurns": "No turns left.",
 		"exTurnsLeft": "Turns left",
 		"exUnavailable": "Not available in this simulation.",
-		"auAgree": "Signing up means you accept the"
+		"auAgree": "Signing up means you accept the",
+		"rvSaving": "Saving your reviews. Please wait before leaving.",
+		"rvDiscard": "Discard pending ratings and reload"
 	},
 	"ru": {
 		"next": "Дальше",
@@ -1443,7 +1445,9 @@
 		"exNoTurns": "Ходов не осталось.",
 		"exTurnsLeft": "Осталось ходов",
 		"exUnavailable": "Недоступно в этой симуляции.",
-		"auAgree": "Регистрируясь, вы принимаете"
+		"auAgree": "Регистрируясь, вы принимаете",
+		"rvSaving": "Сохраняем результаты повторения. Подождите перед выходом.",
+		"rvDiscard": "Отменить неотправленные оценки и перезагрузить"
 	},
 	"es": {
 		"next": "Siguiente",
@@ -2166,7 +2170,9 @@
 		"exNoTurns": "No quedan turnos.",
 		"exTurnsLeft": "Turnos restantes",
 		"exUnavailable": "No disponible en esta simulación.",
-		"auAgree": "Al registrarte aceptas"
+		"auAgree": "Al registrarte aceptas",
+		"rvSaving": "Guardando tus repasos. Espera antes de salir.",
+		"rvDiscard": "Descartar valoraciones pendientes y recargar"
 	},
 	"de": {
 		"next": "Nächste",
@@ -2889,7 +2895,9 @@
 		"exNoTurns": "Keine Züge mehr übrig.",
 		"exTurnsLeft": "Verbleibende Züge",
 		"exUnavailable": "In dieser Simulation nicht verfügbar.",
-		"auAgree": "Mit der Registrierung akzeptierst du"
+		"auAgree": "Mit der Registrierung akzeptierst du",
+		"rvSaving": "Deine Wiederholungen werden gespeichert. Bitte warte, bevor du gehst.",
+		"rvDiscard": "Ausstehende Bewertungen verwerfen und neu laden"
 	},
 	"tr": {
 		"next": "Sonraki",
@@ -3612,7 +3620,9 @@
 		"exNoTurns": "Hiç tur kalmadı.",
 		"exTurnsLeft": "Kalan tur",
 		"exUnavailable": "Bu simülasyonda kullanılamaz.",
-		"auAgree": "Kaydolarak şunları kabul edersin:"
+		"auAgree": "Kaydolarak şunları kabul edersin:",
+		"rvSaving": "Tekrarların kaydediliyor. Ayrılmadan önce lütfen bekle.",
+		"rvDiscard": "Bekleyen değerlendirmeleri sil ve yeniden yükle"
 	},
 	"fa": {
 		"next": "بعدی",
@@ -4335,7 +4345,9 @@
 		"exNoTurns": "نوبتی باقی نمانده.",
 		"exTurnsLeft": "نوبت‌های باقی‌مانده",
 		"exUnavailable": "در این شبیه‌سازی در دسترس نیست.",
-		"auAgree": "با ثبت‌نام این‌ها را می‌پذیری:"
+		"auAgree": "با ثبت‌نام این‌ها را می‌پذیری:",
+		"rvSaving": "مرورهای شما در حال ذخیره شدن است. لطفاً پیش از خروج صبر کنید.",
+		"rvDiscard": "لغو امتیازهای در انتظار و بارگیری دوباره"
 	},
 	"fr": {
 		"next": "Suivant",
@@ -5058,7 +5070,9 @@
 		"exNoTurns": "Plus aucun tour.",
 		"exTurnsLeft": "Tours restants",
 		"exUnavailable": "Indisponible dans cette simulation.",
-		"auAgree": "En t’inscrivant, tu acceptes"
+		"auAgree": "En t’inscrivant, tu acceptes",
+		"rvSaving": "Enregistrement de tes révisions. Attends avant de partir.",
+		"rvDiscard": "Abandonner les évaluations en attente et recharger"
 	},
 	"ja": {
 		"next": "次へ",
@@ -5781,7 +5795,9 @@
 		"exNoTurns": "残りターンはありません。",
 		"exTurnsLeft": "残りターン",
 		"exUnavailable": "このシミュレーションでは使えません。",
-		"auAgree": "登録すると、次に同意したことになります："
+		"auAgree": "登録すると、次に同意したことになります：",
+		"rvSaving": "復習の記録を保存しています。完了するまでお待ちください。",
+		"rvDiscard": "未保存の評価を破棄して再読み込み"
 	},
 	"pt": {
 		"next": "Próximo",
@@ -6504,7 +6520,9 @@
 		"exNoTurns": "Não restam turnos.",
 		"exTurnsLeft": "Turnos restantes",
 		"exUnavailable": "Indisponível nesta simulação.",
-		"auAgree": "Ao se cadastrar, você aceita"
+		"auAgree": "Ao se cadastrar, você aceita",
+		"rvSaving": "Salvando suas revisões. Aguarde antes de sair.",
+		"rvDiscard": "Descartar avaliações pendentes e recarregar"
 	},
 	"zh-CN": {
 		"next": "下一处",
@@ -7227,7 +7245,9 @@
 		"exNoTurns": "没有剩余回合了。",
 		"exTurnsLeft": "剩余回合",
 		"exUnavailable": "这个模拟里用不了。",
-		"auAgree": "注册即表示你同意"
+		"auAgree": "注册即表示你同意",
+		"rvSaving": "正在保存复习记录，请等保存完成后再离开。",
+		"rvDiscard": "放弃待保存的评分并重新加载"
 	},
 	"vi": {
 		"next": "Tiếp",
@@ -7950,7 +7970,9 @@
 		"exNoTurns": "Hết lượt rồi.",
 		"exTurnsLeft": "Lượt còn lại",
 		"exUnavailable": "Không có trong mô phỏng này.",
-		"auAgree": "Khi đăng ký, bạn đồng ý với"
+		"auAgree": "Khi đăng ký, bạn đồng ý với",
+		"rvSaving": "Đang lưu kết quả ôn tập. Vui lòng chờ trước khi rời đi.",
+		"rvDiscard": "Bỏ các đánh giá đang chờ và tải lại"
 	},
 	"it": {
 		"next": "Avanti",
@@ -8673,7 +8695,9 @@
 		"exNoTurns": "Turni esauriti.",
 		"exTurnsLeft": "Turni rimasti",
 		"exUnavailable": "Non disponibile in questa simulazione.",
-		"auAgree": "Registrandoti accetti"
+		"auAgree": "Registrandoti accetti",
+		"rvSaving": "Salvataggio dei ripassi in corso. Attendi prima di uscire.",
+		"rvDiscard": "Scarta le valutazioni in sospeso e ricarica"
 	},
 	"ar": {
 		"next": "التالي",
@@ -9396,7 +9420,9 @@
 		"exNoTurns": "لم تبقَ أدوار.",
 		"exTurnsLeft": "الأدوار المتبقية",
 		"exUnavailable": "غير متاح في هذه المحاكاة.",
-		"auAgree": "بالتسجيل فإنك توافق على"
+		"auAgree": "بالتسجيل فإنك توافق على",
+		"rvSaving": "جارٍ حفظ مراجعاتك. يُرجى الانتظار قبل المغادرة.",
+		"rvDiscard": "تجاهل التقييمات المعلقة وإعادة التحميل"
 	},
 	"pl": {
 		"next": "Dalej",
@@ -10119,7 +10145,9 @@
 		"exNoTurns": "Nie zostały żadne tury.",
 		"exTurnsLeft": "Pozostałe tury",
 		"exUnavailable": "Niedostępne w tej symulacji.",
-		"auAgree": "Rejestrując się, akceptujesz"
+		"auAgree": "Rejestrując się, akceptujesz",
+		"rvSaving": "Zapisywanie powtórek. Poczekaj przed wyjściem.",
+		"rvDiscard": "Odrzuć oczekujące oceny i wczytaj ponownie"
 	},
 	"el": {
 		"next": "Επόμενο",
@@ -10842,7 +10870,9 @@
 		"exNoTurns": "Δεν απέμειναν γύροι.",
 		"exTurnsLeft": "Γύροι που απομένουν",
 		"exUnavailable": "Δεν είναι διαθέσιμο σε αυτή την προσομοίωση.",
-		"auAgree": "Με την εγγραφή αποδέχεσαι"
+		"auAgree": "Με την εγγραφή αποδέχεσαι",
+		"rvSaving": "Αποθήκευση των επαναλήψεών σου. Περίμενε πριν φύγεις.",
+		"rvDiscard": "Απόρριψη εκκρεμών αξιολογήσεων και επαναφόρτωση"
 	},
 	"nl": {
 		"next": "Volgende",
@@ -11565,7 +11595,9 @@
 		"exNoTurns": "Geen beurten meer.",
 		"exTurnsLeft": "Beurten over",
 		"exUnavailable": "Niet beschikbaar in deze simulatie.",
-		"auAgree": "Door je aan te melden ga je akkoord met"
+		"auAgree": "Door je aan te melden ga je akkoord met",
+		"rvSaving": "Je herhalingen worden opgeslagen. Wacht even voordat je vertrekt.",
+		"rvDiscard": "Openstaande beoordelingen verwerpen en herladen"
 	},
 	"id": {
 		"next": "Berikutnya",
@@ -12288,7 +12320,9 @@
 		"exNoTurns": "Giliran sudah habis.",
 		"exTurnsLeft": "Sisa giliran",
 		"exUnavailable": "Tidak tersedia di simulasi ini.",
-		"auAgree": "Dengan mendaftar, kamu menyetujui"
+		"auAgree": "Dengan mendaftar, kamu menyetujui",
+		"rvSaving": "Sedang menyimpan ulasanmu. Tunggu sebelum keluar.",
+		"rvDiscard": "Buang penilaian tertunda dan muat ulang"
 	},
 	"ko": {
 		"next": "다음 곳",
@@ -13011,6 +13045,8 @@
 		"exNoTurns": "남은 턴이 없어요.",
 		"exTurnsLeft": "남은 턴",
 		"exUnavailable": "이 시뮬레이션에서는 사용할 수 없어요.",
-		"auAgree": "가입하면 다음에 동의하게 돼요:"
+		"auAgree": "가입하면 다음에 동의하게 돼요:",
+		"rvSaving": "복습 기록을 저장하고 있어요. 완료될 때까지 기다려 주세요.",
+		"rvDiscard": "대기 중인 평가를 버리고 새로고침"
 	}
 }

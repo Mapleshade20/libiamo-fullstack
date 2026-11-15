@@ -30,6 +30,10 @@ pnpm dev               # http://127.0.0.1:5173
 
 `pnpm check` (types and Biome) and `pnpm test` must pass before a change is done.
 
+`TEST_POSTGRES_URL=postgres://localhost/postgres pnpm test` also runs the PostgreSQL regression suite. The connection
+must be allowed to create databases: the suite creates and drops its own database and never touches the development
+database. Without that variable the PostgreSQL cases are explicitly skipped.
+
 `lab/replay.mjs` replays the recorded revisions in `lab/baseline/` against the dev server, answering every model call
 from their cache (`LLM_CACHE_DIR`, `LLM_CACHE_ONLY=1`), so a change in behaviour shows as a differing response and
 nothing is spent.

@@ -1,9 +1,12 @@
 import { app } from "#lib/account/app.svelte.ts";
 import type { Note, ReviewCard } from "#lib/notebook/types.ts";
 import { noteFaces } from "#lib/review/faces.ts";
+import type { RatingName } from "#lib/review/types.ts";
 import type { DayKind, WeekView } from "#lib/week/types.ts";
 import type { PieceItem, PieceResult } from "#lib/writing/types.ts";
 import { notesPending } from "#lib/writing/types.ts";
+import { invalidateTourState } from "./lifetime.ts";
+import { freshReview, rateTourReview, type TourReview, tourOutcomes } from "./review.ts";
 
 /*
  * The tour's sandbox: while the tour plays, the pages read and write this instead of the learner's own data, starting
@@ -41,14 +44,17 @@ export type Sandbox = {
 	glass: GlassSeen | null;
 	/** A passage pasted to collect from, by its id (the collect page's `?reading=`). */
 	readings: Record<string, { passage: string; lang: string }>;
+	reviews: Record<string, TourReview>;
 };
 
 let box = $state<Sandbox | null>(null);
 export const sandboxed = () => box !== null;
 export function enterSandbox(seed: Partial<Sandbox>) {
-	box = { pieces: [], collected: [], edits: {}, days: {}, glass: null, readings: {}, ...seed };
+	invalidateTourState();
+	box = { pieces: [], collected: [], edits: {}, days: {}, glass: null, readings: {}, reviews: {}, ...seed };
 }
 export function leaveSandbox() {
+	invalidateTourState();
 	box = null;
 }
 const the = () => box as Sandbox;
@@ -90,13 +96,12 @@ function collectedId(c: Collected) {
 }
 
 /* ---------- The notebook and review ---------- */
-/** What each rating does to a card the sandbox asks (a new one): the scheduler's first steps. */
-const FIRST: ReviewCard["outcomes"] = {
-	again: { label: "1m", stays: true, inMs: 60_000 },
-	hard: { label: "6m", stays: true, inMs: 360_000 },
-	good: { label: "10m", stays: true, inMs: 600_000 },
-	easy: { label: "4d", stays: false, inMs: 4 * 864e5 },
-};
+export function rateTourCard(id: string, rating: RatingName) {
+	const s = the();
+	const state = rateTourReview(s.reviews[id] ?? freshReview(), rating);
+	s.reviews[id] = state;
+	return { queue: state.done ? ("review" as const) : ("learning" as const), outcomes: tourOutcomes(state) };
+}
 /** The sandbox's review cards: each phrase it collected, asked in the sentence it was read in. */
 export function tourDeck(): ReviewCard[] {
 	const edits = box?.edits ?? {};
@@ -104,6 +109,7 @@ export function tourDeck(): ReviewCard[] {
 		.filter((c) => c.lang === app.lang && c.sentence && c.marked && c.sentence.includes(c.marked))
 		.map((c): ReviewCard => {
 			const id = collectedId(c);
+			const state = box?.reviews[id] ?? freshReview();
 			return {
 				id,
 				kind: "collected",
@@ -112,11 +118,11 @@ export function tourDeck(): ReviewCard[] {
 				answer: c.marked as string,
 				cue: edits[id]?.gloss ?? c.meaning,
 				phrase: edits[id]?.phrase ?? c.phrase,
-				queue: "new",
-				outcomes: FIRST,
+				queue: state.queue,
+				outcomes: tourOutcomes(state),
 			};
 		})
-		.filter((c) => !edits[c.id]?.deleted);
+		.filter((c) => !edits[c.id]?.deleted && !box?.reviews[c.id]?.done);
 }
 /** The sandbox's notebook: the phrases it collected, then the entries of the pieces it finished. */
 export function tourNotebook(): Note[] {
@@ -132,7 +138,7 @@ export function tourNotebook(): Note[] {
 				phrase: c.phrase,
 				from: "collected",
 				where: "",
-				due: true,
+				due: !box?.reviews[id]?.done,
 				gloss: c.meaning,
 				register: c.register as Note["register"],
 				examples: (c.examples ?? (c.example ? [c.example] : [])).map((t) => ({ t })),

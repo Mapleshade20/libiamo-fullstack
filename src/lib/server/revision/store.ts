@@ -26,12 +26,22 @@ type Held = {
 	used: number;
 	/** Snapshot writes, one after another; each writes the revision as it is when its turn comes. */
 	writing: Promise<void>;
-	pending: boolean;
 	timer?: ReturnType<typeof setTimeout>;
 	/** Something settled in the background: the snapshot is written again shortly. */
 	changed: () => void;
 };
 const held = new Map<string, Held>();
+const mutations = new Map<string, Promise<unknown>>();
+function exclusive<T>(id: string, run: () => Promise<T>): Promise<T> {
+	const next = (mutations.get(id) ?? Promise.resolve()).catch(() => {}).then(run);
+	mutations.set(id, next);
+	void next
+		.finally(() => {
+			if (mutations.get(id) === next) mutations.delete(id);
+		})
+		.catch(() => {});
+	return next;
+}
 const IDLE_MS = 30 * 60_000;
 /** Background results settle in bursts; their snapshot waits a moment for the rest. */
 const SETTLE_MS = 1000;
@@ -41,32 +51,47 @@ async function callerFor(user: Learner, pieceId: string, h: () => Held | undefin
 }
 
 function hold(pieceId: string, userId: string, session: RevisionSession, seq: number): Held {
-	const h: Held = { userId, session, seq, step: null, used: Date.now(), writing: Promise.resolve(), pending: false, changed: () => {} };
+	const h: Held = { userId, session, seq, step: null, used: Date.now(), writing: Promise.resolve(), changed: () => {} };
 	h.changed = () => {
+		if (held.get(pieceId) !== h) return;
 		clearTimeout(h.timer);
-		h.timer = setTimeout(() => save(pieceId, h), SETTLE_MS);
+		h.timer = setTimeout(() => {
+			void exclusive(pieceId, () => save(pieceId, h)).catch((e) => console.error(`revision ${pieceId}: background save failed:`, e));
+		}, SETTLE_MS);
 	};
 	session.onChange = h.changed;
 	held.set(pieceId, h);
 	return h;
 }
 
-/** Write the revision's snapshot (queued behind any write under way, and skipped if one is already queued). */
-function save(pieceId: string, h: Held) {
+type StepWrite = { seq: number; action: string; body: unknown; response: unknown; error: string | null; ms: number };
+/** A step and the state it acknowledged have one commit. A retired session never writes again. */
+function save(pieceId: string, h: Held, step?: StepWrite) {
 	clearTimeout(h.timer);
-	if (h.pending) return h.writing;
-	h.pending = true;
-	h.writing = h.writing
-		.then(async () => {
-			h.pending = false;
-			const state = h.session.snapshot();
-			await db
+	const writing = h.writing.then(async () => {
+		if (held.get(pieceId) !== h) return;
+		const state = h.session.snapshot();
+		await db.transaction(async (tx) => {
+			if (step) await tx.insert(pieceStep).values({ pieceId, ...step });
+			await tx
 				.insert(pieceRevision)
 				.values({ pieceId, version: SNAPSHOT_VERSION, state })
 				.onConflictDoUpdate({ target: pieceRevision.pieceId, set: { version: SNAPSHOT_VERSION, state } });
-		})
-		.catch((e) => console.error(`revision ${pieceId}: snapshot failed:`, e));
-	return h.writing;
+		});
+	});
+	// Keep the queue usable after a failed write, but let the caller observe the failure.
+	h.writing = writing.catch(() => {});
+	return writing;
+}
+
+async function retire(pieceId: string) {
+	const h = held.get(pieceId);
+	if (!h) return;
+	held.delete(pieceId);
+	clearTimeout(h.timer);
+	h.session.onChange = () => {};
+	h.session.ai.lanes?.discard(() => true);
+	await h.writing;
 }
 
 /** A new piece of the learner's writing with its revision, or a fresh revision of one of their unfinished pieces. */
@@ -99,8 +124,8 @@ export async function startRevision(
 		detail: input.detail ?? "needed",
 		state: "revising",
 	};
-	if (id) await db.update(piece).set(fields).where(eq(piece.id, id));
-	else {
+	const existing = !!id;
+	if (!id) {
 		const [row] = await db
 			.insert(piece)
 			.values({
@@ -117,69 +142,79 @@ export async function startRevision(
 		id = row.id;
 	}
 	const pieceId = id;
-	const [last] = await db
-		.select({ seq: max(pieceStep.seq) })
-		.from(pieceStep)
-		.where(eq(pieceStep.pieceId, pieceId));
-	const prev = held.get(pieceId);
-	if (prev) clearTimeout(prev.timer);
-	let h: Held | undefined;
-	const ai = await callerFor(user, pieceId, () => h);
-	h = hold(pieceId, user.id, new RevisionSession(input, ai), (last?.seq ?? -1) + 1);
-	await record(pieceId, h, "create", input, {}, null, 0);
-	return pieceId;
+	return exclusive(pieceId, async () => {
+		await retire(pieceId);
+		if (existing) await db.update(piece).set(fields).where(eq(piece.id, pieceId));
+		const [last] = await db
+			.select({ seq: max(pieceStep.seq) })
+			.from(pieceStep)
+			.where(eq(pieceStep.pieceId, pieceId));
+		let h: Held | undefined;
+		const ai = await callerFor(user, pieceId, () => h);
+		h = hold(pieceId, user.id, new RevisionSession(input, ai), (last?.seq ?? -1) + 1);
+		await record(pieceId, h, "create", input, {}, null, 0);
+		return pieceId;
+	});
 }
 
 /** The learner's revision of a piece: in memory, or loaded from its snapshot. Null when they have none there. */
 export async function openRevision(user: Learner, pieceId: string): Promise<Held | null> {
-	const h = held.get(pieceId);
-	if (h) {
-		if (h.userId !== user.id) return null;
-		h.used = Date.now();
-		return h;
-	}
-	const [row] = await db
-		.select({ version: pieceRevision.version, state: pieceRevision.state, userId: piece.userId })
-		.from(pieceRevision)
-		.innerJoin(piece, eq(piece.id, pieceRevision.pieceId))
-		.where(eq(pieceRevision.pieceId, pieceId));
-	if (!row || row.userId !== user.id || row.version !== SNAPSHOT_VERSION) return null;
-	const [last] = await db
-		.select({ seq: max(pieceStep.seq) })
-		.from(pieceStep)
-		.where(eq(pieceStep.pieceId, pieceId));
-	let loaded: Held | undefined;
-	const ai = await callerFor(user, pieceId, () => loaded);
-	// Another request may have loaded it meanwhile.
-	const again = held.get(pieceId);
-	if (again) return again;
-	loaded = hold(pieceId, user.id, RevisionSession.restore(row.state as RevisionState, ai), (last?.seq ?? -1) + 1);
-	return loaded;
+	return exclusive(pieceId, async () => {
+		const h = held.get(pieceId);
+		if (h) {
+			if (h.userId !== user.id) return null;
+			h.used = Date.now();
+			return h;
+		}
+		const [row] = await db
+			.select({ version: pieceRevision.version, state: pieceRevision.state, userId: piece.userId })
+			.from(pieceRevision)
+			.innerJoin(piece, eq(piece.id, pieceRevision.pieceId))
+			.where(eq(pieceRevision.pieceId, pieceId));
+		if (!row || row.userId !== user.id || row.version !== SNAPSHOT_VERSION) return null;
+		const [last] = await db
+			.select({ seq: max(pieceStep.seq) })
+			.from(pieceStep)
+			.where(eq(pieceStep.pieceId, pieceId));
+		let loaded: Held | undefined;
+		const ai = await callerFor(user, pieceId, () => loaded);
+		// Another request may have loaded it meanwhile.
+		const again = held.get(pieceId);
+		if (again) return again;
+		loaded = hold(pieceId, user.id, RevisionSession.restore(row.state as RevisionState, ai), (last?.seq ?? -1) + 1);
+		return loaded;
+	});
 }
 
 /** One action of the page, on the tape with what it answered, and the snapshot written after it. */
 export async function act<T>(pieceId: string, h: Held, action: string, body: unknown, run: (s: RevisionSession) => Promise<T>): Promise<T> {
-	const seq = h.seq++;
-	h.step = seq;
-	h.used = Date.now();
-	const t0 = Date.now();
-	try {
-		const out = await run(h.session);
+	return exclusive(pieceId, async () => {
+		if (held.get(pieceId) !== h) throw new Error("This revision was replaced. Reload it before continuing.");
+		await h.session.ai.resolved();
+		const seq = h.seq++;
+		h.step = seq;
+		h.used = Date.now();
+		const t0 = Date.now();
+		let out: T;
+		try {
+			out = await run(h.session);
+		} catch (e) {
+			await record(pieceId, h, action, body, null, String((e as Error)?.message ?? e), Date.now() - t0, seq);
+			throw e;
+		}
 		await record(pieceId, h, action, body, out ?? {}, null, Date.now() - t0, seq);
 		return out;
-	} catch (e) {
-		await record(pieceId, h, action, body, null, String((e as Error)?.message ?? e), Date.now() - t0, seq);
-		throw e;
-	}
+	});
 }
 
 async function record(pieceId: string, h: Held, action: string, body: unknown, response: unknown, error: string | null, ms: number, seq = h.seq++) {
 	try {
-		await db.insert(pieceStep).values({ pieceId, seq, action, body: body ?? {}, response, error, ms });
+		await save(pieceId, h, { seq, action, body: body ?? {}, response, error, ms });
 	} catch (e) {
-		console.error(`revision ${pieceId}: step ${seq} not written:`, e);
+		// Do not let a later action or background save commit state whose tape step was rolled back.
+		await retire(pieceId);
+		throw e;
 	}
-	await save(pieceId, h);
 }
 
 /** The learner's piece, as far as coming back to its revision needs it. */
@@ -298,13 +333,10 @@ if (!building) setInterval(() => sweepNotes().catch((e) => console.error("notes 
 
 /** Once the piece is finished and its notes are filed, its revision is not needed again. */
 export async function dropRevision(pieceId: string) {
-	const h = held.get(pieceId);
-	if (h) {
-		clearTimeout(h.timer);
-		await h.writing;
-		held.delete(pieceId);
-	}
-	await db.delete(pieceRevision).where(eq(pieceRevision.pieceId, pieceId));
+	return exclusive(pieceId, async () => {
+		await retire(pieceId);
+		await db.delete(pieceRevision).where(eq(pieceRevision.pieceId, pieceId));
+	});
 }
 
 /** Idle revisions leave memory (their snapshot written first). */
@@ -312,18 +344,21 @@ setInterval(() => {
 	const now = Date.now();
 	for (const [id, h] of held)
 		if (now - h.used > IDLE_MS)
-			save(id, h).then(() => {
-				if (now - h.used > IDLE_MS) held.delete(id);
-			});
+			void exclusive(id, async () => {
+				if (held.get(id) !== h || Date.now() - h.used <= IDLE_MS) return;
+				await save(id, h);
+				await retire(id);
+			}).catch((e) => console.error(`revision ${id}: idle save failed:`, e));
 }, 60_000).unref();
 
 /** Every snapshot written, for shutdown. */
 export async function flushRevisions() {
-	await Promise.all([...held].map(([id, h]) => save(id, h)));
+	await Promise.all([...held].map(([id, h]) => exclusive(id, () => save(id, h))));
 }
 
 /** Development only: the revision thrown away and loaded again from its snapshot (lab/replay.mjs --reload). */
 export function reloadRevision(h: Held) {
+	h.session.onChange = () => {};
 	h.session = RevisionSession.restore(JSON.parse(JSON.stringify(h.session.snapshot())), h.session.ai);
 	h.session.onChange = h.changed;
 }

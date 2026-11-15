@@ -1,10 +1,12 @@
+import { randomUUID } from "node:crypto";
 import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Place, ScenarioKind, ScenarioStatus, SourceState, Urgency } from "#lib/constants.ts";
 import { blankVersion } from "#lib/scenario/blank.ts";
 import { SITE_OF } from "#lib/scenario/types.ts";
-import { type Version, versionsSchema } from "#lib/scenario/versions.ts";
+import { type TranslationVersion, type Version, versionsSchema } from "#lib/scenario/versions.ts";
 import { db } from "#lib/server/db/index.ts";
 import { issueScenario, piece, scenario, scenarioSource, suggestion, work } from "#lib/server/db/schema.ts";
+import { sourceIdentity } from "#lib/server/translation/identity.ts";
 import { kickSources, queueSources } from "#lib/server/translation/runner.ts";
 
 /*
@@ -31,6 +33,7 @@ export type AdminScenarioRow = {
 
 export type AdminSource = {
 	id: string;
+	generation: string;
 	language: string;
 	native: string;
 	state: SourceState;
@@ -132,6 +135,7 @@ export async function adminScenario(id: string): Promise<AdminScenario | null> {
 		works,
 		sources: sources.map((s) => ({
 			id: s.id,
+			generation: s.generation,
 			language: s.language,
 			native: s.native,
 			state: s.state as SourceState,
@@ -201,17 +205,28 @@ export async function deleteScenario(id: string) {
 }
 
 /** Makes a source again (the original changed, or the names were confirmed since). */
-export async function remakeSource(sourceId: string) {
-	await db.update(scenarioSource).set({ state: "pending", notes: null }).where(eq(scenarioSource.id, sourceId));
+export async function remakeSource(sourceId: string, generation: string) {
+	const [row] = await db
+		.select({ src: scenarioSource, s: scenario })
+		.from(scenarioSource)
+		.innerJoin(scenario, eq(scenario.id, scenarioSource.scenarioId))
+		.where(eq(scenarioSource.id, sourceId));
+	if (!row) return;
+	const v = (row.s.versions as Record<string, TranslationVersion>)[row.src.language];
+	if (!v) throw new ScenarioError("This source no longer has a version.");
+	await db
+		.update(scenarioSource)
+		.set({ state: "pending", notes: null, generation: randomUUID(), inputHash: sourceIdentity(v, row.s.workId) })
+		.where(and(eq(scenarioSource.id, sourceId), eq(scenarioSource.generation, generation)));
 	kickSources();
 }
 
 /** The admin has read the source and vouches for it. */
-export async function confirmSource(sourceId: string) {
+export async function confirmSource(sourceId: string, generation: string) {
 	await db
 		.update(scenarioSource)
 		.set({ state: "confirmed" })
-		.where(and(eq(scenarioSource.id, sourceId), inArray(scenarioSource.state, ["checked", "notes"])));
+		.where(and(eq(scenarioSource.id, sourceId), eq(scenarioSource.generation, generation), inArray(scenarioSource.state, ["checked", "notes"])));
 }
 
 /** A free scenario id from a title: its words, lowercased, numbered when taken. */

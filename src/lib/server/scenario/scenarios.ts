@@ -6,6 +6,7 @@ import { SITE_OF } from "#lib/scenario/types.ts";
 import { type ExchangeVersion, live, type TranslationVersion } from "#lib/scenario/versions.ts";
 import { db } from "#lib/server/db/index.ts";
 import { issue, issueScenario, piece, scenario, scenarioSource } from "#lib/server/db/schema.ts";
+import { sourceIdentity } from "#lib/server/translation/identity.ts";
 import { isCurrent, rank, shelfOf } from "./rank.ts";
 
 /*
@@ -16,7 +17,7 @@ import { isCurrent, rank, shelfOf } from "./rank.ts";
 export type Reader = { id: string; nativeLanguage?: string | null };
 
 type Row = typeof scenario.$inferSelect;
-type Source = Pick<typeof scenarioSource.$inferSelect, "id" | "title" | "text" | "glossary" | "native">;
+type Source = Pick<typeof scenarioSource.$inferSelect, "id" | "title" | "text" | "glossary" | "native" | "inputHash">;
 const READY = ["checked", "confirmed"];
 
 async function published(ids?: string[]) {
@@ -38,6 +39,7 @@ async function sourcesFor(language: string, native: string | null | undefined, i
 			glossary: scenarioSource.glossary,
 			native: scenarioSource.native,
 			state: scenarioSource.state,
+			inputHash: scenarioSource.inputHash,
 		})
 		.from(scenarioSource)
 		.where(and(eq(scenarioSource.language, language), eq(scenarioSource.native, native), inArray(scenarioSource.scenarioId, ids)));
@@ -75,7 +77,7 @@ async function offered(u: Reader, language: string, ids?: string[]): Promise<Off
 		if (!live(version)) return [];
 		if (row.kind !== "translation") return [{ row, version }];
 		const source = sources.get(row.id);
-		return source ? [{ row, version, source }] : [];
+		return source && source.inputHash === sourceIdentity(version as TranslationVersion, row.workId) ? [{ row, version, source }] : [];
 	});
 }
 

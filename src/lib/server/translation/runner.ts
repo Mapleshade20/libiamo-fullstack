@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
-import { and, eq, ne } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { APP_LANGS } from "#lib/constants.ts";
 import type { TranslationVersion } from "#lib/scenario/versions.ts";
 import { db } from "#lib/server/db/index.ts";
@@ -9,6 +9,7 @@ import { serviceCaller } from "#lib/server/llm/callers.ts";
 import type { Lang } from "#lib/server/revision/draft.ts";
 import { unitsOf } from "#lib/translation/blocks.ts";
 import { building } from "$app/env";
+import { sourceIdentity } from "./identity.ts";
 import { checkSource, extractTerms, makeSource, repairSource, type Term } from "./source.ts";
 import { buildNameTable, confirmedNamesOf, namesStateOf } from "./tables.ts";
 
@@ -24,8 +25,6 @@ const SWEEP_MS = 30_000;
 
 /** A paragraph as the model wrote it, without the "[2] " the prompt numbers them with. */
 const unnumbered = (p: string) => p.replace(/^\s*\[\d+\]\s*/, "").trim();
-
-export const hashOf = (original: string) => createHash("sha256").update(original).digest("hex").slice(0, 32);
 
 /**
  * The names and terms a reader of the original needs: what the model finds, with every term the scenario says the source
@@ -48,8 +47,10 @@ export async function makeSourceRow(id: string, ai: Caller = serviceCaller()) {
 	const target = row.src.language as Lang;
 	const native = row.src.native as Lang;
 	const v = (row.s.versions as Record<string, TranslationVersion>)[target];
+	const current = and(eq(scenarioSource.id, id), eq(scenarioSource.state, "pending"), eq(scenarioSource.generation, row.src.generation));
 	try {
 		if (!v) throw new Error(`no ${target} version`);
+		if (row.src.inputHash !== sourceIdentity(v, row.s.workId)) throw new Error("Source input changed; queue this version again.");
 		const { units: original, join } = unitsOf(v.original);
 		const context = `${v.where}, read by ${v.readers}`;
 		const terms = await termsFor(v, target, ai);
@@ -72,7 +73,7 @@ export async function makeSourceRow(id: string, ai: Caller = serviceCaller()) {
 				await db
 					.update(scenarioSource)
 					.set({ state: "notes", notes: { names: pending }, madeAt: new Date() })
-					.where(and(eq(scenarioSource.id, id), eq(scenarioSource.state, "pending")));
+					.where(current);
 				return;
 			}
 		}
@@ -93,16 +94,16 @@ export async function makeSourceRow(id: string, ai: Caller = serviceCaller()) {
 				glossary: made.glossary,
 				state: left.length ? "notes" : "checked",
 				notes: left.length ? { issues: left, found: first.issues } : null,
-				originalHash: hashOf(v.original),
+				inputHash: sourceIdentity(v, row.s.workId),
 				madeAt: new Date(),
 			})
-			.where(and(eq(scenarioSource.id, id), eq(scenarioSource.state, "pending")));
+			.where(current);
 	} catch (e) {
 		console.error(`translation source ${row.s.id} ${target}←${native} failed:`, e);
 		await db
 			.update(scenarioSource)
 			.set({ state: "failed", notes: { error: String((e as Error)?.message ?? e) }, madeAt: new Date() })
-			.where(and(eq(scenarioSource.id, id), eq(scenarioSource.state, "pending")));
+			.where(current);
 	}
 }
 
@@ -113,21 +114,34 @@ export async function makeSourceRow(id: string, ai: Caller = serviceCaller()) {
 export async function queueSources(scenarioId: string, opts: { natives?: readonly string[]; again?: boolean } = {}) {
 	const [s] = await db.select().from(scenario).where(eq(scenario.id, scenarioId));
 	if (s?.kind !== "translation") return 0;
-	const rows = Object.keys(s.versions as Record<string, unknown>).flatMap((language) =>
-		(opts.natives ?? APP_LANGS).filter((native) => native !== language).map((native) => ({ scenarioId, language, native, state: "pending" })),
+	const rows = Object.entries(s.versions as Record<string, TranslationVersion>).flatMap(([language, version]) =>
+		(opts.natives ?? APP_LANGS)
+			.filter((native) => native !== language)
+			.map((native) => ({
+				scenarioId,
+				language,
+				native,
+				state: "pending",
+				inputHash: sourceIdentity(version, s.workId),
+				generation: randomUUID(),
+			})),
 	);
 	if (!rows.length) return 0;
-	const q = db.insert(scenarioSource).values(rows);
-	const done = opts.again
-		? await q
-				.onConflictDoUpdate({
-					target: [scenarioSource.scenarioId, scenarioSource.language, scenarioSource.native],
-					set: { state: "pending", notes: null },
-				})
-				.returning({ id: scenarioSource.id })
-		: await q.onConflictDoNothing().returning({ id: scenarioSource.id });
+	let count = 0;
+	for (const row of rows) {
+		const done = await db
+			.insert(scenarioSource)
+			.values(row)
+			.onConflictDoUpdate({
+				target: [scenarioSource.scenarioId, scenarioSource.language, scenarioSource.native],
+				set: { state: "pending", notes: null, inputHash: row.inputHash, generation: row.generation },
+				setWhere: opts.again ? undefined : sql`${scenarioSource.inputHash} is distinct from ${row.inputHash}`,
+			})
+			.returning({ id: scenarioSource.id });
+		count += done.length;
+	}
 	kickSources();
-	return done.length;
+	return count;
 }
 
 let running: Promise<void> | null = null;
