@@ -1,13 +1,17 @@
 import { redirect } from "@sveltejs/kit";
 import { type Handle, sequence } from "@sveltejs/kit/hooks";
 import { svelteKitHandler } from "better-auth/svelte-kit";
+import { dirOf, htmlLang } from "#lib/i18n/langs.ts";
+import { perRequest } from "#lib/scope.ts";
+import { pageSetup } from "#lib/server/account/page.ts";
 import { auth } from "#lib/server/auth/auth.ts";
 import { sql } from "#lib/server/db/index.ts";
 import { ensureAgentReplyWorker, stopAgentReplyWorker } from "#lib/server/exchange/agents/boot.ts";
 import { pruneCalls } from "#lib/server/llm/records.ts";
 import { flushRevisions } from "#lib/server/revision/store.ts";
 import { ensureSourceRunner, stopSourceRunner } from "#lib/server/translation/runner.ts";
-import { building, dev } from "$app/env";
+import { building } from "$app/env";
+import { getRequestEvent } from "$app/server";
 
 /* adapter-node emits this once every connection has closed (SIGTERM from tini, SIGINT, or idle). */
 process.on("sveltekit:shutdown", async (reason) => {
@@ -36,6 +40,14 @@ if (!building) {
 	setTimeout(prune, 60_000).unref();
 	setInterval(prune, 6 * 3_600_000).unref();
 }
+
+/* The state that belongs to a learner (lib/scope.ts) is kept per request on the server, never shared between them. */
+const STATE = Symbol("learner state");
+perRequest(() => {
+	const locals = getRequestEvent().locals as App.Locals & { [STATE]?: Map<object, unknown> };
+	locals[STATE] ??= new Map();
+	return locals[STATE];
+});
 
 const handleAuth: Handle = async ({ event, resolve }) => {
 	const found = await auth.api.getSession({ headers: event.request.headers });
@@ -69,9 +81,21 @@ const handleAccess: Handle = ({ event, resolve }) => {
 	if (!user) redirect(303, "/sign-in");
 	if (!user.onboardedAt && path !== "/welcome") redirect(303, "/welcome");
 	if ((path === "/admin" || path.startsWith("/admin/")) && user.role !== "admin") return new Response("Not found", { status: 404 });
-	// The lab's pages are debug tools: development and admins only.
-	if ((path === "/lab" || path.startsWith("/lab/")) && !dev && user.role !== "admin") return new Response("Not found", { status: 404 });
 	return resolve(event);
 };
 
-export const handle = sequence(handleAuth, handleAccess);
+/* <html> as the learner set it up: the language worked in, the theme, the backdrop, the sidebar folded. */
+const handlePage: Handle = ({ event, resolve }) => {
+	const p = pageSetup(event);
+	const classes = [p.folded && "side-folded", event.route.id?.startsWith("/(focus)") && "focused"].filter(Boolean).join(" ");
+	return resolve(event, {
+		transformPageChunk: ({ html }) =>
+			html
+				.replace('<html lang="en" dir="ltr"', `<html lang="${htmlLang(p.lang)}" dir="${dirOf(p.lang)}"`)
+				.replace("%html.class%", classes)
+				.replace("%theme%", p.theme)
+				.replace("%backdrop%", p.backdrop),
+	});
+};
+
+export const handle = sequence(handleAuth, handleAccess, handlePage);

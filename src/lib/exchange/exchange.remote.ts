@@ -96,17 +96,14 @@ export const placeOf = query(PlaceQuery, async ({ scenarioId, lang }): Promise<P
 });
 
 /** Goes into the place: the piece and its exchange, the plan typed on the scenario page as the piece's background. */
-export const enterPlace = command(
-	z.object({ scenarioId: z.string().max(60), lang: z.string().max(10), plan: z.string().max(4000).default("") }),
-	async (input) => {
-		const u = learner();
-		const s = await settingFor(input.scenarioId, input.lang);
-		if (!s) error(404, "No such scenario.");
-		const r = await openExchange(u, s, input.plan);
-		await Promise.all([placeOf({ scenarioId: input.scenarioId, lang: input.lang }).refresh(), pieces().refresh()]);
-		return r;
-	},
-);
+export const enterPlace = command(z.object({ scenarioId: z.string().max(60), lang: z.string().max(10) }), async (input) => {
+	const u = learner();
+	const s = await settingFor(input.scenarioId, input.lang);
+	if (!s) error(404, "No such scenario.");
+	const r = await openExchange(u, s);
+	await Promise.all([placeOf({ scenarioId: input.scenarioId, lang: input.lang }).refresh(), pieces().refresh()]);
+	return r;
+});
 
 async function owned(exchangeId: number) {
 	const u = learner();

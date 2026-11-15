@@ -3,14 +3,17 @@ import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import Copy from "@lucide/svelte/icons/copy";
 import ExternalLink from "@lucide/svelte/icons/external-link";
 import { diffWords } from "diff";
+import { app } from "#lib/account/app.svelte.ts";
 import Accordion from "#lib/components/common/Accordion.svelte";
 import InfoTip from "#lib/components/common/InfoTip.svelte";
 import LoadingReveal from "#lib/components/common/LoadingReveal.svelte";
 import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
 import EmptyState from "#lib/components/shell/EmptyState.svelte";
+import { toast } from "#lib/components/shell/toast.svelte.ts";
+import { sandboxed, tourPiece } from "#lib/components/tour/sandbox.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
-import { app, sandboxed, toast, tx } from "#lib/demo/app.svelte.ts";
-import { keptPiece, siteOf } from "#lib/demo/data.ts";
+import { tx } from "#lib/i18n/tx.ts";
+import { siteOf } from "#lib/writing/sites.ts";
 import { notesPending, type Posted } from "#lib/writing/types.ts";
 import { pieceById } from "#lib/writing/writing.remote.ts";
 import { refreshWriting, setPosted } from "#lib/writing/writing.svelte.ts";
@@ -24,7 +27,7 @@ import { page } from "$app/state";
  */
 const id = $derived(page.params.id ?? "");
 // The tour's piece lives in its sandbox; every other is the server's.
-const w = $derived(sandboxed() ? keptPiece(id) : await pieceById(id));
+const w = $derived(sandboxed() ? tourPiece(id) : await pieceById(id));
 const r = $derived(w?.result);
 const st = $derived(siteOf(w?.site));
 const scenario = $derived(w?.scenarioId ? { id: w.scenarioId } : undefined);

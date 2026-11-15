@@ -5,6 +5,7 @@ import Pause from "@lucide/svelte/icons/pause";
 import Play from "@lucide/svelte/icons/play";
 import { onMount, tick } from "svelte";
 import { fade, fly } from "svelte/transition";
+import { browser } from "$app/env";
 import { director as d } from "./director.svelte";
 
 /*
@@ -15,7 +16,7 @@ import { director as d } from "./director.svelte";
  */
 let note: HTMLElement | undefined = $state();
 let pos = $state({ x: 0, y: 0 });
-const touch = matchMedia("(pointer: coarse)").matches;
+const touch = browser && matchMedia("(pointer: coarse)").matches;
 
 async function place() {
 	await tick();

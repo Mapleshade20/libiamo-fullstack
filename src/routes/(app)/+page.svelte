@@ -2,48 +2,23 @@
 import { onMount } from "svelte";
 import { announcements } from "#lib/account/announcements.remote.ts";
 import { dateOf, local } from "#lib/account/announcements.ts";
-import { debugging } from "#lib/client/debug.ts";
 import Backdrop from "#lib/components/backdrop/Backdrop.svelte";
 import FloatingPanel from "#lib/components/common/FloatingPanel.svelte";
 import Composer from "#lib/components/home/Composer.svelte";
-import DevPanel from "#lib/components/home/DevPanel.svelte";
 import Inbox from "#lib/components/home/Inbox.svelte";
 import Shelf from "#lib/components/home/Shelf.svelte";
 import { shell } from "#lib/components/shell/shell.svelte.ts";
-import { toast, tx } from "#lib/demo/app.svelte.ts";
+import { toast } from "#lib/components/shell/toast.svelte.ts";
+import { tx } from "#lib/i18n/tx.ts";
 
 /*
  * The home page: unread things above the greeting, the box, and the shelf. The greeting and the shelf's heading are
- * drawn once per visit, at random (the main app picks them on the server, so what the page arrives with stays). Some
- * greetings belong to a time of day or of the week and are only drawn then.
+ * drawn on the server (+page.server.ts), so what the page arrives with stays.
  */
-const GREETS: Record<string, string[]> = {
-	morning: ["greetMorning1", "greetMorning2"],
-	afternoon: ["greetAfternoon1", "greetAfternoon2"],
-	evening: ["greetEvening1", "greetEvening2"],
-	night: ["greetNight1", "greetNight2"],
-	weekend: ["greetWeekend1", "greetWeekend2"],
-	monday: ["greetMonday"],
-	friday: ["greetFriday"],
-	any: Array.from({ length: 10 }, (_, i) => `greetAny${i + 1}`),
-};
-const pick = <T>(list: T[]) => list[Math.floor(Math.random() * list.length)];
-function drawGreeting(now = new Date()) {
-	const h = now.getHours();
-	const day = now.getDay();
-	const timely = [
-		...GREETS[h >= 5 && h < 11 ? "morning" : h >= 11 && h < 17 ? "afternoon" : h >= 17 && h < 23 ? "evening" : "night"],
-		...(day === 0 || day === 6 ? GREETS.weekend : day === 1 ? GREETS.monday : day === 5 ? GREETS.friday : []),
-	];
-	// About one visit in three gets a greeting for the moment; the others, one for any time.
-	return pick(Math.random() < 0.35 ? timely : GREETS.any);
-}
-const greeting = drawGreeting();
-const shelfHead = pick(["shelfHead1", "shelfHead2", "shelfHead3", "shelfHead4"]);
+let { data } = $props();
 
 let markEl: HTMLElement | undefined = $state();
 let trayOpen = $state(false);
-let composer: Composer | undefined = $state();
 const notices = announcements();
 const read = $derived((notices.current ?? []).filter((a) => a.read));
 
@@ -118,15 +93,12 @@ $effect(() => {
 				{/if}
 			</FloatingPanel>
 			<!-- A word joiner: never break between the mark and the first word. -->
-			<span>⁠{tx(greeting)}</span>
+			<span>⁠{tx(data.greeting)}</span>
 		</h1>
-		<Composer bind:this={composer} />
+		<Composer />
 	</section>
-	<Shelf head={shelfHead} />
+	<Shelf head={data.shelfHead} />
 </main>
-{#if debugging()}
-	<div class="dev-wrap" class:away={shell.viewing}><DevPanel onfixture={(f) => composer?.fill(f)} /></div>
-{/if}
 
 <style>
 .home {
@@ -251,8 +223,5 @@ li + li {
 	text-align: center;
 	color: var(--muted);
 	font-size: 13.5px;
-}
-.dev-wrap {
-	transition: opacity 350ms var(--ease-panel);
 }
 </style>

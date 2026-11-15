@@ -16,6 +16,7 @@ import { scheduleWorldMoment } from "#lib/server/exchange/agents/worker.ts";
 import { buildSceneTranscript } from "#lib/server/exchange/prompt-context.ts";
 import { db } from "../db/index.ts";
 import { agentBatch, agentDelivery, exchange, exchangeMessage, piece, user } from "../db/schema.ts";
+import { takePlan } from "../scenario/plans.ts";
 import { type Setting, settingOf } from "./setting.ts";
 
 export const sessionMessageChronologicalOrder = [asc(exchangeMessage.createdAt), asc(exchangeMessage.id)];
@@ -294,14 +295,13 @@ async function scheduleTakers(tx: SubmitTx, input: Parameters<typeof scheduleArr
 }
 
 /**
- * Opens the exchange of a scenario: its piece (`writing`, the plan typed beforehand as its background) and the exchange,
+ * Opens the exchange of a scenario: its piece (`writing`, the plan typed on the scenario page as its background) and the exchange,
  * in one transaction. A learner has at most one unfinished piece of a scenario (a partial unique index), so entering
  * again returns the one already open.
  */
 export async function openExchange(
 	u: { id: string; tutorLanguage: string; nativeLanguage?: string | null },
 	s: Setting,
-	plan: string,
 ): Promise<{ exchangeId: number; pieceId: string }> {
 	const startedAt = new Date();
 	return db.transaction(async (tx) => {
@@ -311,6 +311,7 @@ export async function openExchange(
 			.innerJoin(exchange, eq(exchange.pieceId, piece.id))
 			.where(and(eq(piece.userId, u.id), eq(piece.scenarioId, s.id), inArray(piece.state, ["writing", "revising"])));
 		if (open) return open;
+		const plan = await takePlan(tx, u.id, s.id, s.language);
 		const [p] = await tx
 			.insert(piece)
 			.values({
@@ -321,7 +322,7 @@ export async function openExchange(
 				place: SITE_OF[s.ui],
 				title: s.title,
 				text: "",
-				background: plan.trim() || null,
+				background: plan,
 				tutorLanguage: u.tutorLanguage === "target" ? s.language : (u.nativeLanguage ?? "en"),
 				state: "writing",
 			})

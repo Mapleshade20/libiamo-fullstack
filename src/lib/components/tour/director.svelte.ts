@@ -1,16 +1,15 @@
 import { tick } from "svelte";
-import { CALLS } from "#lib/components/debug/calls.ts";
-import { app, enterSandbox, leaveSandbox } from "#lib/demo/app.svelte.ts";
-import { COLLECT_KEY } from "#lib/demo/data.ts";
+import { app } from "#lib/account/app.svelte.ts";
 import { t } from "#lib/i18n/index.svelte.ts";
 import { pacing } from "#lib/session/clock.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
+import { enterSandbox, leaveSandbox, type Sandbox } from "./sandbox.svelte.ts";
 import { playTape, recordTape, stopTape, type Tape } from "./tape";
 
 /*
  * The tour's director: a pointer that walks the learner through the app by doing it, on stand-in data (the sandbox,
- * lib/demo/app.svelte.ts) with the model's answers from a tape (tape.ts). It moves, clicks, types and drags on the real
+ * sandbox.svelte.ts) with the model's answers from a tape (tape.ts). It moves, clicks, types and drags on the real
  * pages; the learner only watches, and can pause, skip a chapter, go back one, or leave. Chapters start from their own
  * page and their own data, so any chapter can be played alone.
  *
@@ -18,7 +17,7 @@ import { playTape, recordTape, stopTape, type Tape } from "./tape";
  * is left, so a chapter is written as straight-line code.
  */
 export type Rect = { x: number; y: number; w: number; h: number };
-export type Chapter = { key: string; start: string; seed: () => Record<string, unknown>; run: (d: Director) => Promise<void> };
+export type Chapter = { key: string; start: string; seed: () => Partial<Sandbox>; run: (d: Director) => Promise<void> };
 
 export class Stopped extends Error {}
 
@@ -65,8 +64,7 @@ class Director {
 		this.recording = !!opts.record;
 		if (this.recording) this.tape = recordTape();
 		else playTape(tape);
-		document.documentElement.classList.add("touring", "no-calls");
-		CALLS.reset();
+		document.documentElement.classList.add("touring");
 		pacing.speed = 1.6;
 		this.on = true;
 		const p = innerWidth / 2;
@@ -81,12 +79,9 @@ class Director {
 		leaveSandbox();
 		this.onEnd?.();
 		this.onEnd = null;
-		sessionStorage.removeItem(COLLECT_KEY);
-		CALLS.reset();
-		document.documentElement.classList.remove("touring", "no-calls");
+		document.documentElement.classList.remove("touring");
 		pacing.speed = 1;
 		pacing.paused = false;
-		localStorage.setItem("tourDone", "1");
 		this.on = false;
 		this.caption = null;
 		this.focus = null;
@@ -114,7 +109,6 @@ class Director {
 			this.keys = null;
 			this.idle = false;
 			this.seenPath = "";
-			sessionStorage.removeItem(COLLECT_KEY);
 			enterSandbox(c.seed());
 			this.epoch++;
 			if (page.url.pathname !== c.start) await goto(c.start);

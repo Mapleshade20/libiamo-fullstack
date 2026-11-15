@@ -1,9 +1,10 @@
 <script lang="ts">
 import { blur } from "svelte/transition";
+import { app } from "#lib/account/app.svelte.ts";
 import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
 import EmptyState from "#lib/components/shell/EmptyState.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
-import { app, tx } from "#lib/demo/app.svelte.ts";
+import { tx } from "#lib/i18n/tx.ts";
 import { dueNow, notesNow } from "#lib/notebook/notebook.svelte.ts";
 import type { Note } from "#lib/notebook/types.ts";
 

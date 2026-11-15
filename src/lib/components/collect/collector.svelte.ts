@@ -1,7 +1,5 @@
-import { CALLS } from "#lib/components/debug/calls.ts";
-import { read, sandboxed, write } from "#lib/demo/app.svelte.ts";
-import { COLLECTED_KEY } from "#lib/demo/data.ts";
-import { checkCall, stopOf } from "#lib/demo/limits.ts";
+import { keepCollected, sandboxed } from "#lib/components/tour/sandbox.svelte.ts";
+import { answered, needKey, stopOf } from "#lib/llm/stops.ts";
 import { removeNotes } from "#lib/notebook/notebook.remote.ts";
 
 /*
@@ -24,7 +22,7 @@ export type Kept = {
 	/** The notebook entry it is kept as. */
 	id?: string;
 };
-type Setup = { lang: string; native: string; feedback: string; model: string; place?: string };
+type Setup = { lang: string; native: string; feedback: string; place?: string };
 
 export class Collector {
 	kept = $state<Kept[]>([]);
@@ -70,9 +68,9 @@ export class Collector {
 		if (!todo.length) return;
 		const sent = todo.map((k, i) => ({ n: i + 1, text: k.marked, key: k.key, sentence: k.sentence }));
 		try {
-			checkCall(`explain:${sent.map((x) => x.text).join("|")}`);
+			needKey();
 			this.halt = null;
-			const r = await CALLS.traced("/api/collect/explain", {
+			const r = await fetch("/api/collect/explain", {
 				method: "POST",
 				headers: { "content-type": "application/json" },
 				body: JSON.stringify({
@@ -83,7 +81,7 @@ export class Collector {
 					retry: this.retries,
 				}),
 			});
-			if (!r.ok) throw new Error(String(r.status));
+			await answered(r);
 			const { items, readingId } = (await r.json()) as {
 				readingId?: string;
 				items: { n: number; id?: string; phrase: string; meaning: string; register: string; why: string; example: string }[];
@@ -121,25 +119,23 @@ export class Collector {
 		}
 		this.store();
 	}
+	/** The tour's phrases go to its sandbox (the server kept the learner's as they were filled in). */
 	private store() {
 		if (!sandboxed()) return;
-		const others = read<{ batch?: string }[]>(COLLECTED_KEY, []).filter((x) => x.batch !== this.batch);
-		write(COLLECTED_KEY, [
-			...others,
-			...this.kept
+		keepCollected(
+			this.batch,
+			this.kept
 				.filter((k) => k.phrase)
 				.map((k) => ({
-					batch: this.batch,
 					lang: this.setup.lang,
-					phrase: k.phrase,
-					meaning: k.meaning,
+					phrase: k.phrase as string,
+					meaning: k.meaning ?? "",
 					why: k.why,
 					register: k.register,
 					example: k.example,
 					marked: k.marked,
 					sentence: k.sentence,
-					at: Date.now(),
 				})),
-		]);
+		);
 	}
 }

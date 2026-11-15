@@ -5,8 +5,8 @@ import { onMount } from "svelte";
 import { account, auth, enter, hydrate, resendVerification, atx as tx } from "#lib/account/account.svelte.ts";
 import MarkedLine from "#lib/components/common/MarkedLine.svelte";
 import Notice from "#lib/components/common/Notice.svelte";
+import { toast } from "#lib/components/shell/toast.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
-import { toast } from "#lib/demo/app.svelte.ts";
 import { page } from "$app/state";
 
 /*

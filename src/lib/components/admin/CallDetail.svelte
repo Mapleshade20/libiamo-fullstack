@@ -4,7 +4,7 @@ import Copy from "@lucide/svelte/icons/copy";
 import { fmtClock, fmtCost, type RecordedCall } from "#lib/admin/records.ts";
 import Accordion from "#lib/components/common/Accordion.svelte";
 import { tip } from "#lib/components/common/tip.ts";
-import { toast } from "#lib/demo/app.svelte.ts";
+import { toast } from "#lib/components/shell/toast.svelte.ts";
 
 /*
  * One model call of a session: what it was for, the model and effort, when it ran and what it cost, the messages it

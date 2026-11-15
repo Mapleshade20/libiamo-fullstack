@@ -1,7 +1,7 @@
 <script lang="ts">
 import Notice from "#lib/components/common/Notice.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
-import type { Stop } from "#lib/demo/limits.ts";
+import type { Stop } from "#lib/llm/stops.ts";
 
 /*
  * Why a step did not happen, said where the step was (under the box, in the post, in the conversation), never as a

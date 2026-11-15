@@ -1,5 +1,5 @@
 {
-  "id": "dbad2469-9317-417b-a52c-a1d4c3d38370",
+  "id": "a0d2d1bb-b601-4ce7-a2c7-dc937a9fb77c",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -2716,6 +2716,91 @@
       },
       "isRLSEnabled": false
     },
+    "public.scenario_plan": {
+      "name": "scenario_plan",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "scenario_id": {
+          "name": "scenario_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "language": {
+          "name": "language",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "text": {
+          "name": "text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "scenario_plan_user_id_user_id_fk": {
+          "name": "scenario_plan_user_id_user_id_fk",
+          "tableFrom": "scenario_plan",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "scenario_plan_scenario_id_scenario_id_fk": {
+          "name": "scenario_plan_scenario_id_scenario_id_fk",
+          "tableFrom": "scenario_plan",
+          "tableTo": "scenario",
+          "columnsFrom": [
+            "scenario_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "scenario_plan_user_id_scenario_id_language_pk": {
+          "name": "scenario_plan_user_id_scenario_id_language_pk",
+          "columns": [
+            "user_id",
+            "scenario_id",
+            "language"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "scenario_plan_language_check": {
+          "name": "scenario_plan_language_check",
+          "value": "\"scenario_plan\".\"language\" in ('en', 'es', 'fr', 'de', 'it', 'pt', 'ja', 'ko', 'zh-CN', 'ru', 'ar', 'nl', 'tr', 'pl')"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.scenario_source": {
       "name": "scenario_source",
       "schema": "",
@@ -3305,6 +3390,34 @@
           "notNull": true,
           "default": true
         },
+        "theme": {
+          "name": "theme",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'system'"
+        },
+        "backdrop": {
+          "name": "backdrop",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'none'"
+        },
+        "pattern": {
+          "name": "pattern",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'blossom'"
+        },
+        "detail": {
+          "name": "detail",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'needed'"
+        },
         "onboarded_at": {
           "name": "onboarded_at",
           "type": "timestamp with time zone",
@@ -3365,6 +3478,22 @@
         "user_tutor_language_check": {
           "name": "user_tutor_language_check",
           "value": "\"user\".\"tutor_language\" in ('native', 'target')"
+        },
+        "user_theme_check": {
+          "name": "user_theme_check",
+          "value": "\"user\".\"theme\" in ('system', 'light', 'dark')"
+        },
+        "user_backdrop_check": {
+          "name": "user_backdrop_check",
+          "value": "\"user\".\"backdrop\" in ('none', 'pattern', 'image', 'painting')"
+        },
+        "user_pattern_check": {
+          "name": "user_pattern_check",
+          "value": "\"user\".\"pattern\" in ('blossom', 'wheat', 'ginkgo', 'snow')"
+        },
+        "user_detail_check": {
+          "name": "user_detail_check",
+          "value": "\"user\".\"detail\" in ('needed', 'more')"
         },
         "user_weekly_goal_check": {
           "name": "user_weekly_goal_check",

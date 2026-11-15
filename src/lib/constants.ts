@@ -28,6 +28,13 @@ export type Role = (typeof ROLES)[number];
 /** The tutor speaks the learner's own language or the one they write in. */
 export const TUTOR_LANGUAGES = ["native", "target"] as const;
 export type TutorLanguage = (typeof TUTOR_LANGUAGES)[number];
+/** How the pages look: light or dark (or as the system is), and what lies behind the home page. */
+export const THEMES = ["system", "light", "dark"] as const;
+export type Theme = (typeof THEMES)[number];
+export const BACKDROPS = ["none", "pattern", "image", "painting"] as const;
+export type Backdrop = (typeof BACKDROPS)[number];
+export const PATTERN_NAMES = ["blossom", "wheat", "ginkgo", "snow"] as const;
+export type PatternName = (typeof PATTERN_NAMES)[number];
 /** Where a learner's own key comes from. */
 export const KEY_PROVIDERS = ["openrouter", "deepseek", "openai", "glm"] as const;
 export type KeyProvider = (typeof KEY_PROVIDERS)[number];

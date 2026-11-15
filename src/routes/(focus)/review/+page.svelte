@@ -4,13 +4,14 @@ import Eye from "@lucide/svelte/icons/eye";
 import Lightbulb from "@lucide/svelte/icons/lightbulb";
 import { diffChars, diffWords } from "diff";
 import { onMount, tick } from "svelte";
+import { app } from "#lib/account/app.svelte.ts";
 import { tip } from "#lib/components/common/tip.ts";
 import RateMark from "#lib/components/review/RateMark.svelte";
 import ReviewFace from "#lib/components/review/ReviewFace.svelte";
 import FocusBar from "#lib/components/shell/FocusBar.svelte";
+import { practised, sandboxed } from "#lib/components/tour/sandbox.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
-import { app, sandboxed, tx } from "#lib/demo/app.svelte.ts";
-import { practised } from "#lib/demo/data.ts";
+import { tx } from "#lib/i18n/tx.ts";
 import { rate as sendRating } from "#lib/notebook/notebook.remote.ts";
 import { deckNow } from "#lib/notebook/notebook.svelte.ts";
 import type { ReviewCard } from "#lib/notebook/types.ts";
@@ -26,7 +27,6 @@ import { goto } from "$app/navigation";
  */
 // The sitting is the cards due when the page opened; ratings change it here, not by asking the server again.
 const deck: ReviewCard[] = await deckNow();
-if (!deck.length) goto("/", { replace: true });
 const sitting = createSitting(deck);
 const started = Date.now();
 let shownAt = started;
@@ -116,6 +116,8 @@ const minutes = $derived(finished ? Math.max(1, Math.round((Date.now() - started
 const firstTry = $derived(finished ? sitting.done.filter((i) => firstRight.get(i.card.id)).length : 0);
 
 onMount(() => {
+	// Nothing due: nothing to sit through.
+	if (!deck.length) return void goto("/", { replace: true });
 	document.title = `${tx("rvTitle")} · ${tx("homeTitle")}`;
 	focusNow();
 	const keys = (e: KeyboardEvent) => {

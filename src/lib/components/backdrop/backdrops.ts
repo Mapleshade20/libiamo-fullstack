@@ -1,4 +1,4 @@
-// @ts-nocheck: string-built SVG art, ported as is from the old plain-HTML demo.
+// @ts-nocheck: string-built SVG art, kept as it was first drawn (plain HTML strings).
 /* The backdrop behind the home page and the scene card, as the learner set it in their preferences: nothing, a
    wallpaper of small repeated motifs, or an old print, a different one each day. Neither follows the clock or the
    season. (The drawn landscapes they replace are kept on the archive/drawn-backdrops branch.) */
@@ -96,8 +96,8 @@ const PRINTS = [
 ];
 // One picture a day from a series, the same all day (the main app picks it on the server); consecutive days are far
 // apart in the list (5 shares no factor with either series' length).
-export function ofDay(list, date = new Date(), offset = 0) {
-	const day = Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 864e5) + offset;
+export function ofDay(list, date = new Date()) {
+	const day = Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 864e5);
 	const n = list.length;
 	return list[(((day * 5) % n) + n) % n];
 }
@@ -317,31 +317,21 @@ function patternHtml(name, dark) {
 	return `<div class="pattern" style="background-size:${w * 1.15}px ${h * 1.15}px;background-image:url('data:image/svg+xml,${encodeURIComponent(tile.replace(/\s+/g, " "))}')"></div>`;
 }
 
-/* The learner's choice (their preferences; localStorage here, the profile in the main app), set on <html> before the
-   page paints so the page can lay itself out for it. */
-export const BACKDROPS = ["none", "pattern", "image", "painting"];
-export const backdropChoice = () => ({
-	backdrop: BACKDROPS.find((v) => v === localStorage.getItem("backdrop")) ?? "none",
-	pattern: Object.keys(PATTERNS).find((v) => v === localStorage.getItem("pattern")) ?? "blossom",
-});
-
-export function renderBackdrop(host) {
-	const choice = backdropChoice();
-	const dark = document.documentElement.dataset.theme === "dark";
+/* The learner's choice (their settings, lib/account/app.svelte.ts), put on <html> so the page can lay itself out for
+   it (the server puts it there first). */
+export function renderBackdrop(host, choice, dark) {
 	// Paintings are for the light theme only; at night the choice stands but nothing is shown.
 	const backdrop = choice.backdrop === "painting" && dark ? "none" : choice.backdrop;
-	// The demo settings can step through a series (`homeDev.imageOffset`).
-	const offset = Number(JSON.parse(localStorage.getItem("homeDev") || "{}").imageOffset) || 0;
 	document.documentElement.dataset.backdrop = backdrop;
-	const key = `${backdrop}:${choice.pattern}:${dark}:${offset}`;
+	const key = `${backdrop}:${choice.pattern}:${dark}`;
 	if (host.dataset.key === key) return;
 	host.dataset.key = key;
 	host.classList.toggle("full", backdrop === "pattern" || backdrop === "painting");
 	host.innerHTML =
 		backdrop === "image"
-			? printHtml(ofDay(PRINTS, new Date(), offset))
+			? printHtml(ofDay(PRINTS, new Date()))
 			: backdrop === "painting"
-				? paintingHtml(ofDay(PAINTINGS, new Date(), offset))
+				? paintingHtml(ofDay(PAINTINGS, new Date()))
 				: backdrop === "pattern"
 					? patternHtml(choice.pattern, dark)
 					: "";

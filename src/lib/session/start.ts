@@ -1,4 +1,4 @@
-import { checkCall } from "#lib/demo/limits.ts";
+import { needKey } from "#lib/llm/stops.ts";
 import { refreshWriting } from "#lib/writing/writing.svelte.ts";
 import type { Setup } from "./types";
 
@@ -10,7 +10,7 @@ import type { Setup } from "./types";
 let handed: { id: string; setup: Setup } | null = null;
 
 export async function startPiece(setup: Setup): Promise<string> {
-	checkCall("session");
+	needKey();
 	const r = await fetch("/api/s", {
 		method: "POST",
 		headers: { "content-type": "application/json" },

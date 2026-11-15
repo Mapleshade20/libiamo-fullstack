@@ -1,5 +1,5 @@
 <script lang="ts">
-import { toastState } from "#lib/demo/app.svelte.ts";
+import { toastState } from "#lib/components/shell/toast.svelte.ts";
 
 /* A quiet word after an action: rises in with a fade, a blur and a scale (transitions.dev "Toast"), leaves by itself. */
 let on = $state(false);

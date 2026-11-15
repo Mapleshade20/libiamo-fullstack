@@ -2,14 +2,15 @@
 import ArrowRight from "@lucide/svelte/icons/arrow-right";
 import { untrack } from "svelte";
 import { fly } from "svelte/transition";
+import { app } from "#lib/account/app.svelte.ts";
 import FocusBar from "#lib/components/shell/FocusBar.svelte";
+import { toast } from "#lib/components/shell/toast.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
-import { app, toast, tx } from "#lib/demo/app.svelte.ts";
-import { siteOf } from "#lib/demo/data.ts";
-import { dev } from "#lib/demo/dev.svelte.ts";
 import { afterPlace, readInPlace } from "#lib/exchange/exchange.remote.ts";
+import { tx } from "#lib/i18n/tx.ts";
 import { startPiece } from "#lib/session/start.ts";
 import type { Setup } from "#lib/session/types.ts";
+import { siteOf } from "#lib/writing/sites.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
 
@@ -26,8 +27,8 @@ const st = $derived(siteOf(after?.site));
 const chat = $derived(after?.place === "discord" || after?.place === "imessage");
 // Nothing to look back on yet: the exchange goes on in its place (or was never begun).
 $effect(() => {
-	if (!after) goto(`/scenario/${id}`, { replaceState: true });
-	else if (after.open) goto(`/scenario/${id}/play`, { replaceState: true });
+	if (!after) goto(`/scenario/${id}`, { replace: true });
+	else if (after.open) goto(`/scenario/${id}/play`, { replace: true });
 });
 
 // The thread shows every reply: they are read now (the home page stops announcing them).
@@ -44,7 +45,6 @@ async function review() {
 	const pieceId = await startPiece({
 		...after.handoff,
 		pieceId: after.pieceId,
-		...$state.snapshot(dev),
 		learner: app.prefs.native,
 		feedback: app.prefs.feedback as Setup["feedback"],
 		lang: after.language,

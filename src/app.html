@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-backdrop="none">
+<html lang="en" dir="ltr" class="%html.class%" data-theme="%theme%" data-backdrop="%backdrop%">
 	<head>
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -11,18 +11,18 @@
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Italianno&display=swap">
 		<script>
-		// Light or dark before the first paint: the learner's choice, else the system's (lib/demo/theme.ts keeps it after).
+		// The learner's theme is on <html> from the server; "system" is decided here, before the first paint
+		// (lib/account/look.svelte.ts follows the system after). Paintings are for the light theme only.
 		(() => {
-			const c = localStorage.getItem("theme");
-			const dark = c === "dark" || (c !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
-			document.documentElement.dataset.theme = dark ? "dark" : "light";
-			if (localStorage.getItem("sideFolded") === "1") document.documentElement.classList.add("side-folded");
+			const html = document.documentElement;
+			if (html.dataset.theme === "system") html.dataset.theme = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+			if (html.dataset.theme === "dark" && html.dataset.backdrop === "painting") html.dataset.backdrop = "none";
 			// Back from the session page (a separate document): name the trip so the scene card shrinks into the box.
 			addEventListener("pagereveal", (e) => {
 				const from = navigation?.activation?.from?.url;
 				if (!e.viewTransition || !from) return;
-				document.documentElement.dataset.vt = `${new URL(from).pathname}>${location.pathname}`;
-				e.viewTransition.finished.finally(() => delete document.documentElement.dataset.vt);
+				html.dataset.vt = `${new URL(from).pathname}>${location.pathname}`;
+				e.viewTransition.finished.finally(() => delete html.dataset.vt);
 			});
 		})();
 		</script>

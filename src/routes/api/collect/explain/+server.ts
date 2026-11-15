@@ -2,6 +2,7 @@ import { error } from "@sveltejs/kit";
 import { LEARNABLE } from "#lib/constants.ts";
 import { collectInput } from "#lib/server/collect.ts";
 import { learner } from "#lib/server/guard.ts";
+import { stopOf } from "#lib/server/llm/transport.ts";
 import { explain } from "#lib/server/notebook/collect.ts";
 import { fileCollected } from "#lib/server/notebook/notes.ts";
 
@@ -19,7 +20,8 @@ export async function POST({ request }) {
 	if (!hs.length) error(400, "nothing highlighted");
 	const d = await collectInput(b);
 	if (!(LEARNABLE as readonly string[]).includes(d.lang)) error(400, "unknown language");
-	const items = await explain(d, hs, Number(b.retry) || 0);
+	const items = await explain(d, hs, Number(b.retry) || 0).catch((e) => e as Error);
+	if (items instanceof Error) return Response.json({ error: items.message, code: stopOf(items) }, { status: 502 });
 	const { readingId, ids } = await fileCollected(
 		u,
 		{

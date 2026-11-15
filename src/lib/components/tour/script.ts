@@ -1,8 +1,8 @@
+import { app } from "#lib/account/app.svelte.ts";
 import { drinkOf } from "#lib/components/streak/glass/drinks.ts";
-import { app } from "#lib/demo/app.svelte.ts";
-import { dayKey, practised, recordWriting } from "#lib/demo/data.ts";
 import { contentFor } from "./content";
 import type { Chapter, Director } from "./director.svelte";
+import { dayKey, practised, recordTourPiece, type Sandbox } from "./sandbox.svelte.ts";
 
 /*
  * The tour, chapter by chapter, from the learner's seat: what they most want to know is what happens to something they
@@ -10,12 +10,8 @@ import type { Chapter, Director } from "./director.svelte";
  * where they all go and how they come back, what to write when they have nothing, and how a day counts.
  */
 const content = () => contentFor(app.lang);
-const base = (): Record<string, unknown> => ({
-	homeDraft: {},
-	practiceDays: {},
-	glassSeen: { day: dayKey(), look: "down", drink: drinkOf().id },
-});
-const withPiece = () => ({ ...base(), myWriting: [content().piece(Date.now())] });
+const base = (): Partial<Sandbox> => ({ glass: { day: dayKey(), look: "down", drink: drinkOf().id } });
+const withPiece = () => ({ ...base(), pieces: [content().piece(Date.now())] });
 const withKept = () => ({ ...withPiece(), collected: [content().kept(Date.now())] });
 
 const q = <T extends Element = HTMLElement>(sel: string) => [...document.querySelectorAll<T>(sel)];
@@ -149,7 +145,7 @@ const write: Chapter = {
 		await d.say("tourW8c", last(q<HTMLElement>(".thread .stop:last-of-type .replies > *")) ?? lastStop());
 		d.quiet();
 		// The rest goes the same way; the tour skips to the finished piece.
-		recordWriting(c.piece(Date.now()));
+		recordTourPiece(c.piece(Date.now()));
 		await d.go("/w/tour-piece");
 		await d.say("tourW9", ".piece .ready");
 		await d.say("tourW10", ".piece .learned");
@@ -226,7 +222,7 @@ const scenario: Chapter = {
 const week: Chapter = {
 	key: "tourWeek",
 	start: "/",
-	seed: () => ({ ...withKept(), practiceDays: { [dayKey()]: "learned" }, glassSeen: { day: dayKey(), look: "up", drink: drinkOf().id } }),
+	seed: () => ({ ...withKept(), days: { [dayKey()]: "learned" }, glass: { day: dayKey(), look: "up", drink: drinkOf().id } }),
 	async run(d) {
 		await d.say("tourK1", ".week-btn");
 		await d.click(".week-btn");

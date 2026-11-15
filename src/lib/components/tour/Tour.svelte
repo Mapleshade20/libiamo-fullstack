@@ -1,6 +1,6 @@
 <script lang="ts">
+import { app } from "#lib/account/app.svelte.ts";
 import { onboarding } from "#lib/account/onboarding.svelte.ts";
-import { app } from "#lib/demo/app.svelte.ts";
 import { dev } from "$app/env";
 import { page } from "$app/state";
 import { hasContent } from "./content";

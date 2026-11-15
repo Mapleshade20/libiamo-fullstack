@@ -31,11 +31,6 @@ export async function markAnnouncementRead(userId: string, announcementId: numbe
 	await db.insert(announcementRead).values({ userId, announcementId }).onConflictDoNothing();
 }
 
-/** For the developer settings: every announcement unread again. */
-export async function forgetAnnouncementReads(userId: string) {
-	await db.delete(announcementRead).where(eq(announcementRead.userId, userId));
-}
-
 export type AdminAnnouncement = {
 	id: number;
 	publishedAt: string | null;

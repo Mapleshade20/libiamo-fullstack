@@ -10,9 +10,9 @@ import { fmtDay, langEn } from "#lib/admin/records.ts";
 import Accordion from "#lib/components/common/Accordion.svelte";
 import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
 import { tip } from "#lib/components/common/tip.ts";
+import { toast } from "#lib/components/shell/toast.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
 import type { SuggestionPlace } from "#lib/constants.ts";
-import { toast } from "#lib/demo/app.svelte.ts";
 import { SITE_OF } from "#lib/scenario/types.ts";
 import { goto } from "$app/navigation";
 

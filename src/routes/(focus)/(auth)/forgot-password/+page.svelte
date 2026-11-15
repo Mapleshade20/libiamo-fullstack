@@ -6,8 +6,8 @@ import PasswordField from "#lib/components/auth/PasswordField.svelte";
 import MarkedLine from "#lib/components/common/MarkedLine.svelte";
 import { shake } from "#lib/components/common/motion.ts";
 import Notice from "#lib/components/common/Notice.svelte";
+import { toast } from "#lib/components/shell/toast.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
-import { toast } from "#lib/demo/app.svelte.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
 

@@ -10,8 +10,9 @@ import { autogrow, shake } from "#lib/components/common/motion.ts";
 import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
 import { tip } from "#lib/components/common/tip.ts";
 import EmptyState from "#lib/components/shell/EmptyState.svelte";
+import { toast } from "#lib/components/shell/toast.svelte.ts";
 import type { FeedbackKind } from "#lib/constants.ts";
-import { toast, tx } from "#lib/demo/app.svelte.ts";
+import { tx } from "#lib/i18n/tx.ts";
 import { page } from "$app/state";
 
 /*

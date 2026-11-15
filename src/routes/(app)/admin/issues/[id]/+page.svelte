@@ -8,9 +8,9 @@ import Checkbox from "#lib/components/common/Checkbox.svelte";
 import ModalDialog from "#lib/components/common/ModalDialog.svelte";
 import { tip } from "#lib/components/common/tip.ts";
 import SiteArt from "#lib/components/home/SiteArt.svelte";
+import { toast } from "#lib/components/shell/toast.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
-import { toast } from "#lib/demo/app.svelte.ts";
-import { siteOf } from "#lib/demo/data.ts";
+import { siteOf } from "#lib/writing/sites.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
 
@@ -66,13 +66,13 @@ async function save() {
 	saving = false;
 	if (!r.ok) return toast(r.error);
 	toast(new Date(`${it.date}T12:00`) > new Date() ? `Scheduled for ${it.date}` : "Saved");
-	if (isNew) goto(`/admin/issues/${id}`, { replaceState: true });
+	if (isNew) goto(`/admin/issues/${id}`, { replace: true });
 }
 async function remove() {
 	deleting = false;
 	if (!found) return;
 	await deleteOneIssue(found.id).catch(() => toast("Could not delete it"));
-	goto("/admin/issues", { replaceState: true });
+	goto("/admin/issues", { replace: true });
 }
 const n = $derived(it.scenarios.length);
 const ok = $derived(n >= 4 && n <= 6 && !!it.title.trim());

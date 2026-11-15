@@ -8,9 +8,6 @@ export type Setup = {
 	learner: string;
 	feedback: "native" | "target";
 	lang?: string;
-	model?: string;
-	grader?: string;
-	cache?: string;
 	scenario?: { id: string; title: string; site: string };
 	/** A scenario's conversation as it happened; `text` is then its learner turns joined by `SEP` lines. */
 	exchange?: Exchange;

@@ -88,7 +88,7 @@ export async function chat(messages: Message[], opts: CallOptions): Promise<Call
 	if (!route) throw new LimitError("nokey");
 	const effort = opts.effort ?? "medium";
 	const { cache, lanes, record } = ai.init;
-	const live: LiveCall | undefined = lanes?.begin(ai.purpose, opts.tag, route.model, messages, ai.background);
+	const live: LiveCall | undefined = lanes?.begin(ai.purpose, opts.tag, route.model, ai.background);
 	const key = { model: route.model, effort, sample: opts.sample ?? 0, messages, tag: opts.tag };
 	const base = {
 		purpose: ai.purpose,
@@ -102,7 +102,7 @@ export async function chat(messages: Message[], opts: CallOptions): Promise<Call
 	};
 	const hit = cache && !ai.init.fresh ? cache.get(key) : null;
 	if (hit) {
-		if (live) lanes?.finish(live, { state: "cached", ms: 0, tokens: hit.usage, cost: hit.costUsd, output: hit.text });
+		if (live) lanes?.finish(live, { state: "cached", ms: 0 });
 		return { text: hit.text, usage: hit.usage, ms: hit.ms, cached: true, costUsd: hit.costUsd };
 	}
 	try {
@@ -113,7 +113,7 @@ export async function chat(messages: Message[], opts: CallOptions): Promise<Call
 			const r = await send(route, messages, effort, opts.limits);
 			cache?.put(key, r);
 			const discarded = live?.state === "discarded";
-			if (live) lanes?.finish(live, { state: "done", ms: r.ms, tokens: r.usage, cost: r.costUsd, output: r.text });
+			if (live) lanes?.finish(live, { state: "done", ms: r.ms });
 			safely(record, {
 				...base,
 				state: discarded ? "discarded" : opts.tag.endsWith("/repair") ? "repaired" : "done",

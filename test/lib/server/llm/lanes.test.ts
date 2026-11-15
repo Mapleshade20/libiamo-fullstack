@@ -9,7 +9,7 @@ function fakeCall(lanes: Lanes, purpose: string, bg: boolean, started: string[])
 		done = r;
 	});
 	const run = (async () => {
-		const call = lanes.begin(purpose, "t", "m", [], bg);
+		const call = lanes.begin(purpose, "t", "m", bg);
 		const release = await lanes.gate(call);
 		started.push(purpose);
 		await finished;

@@ -1,10 +1,11 @@
 <script lang="ts">
 import RotateCcw from "@lucide/svelte/icons/rotate-ccw";
 import Send from "@lucide/svelte/icons/send";
+import { toast } from "#lib/components/shell/toast.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
-import { toast, tx } from "#lib/demo/app.svelte.ts";
-import { type FollowUp, siteOf } from "#lib/demo/data.ts";
-import { setPosted } from "#lib/writing/writing.svelte.ts";
+import { tx } from "#lib/i18n/tx.ts";
+import { siteOf } from "#lib/writing/sites.ts";
+import { type FollowUp, setPosted } from "#lib/writing/writing.svelte.ts";
 
 /*
  * The shelf's follow-up: one piece, one question. Whether it was posted (answered in place; the card then gives way),

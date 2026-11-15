@@ -39,17 +39,17 @@ export const tr = (lang: string, key: string, vars: Record<string, string | numb
 	(UI[lang]?.[key] ?? UI.en[key] ?? key).replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ""));
 
 /**
- * The playable demo's server side. The browser page is rehearsal.html with its hand-written content replaced by these
- * calls, so the page keeps driving the session (pacing, cards, typing) and the server only answers each step.
+ * The server side of one revision. The page (lib/session) drives it (pacing, cards, typing) and the server answers each
+ * step.
  */
 
-/** The page's post format (rehearsal.html's DOC): paragraphs of plain text and items. */
+/** The page's post format: paragraphs of plain text and items. */
 type Part = string | { hole: string } | { choice: string[] };
 type Seg = string | { item: string; parts: Part[]; revised?: boolean };
 type Doc = Seg[][];
 type Span = { id: string; from: number; to: number; part?: Part; revised?: boolean };
 
-/** Hesitations ("a / b") the writer left and passages still in their own script show as the demo's chips, wherever they are. */
+/** Hesitations ("a / b") the writer left and passages still in their own script show as chips, wherever they are. */
 type Marks = { choices: string[]; hole: string | null };
 const SCRIPTS: Partial<Record<Lang, string[]>> = {
 	"zh-CN": ["Han"],

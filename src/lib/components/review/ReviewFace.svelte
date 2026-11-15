@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { Snippet } from "svelte";
-import { tx } from "#lib/demo/app.svelte.ts";
+import { tx } from "#lib/i18n/tx.ts";
 import { around, type Face } from "#lib/review/faces.ts";
 
 /*

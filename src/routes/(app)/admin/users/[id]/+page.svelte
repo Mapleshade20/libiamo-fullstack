@@ -4,8 +4,8 @@ import { account } from "#lib/account/account.svelte.ts";
 import { fmtCost, fmtDay, fmtWhen, langEn } from "#lib/admin/records.ts";
 import { deleteOneUser, userCalls, userList } from "#lib/admin/users.remote.ts";
 import ModalDialog from "#lib/components/common/ModalDialog.svelte";
+import { toast } from "#lib/components/shell/toast.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
-import { toast } from "#lib/demo/app.svelte.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
 
@@ -30,7 +30,7 @@ async function remove() {
 	if (!ok) return toast("Could not delete it");
 	deleting = false;
 	toast("Account deleted");
-	goto("/admin/users", { replaceState: true });
+	goto("/admin/users", { replace: true });
 }
 const facts = $derived(
 	u

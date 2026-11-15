@@ -1,16 +1,16 @@
 <script lang="ts">
 import { fade } from "svelte/transition";
+import { app } from "#lib/account/app.svelte.ts";
 import { reducedMotion } from "#lib/components/common/motion.ts";
 import { createPlay } from "#lib/components/stickers/play.svelte.ts";
 import Sticker from "#lib/components/stickers/Sticker.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
 import { hasScenarios } from "#lib/constants.ts";
-import { app, nameOf, tx } from "#lib/demo/app.svelte.ts";
-import { followUp, myWriting } from "#lib/demo/data.ts";
-import { dev } from "#lib/demo/dev.svelte.ts";
-import { reopen } from "#lib/demo/reopen.ts";
+import { nameOf, tx } from "#lib/i18n/tx.ts";
 import { dueNow } from "#lib/notebook/notebook.svelte.ts";
 import { shelfScenarios } from "#lib/scenario/scenario.remote.ts";
+import { reopen } from "#lib/writing/open.ts";
+import { followUp, myWriting } from "#lib/writing/writing.svelte.ts";
 import FollowCard from "./FollowCard.svelte";
 import ScenarioCard from "./ScenarioCard.svelte";
 
@@ -64,7 +64,7 @@ function show(to: number, dir = 1) {
 $effect(() => {
 	const n = slides.length;
 	if (held || n < 2) return;
-	const timer = setInterval(() => show((at + 1) % n), dev.reviewEvery * 1000);
+	const timer = setInterval(() => show((at + 1) % n), 30_000);
 	return () => clearInterval(timer);
 });
 function hold(on: boolean) {

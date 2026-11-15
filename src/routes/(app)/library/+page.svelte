@@ -1,14 +1,15 @@
 <script lang="ts">
 import { blur } from "svelte/transition";
+import { app } from "#lib/account/app.svelte.ts";
 import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
 import Select from "#lib/components/common/Select.svelte";
 import ScenarioCard from "#lib/components/home/ScenarioCard.svelte";
 import EmptyState from "#lib/components/shell/EmptyState.svelte";
 import { hasScenarios } from "#lib/constants.ts";
-import { app, nameOf, tx } from "#lib/demo/app.svelte.ts";
-import { siteOf } from "#lib/demo/data.ts";
+import { nameOf, tx } from "#lib/i18n/tx.ts";
 import { library } from "#lib/scenario/scenario.remote.ts";
 import type { ScenarioCard as Card } from "#lib/scenario/types.ts";
+import { siteOf } from "#lib/writing/sites.ts";
 
 /*
  * The prompts: this month's issue (a themed handful the admin publishes on a date), then the evergreen pool, which

@@ -73,6 +73,21 @@ export type Collected = {
  * Phrases filled in from something the learner read, each kept the moment it is: the reading first (once), then an entry
  * for each. Returns the reading and the entries' ids, in order.
  */
+/** A passage pasted to collect from, kept before anything is highlighted in it. */
+export async function addReading(userId: string, text: string, language: string): Promise<string> {
+	const [r] = await db.insert(reading).values({ userId, language, text }).returning({ id: reading.id });
+	return r.id;
+}
+
+/** One of the learner's readings, as the collect page opens it. */
+export async function readingOf(userId: string, id: string): Promise<{ id: string; passage: string; lang: string } | null> {
+	const [r] = await db
+		.select({ id: reading.id, passage: reading.text, lang: reading.language })
+		.from(reading)
+		.where(and(eq(reading.id, id), eq(reading.userId, userId)));
+	return r ?? null;
+}
+
 export async function fileCollected(
 	u: WeekLearner,
 	r: { id?: string; text: string; language: string; place?: string; tutorLanguage: string },

@@ -4,8 +4,9 @@ import { tick } from "svelte";
 import { account, auth, changePassword, hasPassword, requestPasswordReset, signOut, weakPassword } from "#lib/account/account.svelte.ts";
 import ModalDialog from "#lib/components/common/ModalDialog.svelte";
 import { shake } from "#lib/components/common/motion.ts";
+import { toast } from "#lib/components/shell/toast.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
-import { toast, tx } from "#lib/demo/app.svelte.ts";
+import { tx } from "#lib/i18n/tx.ts";
 import PasswordField from "./PasswordField.svelte";
 
 /*

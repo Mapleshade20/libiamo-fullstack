@@ -1,17 +1,24 @@
 import { type AppLang, isAppLang } from "#lib/constants.ts";
+import { browser } from "$app/env";
 
 /*
- * The demo's interface strings: web/i18n/source.json (en and zh-CN by hand), translated into the other interface
- * languages by `pnpm i18n` (web/i18n/ui.json). A language is fetched when first needed; English always is, as the
- * fallback. `t(lang, key, vars)` is the main app's API.
+ * The interface strings: catalog/source.json (en and zh-CN by hand), translated into the other interface languages
+ * (catalog/ui.json). The root layout's load brings the ones a page speaks (English always, as the fallback); another
+ * is fetched when first needed. Every language holds the same strings for everyone, so the server keeps one copy.
  */
 type Dict = Record<string, string>;
 const dicts = $state<Partial<Record<AppLang, Dict>>>({});
 const pending = new Map<string, Promise<void>>();
 
+/** A language's strings, brought by the root layout's load. */
+export function provideLang(lang: AppLang, dict: Dict) {
+	if (!dicts[lang]) dicts[lang] = dict;
+}
+export const hasLang = (lang: string) => !!dicts[lang as AppLang];
+
 export function loadLang(lang: string): Promise<void> {
 	const l = isAppLang(lang) ? lang : "en";
-	if (dicts[l]) return Promise.resolve();
+	if (dicts[l] || !browser) return Promise.resolve();
 	let p = pending.get(l);
 	if (!p) {
 		p = fetch(`/api/i18n/${l}`)

@@ -6,6 +6,7 @@ import type { TranslationVersion } from "#lib/scenario/versions.ts";
 import { db } from "#lib/server/db/index.ts";
 import { piece, scenario, scenarioSource } from "#lib/server/db/schema.ts";
 import type { Lang } from "#lib/server/revision/draft.ts";
+import { takePlan } from "#lib/server/scenario/plans.ts";
 import { scenarioViewOf } from "#lib/server/scenario/scenarios.ts";
 
 /*
@@ -63,7 +64,7 @@ async function sourceFor(scenarioId: string, language: string, native: string) {
  * Keeps the sheet's draft: the piece is created with the first words (the plan typed on the scenario page as its
  * background) and its text replaced after. A piece already in its revision is left alone.
  */
-export async function saveSheet(u: SheetUser, input: { scenarioId: string; language: string; text: string; plan?: string }) {
+export async function saveSheet(u: SheetUser, input: { scenarioId: string; language: string; text: string }) {
 	const native = u.nativeLanguage ?? "en";
 	const found = await sourceFor(input.scenarioId, input.language, native);
 	if (!found || !(LEARNABLE as readonly string[]).includes(input.language)) return null;
@@ -90,7 +91,7 @@ export async function saveSheet(u: SheetUser, input: { scenarioId: string; langu
 				place: SITE_OF.translation,
 				title: v?.title ?? "",
 				text: input.text,
-				background: input.plan?.trim() || null,
+				background: await takePlan(tx, u.id, input.scenarioId, input.language),
 				tutorLanguage: u.tutorLanguage === "target" ? input.language : native,
 				state: "writing",
 			})

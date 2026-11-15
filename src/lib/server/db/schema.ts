@@ -26,6 +26,7 @@ import {
 	AGENT_BATCH_STATUSES,
 	AGENT_DELIVERY_STATUSES,
 	APP_LANGS,
+	BACKDROPS,
 	CALL_STATES,
 	CASE_STATUSES,
 	DETAILS,
@@ -38,6 +39,7 @@ import {
 	NAME_KINDS,
 	NAME_STATUSES,
 	NOTE_KINDS,
+	PATTERN_NAMES,
 	PIECE_KINDS,
 	PIECE_STATES,
 	PLACES,
@@ -49,6 +51,7 @@ import {
 	SOURCE_STATES,
 	SUGGESTION_PLACES,
 	SUGGESTION_STATUSES,
+	THEMES,
 	TUTOR_LANGUAGES,
 	URGENCIES,
 	VERDICTS,
@@ -87,6 +90,10 @@ export const user = pgTable(
 		weeklyGoal: integer("weekly_goal").default(3).notNull(),
 		timeZone: text("time_zone"),
 		helpImprove: boolean("help_improve").default(true).notNull(),
+		theme: text("theme").default("system").notNull(),
+		backdrop: text("backdrop").default("none").notNull(),
+		pattern: text("pattern").default("blossom").notNull(),
+		detail: text("detail").default("needed").notNull(),
 		onboardedAt: at("onboarded_at"),
 		/** The address a change is waiting on until its link is opened (Better Auth keeps none). */
 		pendingEmail: text("pending_email"),
@@ -99,6 +106,10 @@ export const user = pgTable(
 		check("user_learning_languages_check", sql`${t.learningLanguages} <@ array[${list(LEARNABLE)}]::text[]`),
 		check("user_active_language_check", sql`${t.activeLanguage} is null or ${t.activeLanguage} = any(${t.learningLanguages})`),
 		check("user_tutor_language_check", oneOf(t.tutorLanguage, TUTOR_LANGUAGES)),
+		check("user_theme_check", oneOf(t.theme, THEMES)),
+		check("user_backdrop_check", oneOf(t.backdrop, BACKDROPS)),
+		check("user_pattern_check", oneOf(t.pattern, PATTERN_NAMES)),
+		check("user_detail_check", oneOf(t.detail, DETAILS)),
 		check("user_weekly_goal_check", sql`${t.weeklyGoal} between 1 and 7`),
 		check("user_onboarded_check", sql`${t.onboardedAt} is null or (${t.nativeLanguage} is not null and ${t.activeLanguage} is not null)`),
 	],
@@ -385,6 +396,24 @@ export const announcement = pgTable("announcement", {
 	createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
 	createdAt: created(),
 });
+/** What a learner plans to say in a scenario, typed on its page before going in; the piece takes it as its background
+    when it is created, and the plan goes. */
+export const scenarioPlan = pgTable(
+	"scenario_plan",
+	{
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		scenarioId: text("scenario_id")
+			.notNull()
+			.references(() => scenario.id, { onDelete: "cascade" }),
+		language: text("language").notNull(),
+		text: text("text").notNull(),
+		updatedAt: updated(),
+	},
+	(t) => [primaryKey({ columns: [t.userId, t.scenarioId, t.language] }), check("scenario_plan_language_check", oneOf(t.language, LEARNABLE))],
+);
+
 export const announcementRead = pgTable(
 	"announcement_read",
 	{
