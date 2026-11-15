@@ -1,14 +1,14 @@
 <script lang="ts">
 import Plus from "@lucide/svelte/icons/plus";
+import { issueList } from "#lib/admin/issues.remote.ts";
 import Button from "#lib/components/ui/button/button.svelte";
-import { adminIssues, fmtDay, issueState } from "#lib/demo/admin.ts";
-import { scenarioById } from "#lib/demo/scenarios.ts";
+import { fmtDay } from "#lib/demo/admin.ts";
 
 /*
  * Issues: an occasional themed handful of scenarios with a date, shown first on the shelf for about a month, then
  * part of the pool. What replaced the main app's daily and weekly lineups; the pool itself needs no schedule.
  */
-const issues = adminIssues().toSorted((a, b) => b.date.localeCompare(a.date));
+const issues = $derived(await issueList());
 const LABEL = { scheduled: "Scheduled", current: "On the shelf", past: "In the pool" } as const;
 </script>
 
@@ -21,22 +21,17 @@ const LABEL = { scheduled: "Scheduled", current: "On the shelf", past: "In the p
 	</header>
 	<ul class="issues">
 		{#each issues as i (i.id)}
-			{@const state = issueState(i.date)}
+			{@const state = i.state}
 			<li>
 				<a class="issue" href="/admin/issues/{i.id}" class:past={state === "past"} style:--tone={i.tone} style:--deep={i.deep}>
 					<span class="band" aria-hidden="true"
-						><span class="d">{new Date(i.date).toLocaleDateString("en-GB", { month: "short" })}</span
-						><span class="y">{new Date(i.date).getFullYear()}</span></span
+						><span class="d">{new Date(`${i.date}T12:00`).toLocaleDateString("en-GB", { month: "short" })}</span
+						><span class="y">{new Date(`${i.date}T12:00`).getFullYear()}</span></span
 					>
 					<span class="body">
-						<span class="t">{i.title.en}</span>
-						<span class="s">{i.line.en}</span>
-						<span class="list"
-							>{i.scenarios
-								.map((id) => scenarioById(id)?.title.en)
-								.filter(Boolean)
-								.join(" · ")}</span
-						>
+						<span class="t">{i.title.en ?? Object.values(i.title)[0]}</span>
+						<span class="s">{i.line.en ?? Object.values(i.line)[0]}</span>
+						<span class="list">{i.scenarios.map((s) => s.title).join(" · ")}</span>
 					</span>
 					<span class="side">
 						<span class="adm-tag" class:ok={state === "current"}>{LABEL[state]}</span>

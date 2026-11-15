@@ -1,5 +1,4 @@
 import { drinkOf } from "#lib/components/streak/glass/drinks.ts";
-import { ANNOUNCEMENTS } from "#lib/demo/announcements.ts";
 import { app } from "#lib/demo/app.svelte.ts";
 import { dayKey, practised, recordWriting } from "#lib/demo/data.ts";
 import { contentFor } from "./content";
@@ -12,7 +11,6 @@ import type { Chapter, Director } from "./director.svelte";
  */
 const content = () => contentFor(app.lang);
 const base = (): Record<string, unknown> => ({
-	announcementsRead: ANNOUNCEMENTS.map((a) => a.id),
 	homeDraft: {},
 	practiceDays: {},
 	glassSeen: { day: dayKey(), look: "down", drink: drinkOf().id },

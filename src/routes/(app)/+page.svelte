@@ -1,5 +1,7 @@
 <script lang="ts">
 import { onMount } from "svelte";
+import { announcements } from "#lib/account/announcements.remote.ts";
+import { dateOf, local } from "#lib/account/announcements.ts";
 import { debugging } from "#lib/client/debug.ts";
 import Backdrop from "#lib/components/backdrop/Backdrop.svelte";
 import FloatingPanel from "#lib/components/common/FloatingPanel.svelte";
@@ -8,7 +10,6 @@ import DevPanel from "#lib/components/home/DevPanel.svelte";
 import Inbox from "#lib/components/home/Inbox.svelte";
 import Shelf from "#lib/components/home/Shelf.svelte";
 import { shell } from "#lib/components/shell/shell.svelte.ts";
-import { ANNOUNCEMENTS, dateOf, local, readIds } from "#lib/demo/announcements.ts";
 import { toast, tx } from "#lib/demo/app.svelte.ts";
 
 /*
@@ -43,7 +44,8 @@ const shelfHead = pick(["shelfHead1", "shelfHead2", "shelfHead3", "shelfHead4"])
 let markEl: HTMLElement | undefined = $state();
 let trayOpen = $state(false);
 let composer: Composer | undefined = $state();
-const read = $derived(ANNOUNCEMENTS.filter((a) => readIds().has(a.id)));
+const notices = announcements();
+const read = $derived((notices.current ?? []).filter((a) => a.read));
 
 onMount(() => {
 	// Seeing the whole picture is only for a picture (the old print or the painting), not for a pattern or nothing; the

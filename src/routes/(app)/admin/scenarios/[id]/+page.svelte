@@ -27,7 +27,7 @@ import ScenarioCard from "#lib/components/home/ScenarioCard.svelte";
 import Situation from "#lib/components/scenario/Situation.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
 import { type ExchangePlace, LEARNABLE, type Place, type ScenarioStatus, type SourceState, type Urgency } from "#lib/constants.ts";
-import { fmtDay, langEn, URGENCY } from "#lib/demo/admin.ts";
+import { fmtDay, langEn } from "#lib/demo/admin.ts";
 import { toast } from "#lib/demo/app.svelte.ts";
 import { openingNames, situationOf } from "#lib/exchange/opening.ts";
 import { blankOpening, blankVersion } from "#lib/scenario/blank.ts";
@@ -56,6 +56,11 @@ type Draft = {
 	workId: string | null;
 	versions: Record<string, Version>;
 };
+const URGENCY: { value: Urgency; label: string }[] = [
+	{ value: "high", label: "Soon · about 30 s" },
+	{ value: "medium", label: "In a while · about 2 min" },
+	{ value: "low", label: "Later · about 10 min" },
+];
 const isNew = $derived(page.params.id === "new");
 const loaded = $derived(isNew ? null : await scenarioOne(page.params.id ?? ""));
 const blank = (): Draft => ({
