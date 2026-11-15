@@ -2,9 +2,9 @@
 import Check from "@lucide/svelte/icons/check";
 import ExternalLink from "@lucide/svelte/icons/external-link";
 import Search from "@lucide/svelte/icons/search";
+import { langEn as nameOf } from "#lib/admin/records.ts";
 import { tip } from "#lib/components/common/tip.ts";
 import Button from "#lib/components/ui/button/button.svelte";
-import { langEn as nameOf } from "#lib/demo/admin.ts";
 import { nameTables, saveNames } from "#lib/translation/names.remote.ts";
 import type { NameRow, NameTable } from "#lib/translation/names.ts";
 

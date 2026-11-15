@@ -1,9 +1,9 @@
 <script lang="ts">
 import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import Copy from "@lucide/svelte/icons/copy";
+import { fmtClock, fmtCost, type RecordedCall } from "#lib/admin/records.ts";
 import Accordion from "#lib/components/common/Accordion.svelte";
 import { tip } from "#lib/components/common/tip.ts";
-import { fmtClock, fmtCost, type RecordedCall } from "#lib/demo/admin.ts";
 import { toast } from "#lib/demo/app.svelte.ts";
 
 /*

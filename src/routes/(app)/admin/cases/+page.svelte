@@ -6,10 +6,13 @@ import Terminal from "@lucide/svelte/icons/terminal";
 import X from "@lucide/svelte/icons/x";
 import { flip } from "svelte/animate";
 import { fade } from "svelte/transition";
+import { type CaseRow, fmtDay } from "#lib/admin/records.ts";
+import { caseList, setCaseStatus } from "#lib/admin/sessions.remote.ts";
 import FloatingPanel from "#lib/components/common/FloatingPanel.svelte";
+import ModalDialog from "#lib/components/common/ModalDialog.svelte";
 import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
 import { tip } from "#lib/components/common/tip.ts";
-import { CASES, type CaseRow, fmtDay, sessionById } from "#lib/demo/admin.ts";
+import Button from "#lib/components/ui/button/button.svelte";
 import { toast } from "#lib/demo/app.svelte.ts";
 
 /*
@@ -17,7 +20,7 @@ import { toast } from "#lib/demo/app.svelte.ts";
  * from production), replays it locally with the learner's own actions, fixes it, and replays every open and fixed
  * case before the commit that is recorded here. A flagged session keeps its calls until its case is closed.
  */
-let list = $state<CaseRow[]>(structuredClone(CASES));
+const list = $derived(await caseList());
 let tab = $state("open");
 let menu = $state<number | null>(null);
 const count = (s: CaseRow["status"]) => list.filter((c) => c.status === s).length;
@@ -26,10 +29,18 @@ async function copy(text: string) {
 	await navigator.clipboard?.writeText(text).catch(() => {});
 	toast(`Copied: ${text}`);
 }
-function set(c: CaseRow, status: CaseRow["status"]) {
+// Marking one fixed asks for the commit that fixed it.
+let fixing = $state<CaseRow | null>(null);
+let commit = $state("");
+async function set(c: CaseRow, status: CaseRow["status"], sha: string | null = null) {
 	menu = null;
-	c.status = status;
-	if (status === "fixed") c.commit = "(next commit)";
+	if (status === "fixed" && !sha) {
+		fixing = c;
+		commit = "";
+		return;
+	}
+	fixing = null;
+	await setCaseStatus({ id: c.id, status, commit: sha }).catch(() => toast("Could not change it"));
 }
 </script>
 
@@ -58,13 +69,12 @@ function set(c: CaseRow, status: CaseRow["status"]) {
 		{#if shown.length}
 			<ul class="adm-rows">
 				{#each shown as c (c.id)}
-					{@const s = sessionById(c.session)}
 					<li class="case" animate:flip={{ duration: 250 }} in:fade={{ duration: 150 }}>
 						<span class="num">{c.id}</span>
 						<div class="main">
 							<p class="note">{c.note}</p>
 							<p class="s">
-								<a href="/admin/sessions/{c.session}#step-{c.step}">{s?.title ?? `Session ${c.session}`}</a><span class="adm-dot">{c.stepLabel}</span
+								<a href="/admin/sessions/{c.session}#step-{c.step}">{c.title || "Untitled"}</a><span class="adm-dot">{c.stepLabel}</span
 								><span class="adm-dot">{c.by}, {fmtDay(c.at)}</span>
 								{#if c.commit}
 									<span class="adm-dot"><span class="adm-tag ok mono">{c.commit}</span></span>
@@ -117,6 +127,30 @@ function set(c: CaseRow, status: CaseRow["status"]) {
 		{/if}
 	</div>
 </div>
+
+<ModalDialog
+	bind:open={
+		() => !!fixing,
+		(v) => {
+	if (!v) fixing = null;
+}
+	}
+	labelledby="fix-h"
+>
+	<h2 id="fix-h" class="mb-2">Fixed in which commit?</h2>
+	<form
+		onsubmit={(e) => {
+			e.preventDefault();
+			if (fixing && commit.trim()) set(fixing, "fixed", commit.trim());
+		}}
+	>
+		<input class="adm-input mono w-full" bind:value={commit} placeholder="53ede84" aria-label="Commit" data-initial-focus>
+		<div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+			<Button variant="secondary" onclick={() => (fixing = null)}>Cancel</Button>
+			<Button type="submit" disabled={!commit.trim()}>Mark fixed</Button>
+		</div>
+	</form>
+</ModalDialog>
 
 <style>
 .cmd {

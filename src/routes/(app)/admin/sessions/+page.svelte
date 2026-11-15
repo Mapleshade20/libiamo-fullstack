@@ -1,24 +1,27 @@
 <script lang="ts">
 import Search from "@lucide/svelte/icons/search";
+import { fmtCost, fmtWhen, langEn, type SessionRow, SIGNALS } from "#lib/admin/records.ts";
+import { sessionList } from "#lib/admin/sessions.remote.ts";
 import Signals from "#lib/components/admin/Signals.svelte";
 import LanguageFlag from "#lib/components/common/LanguageFlag.svelte";
 import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
 import Select from "#lib/components/common/Select.svelte";
 import { tip } from "#lib/components/common/tip.ts";
-import { fmtCost, fmtWhen, langEn, SESSIONS, SIGNALS } from "#lib/demo/admin.ts";
 
 /*
  * Every session, to look through now and then. Signals come from the record alone (the learner pushing back, the
  * system struggling), so the sessions worth opening rise to the top without a model judging them. Calls are kept 30
- * days, longer for a flagged session; a session's steps stay as long as the piece.
+ * days, longer for a flagged session; a session's steps stay as long as the piece. Learners who do not help improve
+ * Libiamo are not listed.
  */
+const all = $derived(await sessionList());
 let sort = $state("signals");
 let kind = $state("all");
 let signal = $state("any");
 let q = $state("");
 const KINDS = [
 	{ value: "all", label: "All kinds" },
-	{ value: "free", label: "Free writing" },
+	{ value: "own", label: "Free writing" },
 	{ value: "scenario", label: "Scenarios" },
 	{ value: "translation", label: "Translations" },
 ];
@@ -28,10 +31,11 @@ const SIG = [
 	{ value: "system", label: "System struggled" },
 	...Object.entries(SIGNALS).map(([k, v]) => ({ value: k, label: v.name })),
 ];
-const KIND_LABEL = { free: "Free writing", scenario: "Scenario", translation: "Translation" };
-const weight = (s: (typeof SESSIONS)[number]) => s.signals.length;
+const KIND_LABEL = { own: "Free writing", scenario: "Scenario", translation: "Translation" };
+const weight = (s: SessionRow) => s.signals.length + s.cases;
 const list = $derived(
-	SESSIONS.filter((s) => kind === "all" || s.kind === kind)
+	all
+		.filter((s) => kind === "all" || s.kind === kind)
 		.filter(
 			(s) =>
 				signal === "any" ||
@@ -76,12 +80,15 @@ const list = $derived(
 									{#if !s.finished}
 										<span class="adm-dot">Unfinished</span>
 									{/if}
+									{#if s.cases}
+										<span class="adm-dot">{s.cases} open {s.cases > 1 ? "cases" : "case"}</span>
+									{/if}
 								</div>
 							</div>
 							<div class="sig"><Signals signals={s.signals} /></div>
 							<div class="nums">
 								<span class="adm-meta">{fmtWhen(s.at)}</span>
-								<span class="adm-meta">{s.minutes} min · {s.stops} {s.stops === 1 ? "stop" : "stops"} · {fmtCost(s.cost)}</span>
+								<span class="adm-meta">{s.minutes} min · {s.stops} {s.stops === 1 ? "stop" : "stops"} · {s.calls} calls · {fmtCost(s.cost)}</span>
 							</div>
 						</a>
 					</li>

@@ -4,13 +4,13 @@ import Plus from "@lucide/svelte/icons/plus";
 import Trash2 from "@lucide/svelte/icons/trash-2";
 import { slide } from "svelte/transition";
 import { announcementList, deleteOneAnnouncement, saveOneAnnouncement } from "#lib/admin/announcements.remote.ts";
+import { fmtDay, langEn } from "#lib/admin/records.ts";
 import { autogrow } from "#lib/components/common/motion.ts";
 import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
 import Select from "#lib/components/common/Select.svelte";
 import { tip } from "#lib/components/common/tip.ts";
 import Button from "#lib/components/ui/button/button.svelte";
 import { APP_LANGS } from "#lib/constants.ts";
-import { fmtDay, langEn } from "#lib/demo/admin.ts";
 import { toast } from "#lib/demo/app.svelte.ts";
 
 /*

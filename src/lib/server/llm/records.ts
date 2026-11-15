@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-import { lt } from "drizzle-orm";
+import { and, lt, not, sql } from "drizzle-orm";
 import { db } from "#lib/server/db/index.ts";
-import { llmCall, llmPrompt } from "#lib/server/db/schema.ts";
+import { llmCall, llmPrompt, sessionCase } from "#lib/server/db/schema.ts";
 import type { CallRecord, Recorder } from "./caller.ts";
 
 /*
@@ -47,12 +47,16 @@ async function write(scope: RecordScope, r: CallRecord) {
 }
 
 /**
- * A call's record is kept thirty days (design §5.7), then goes, words and numbers alike. Phase 5's cases will keep the
- * calls of the pieces they hold.
+ * A call's record is kept thirty days (design §5.7), then goes, words and numbers alike, unless an open case holds its
+ * piece: those stay until the case is closed.
  */
 export const KEEP_CALLS_DAYS = 30;
 export async function pruneCalls(now = new Date()) {
 	const before = new Date(now.getTime() - KEEP_CALLS_DAYS * 86_400_000);
-	const gone = await db.delete(llmCall).where(lt(llmCall.createdAt, before)).returning({ id: llmCall.id });
+	const held = sql`exists (select 1 from ${sessionCase} where ${sessionCase.pieceId} = ${llmCall.pieceId} and ${sessionCase.status} = 'open')`;
+	const gone = await db
+		.delete(llmCall)
+		.where(and(lt(llmCall.createdAt, before), not(held)))
+		.returning({ id: llmCall.id });
 	return gone.length;
 }
