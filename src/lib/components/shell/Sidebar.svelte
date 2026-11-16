@@ -1,5 +1,6 @@
 <script lang="ts">
 import Check from "@lucide/svelte/icons/check";
+import Compass from "@lucide/svelte/icons/compass";
 import Globe from "@lucide/svelte/icons/globe";
 import LogOut from "@lucide/svelte/icons/log-out";
 import MessageSquareHeart from "@lucide/svelte/icons/message-square-heart";
@@ -10,6 +11,7 @@ import { tick } from "svelte";
 import { account, signOut } from "#lib/account/account.svelte.ts";
 import { app } from "#lib/account/app.svelte.ts";
 import { switchLanguage } from "#lib/account/language.ts";
+import { onboarding } from "#lib/account/onboarding.svelte.ts";
 import FloatingPanel from "#lib/components/common/FloatingPanel.svelte";
 import LanguageFlag from "#lib/components/common/LanguageFlag.svelte";
 import { reducedMotion } from "#lib/components/common/motion.ts";
@@ -23,7 +25,7 @@ import { dueNow } from "#lib/notebook/notebook.svelte.ts";
 import { openPiece } from "#lib/writing/open.ts";
 import { siteOf } from "#lib/writing/sites.ts";
 import { myWriting } from "#lib/writing/writing.svelte.ts";
-import { afterNavigate } from "$app/navigation";
+import { afterNavigate, goto } from "$app/navigation";
 import { page } from "$app/state";
 import EmptyState from "./EmptyState.svelte";
 import { shell } from "./shell.svelte";
@@ -269,6 +271,18 @@ const MENU_CLOSE_MS = 160;
 			<a class="floating-menu-item" href="/feedback" onclick={() => (meOpen = false)}
 				><MessageSquareHeart class="size-4 text-muted-foreground" aria-hidden="true" />{tx("navFeedback")}</a
 			>
+			<!-- The tour again, whenever they like: it plays on the home page, on its own stand-ins (nothing of theirs is touched). -->
+			<button
+				type="button"
+				class="floating-menu-item"
+				onclick={() => {
+					meOpen = false;
+					onboarding.tour = true;
+					if (page.url.pathname !== "/") goto("/");
+				}}
+			>
+				<Compass class="size-4 text-muted-foreground" aria-hidden="true" />{tx("navTour")}
+			</button>
 			<!-- Staff only; the admin pages are in English. -->
 			{#if account.me.role === "admin"}
 				<a class="floating-menu-item" href="/admin" onclick={() => (meOpen = false)}

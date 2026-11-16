@@ -10,7 +10,7 @@ import TourLayer from "./TourLayer.svelte";
 import type { Tape } from "./tape";
 
 /*
- * Starts the tour when it is asked for (the welcome's last step, the developer settings, or ?tour in dev: ?tour=record
+ * Starts the tour when it is asked for (the welcome's last step, the account menu, or ?tour in dev: ?tour=record
  * records a new tape, ?at=<n> starts at a chapter), with the tape for the learner's languages. A language the tour
  * has no content for yet is shown on the English one.
  */

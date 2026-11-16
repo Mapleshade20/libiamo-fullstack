@@ -33,6 +33,7 @@ const back = () => setTimeout(() => currentEl?.querySelector("button")?.focus({ 
 function cancel() {
 	replacing = false;
 	key = "";
+	problem = null;
 	back();
 }
 let provider = $state(account.me.key?.provider ?? RECOMMENDED.provider);
@@ -44,8 +45,9 @@ function usePreset(p: (typeof SETUPS)[number]) {
 	model = p.model;
 	keyInput?.focus();
 }
-// The server encrypts the key; it is never sent back.
+// The server tries the key, then encrypts it; it is never sent back. A key it would not save says why under the field.
 let pending = $state(false);
+let problem = $state<{ problem: string; detail?: string } | null>(null);
 async function save(e: SubmitEvent) {
 	e.preventDefault();
 	if (!key.trim()) {
@@ -55,14 +57,18 @@ async function save(e: SubmitEvent) {
 	}
 	const had = !!account.me.key;
 	pending = true;
+	problem = null;
 	try {
-		await setKey(provider, model.trim() || RECOMMENDED.model, key.trim());
+		problem = await setKey(provider, model.trim() || RECOMMENDED.model, key.trim());
 	} catch {
-		pending = false;
-		shake(keyInput);
-		return;
+		problem = { problem: "error" };
 	}
 	pending = false;
+	if (problem) {
+		shake(keyInput);
+		keyInput?.focus();
+		return;
+	}
 	key = "";
 	replacing = false;
 	if (had) back();
@@ -104,13 +110,32 @@ async function save(e: SubmitEvent) {
 					>{tx("setGetKey", { provider: providerOf(provider)?.label ?? "" })}<ExternalLink class="size-3" aria-hidden="true" /></a
 				>
 			</div>
-			<input id="api-key" class="input" type="password" bind:this={keyInput} bind:value={key} placeholder={tx("setApiKeyPh")} spellcheck="false">
+			<input
+				id="api-key"
+				class="input"
+				type="password"
+				bind:this={keyInput}
+				bind:value={key}
+				placeholder={tx("setApiKeyPh")}
+				spellcheck="false"
+				aria-invalid={problem ? "true" : undefined}
+				aria-describedby={problem ? "api-key-err" : undefined}
+			>
+			{#if problem}
+				<p class="err" id="api-key-err" role="alert">
+					{tx(problem.problem, {
+						provider: providerOf(provider)?.label ?? provider,
+						model: model.trim() || RECOMMENDED.model,
+						detail: problem.detail ?? "",
+					})}
+				</p>
+			{/if}
 		</div>
 		<div class="full end">
 			{#if account.me.key}
 				<Button variant="ghost" onclick={cancel}>{tx("setCancel")}</Button>
 			{/if}
-			<Button type="submit" variant="secondary" disabled={pending}>{tx("setSaveKey")}</Button>
+			<Button type="submit" variant="secondary" disabled={pending}>{pending ? tx("setKeyChecking") : tx("setSaveKey")}</Button>
 		</div>
 	</form>
 </Reveal>
@@ -234,6 +259,16 @@ async function save(e: SubmitEvent) {
 	color: var(--ink);
 	text-decoration: underline;
 	text-underline-offset: 3px;
+}
+.input[aria-invalid="true"] {
+	border-color: var(--destructive);
+}
+.err {
+	margin: 6px 0 0;
+	color: var(--destructive);
+	font-size: 13px;
+	line-height: 1.45;
+	overflow-wrap: anywhere;
 }
 .form-grid label {
 	display: grid;

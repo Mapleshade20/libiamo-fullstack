@@ -3,16 +3,22 @@ import type { HTMLInputAttributes } from "svelte/elements";
 import { cn } from "#lib/utils.ts";
 
 /*
- * On/off that applies immediately. A native checkbox with the switch role, so forms and labels keep
- * working; the thumb travels on the spring curve (transitions.dev "Toggle") and the track turns ink.
+ * On/off that applies immediately. A native checkbox with the switch role, so forms keep working; the thumb travels on the spring curve (transitions.dev "Toggle") and the track turns ink.
  */
-let { checked = $bindable(false), class: className, ...rest }: Omit<HTMLInputAttributes, "type" | "role"> & { checked?: boolean } = $props();
+let {
+	checked = $bindable(false),
+	class: className,
+	"aria-label": name,
+	...rest
+}: Omit<HTMLInputAttributes, "type" | "role"> & { checked?: boolean } = $props();
 </script>
 
-<span class={cn("switch relative inline-flex h-5 w-9 shrink-0 align-middle", className)}>
+<!-- A label, so its wider hit area (::before, over the input) presses the switch too; its hidden text names the input. -->
+<label class={cn("switch relative inline-flex h-5 w-9 shrink-0 align-middle", className)}>
 	<input type="checkbox" role="switch" aria-checked={checked} bind:checked {...rest}>
 	<span class="thumb" aria-hidden="true"></span>
-</span>
+	<span class="sr-only">{name}</span>
+</label>
 
 <style>
 /* A paper slider in a recess of the desk; on, the recess is inked blue. */
