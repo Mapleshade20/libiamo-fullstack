@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
+// The callers (lib/server/llm/callers.ts, through the worker) read the environment: none of it is needed here.
+vi.mock("$app/env/private", () => ({
+	LLM_CACHE_DIR: undefined,
+	LLM_CACHE_ONLY: undefined,
+	OPENROUTER_API_KEY: undefined,
+	BETTER_AUTH_SECRET: undefined,
+}));
 vi.mock("#lib/server/db/index.ts", () => ({ db: {} }));
 
 import { buildChatReplySendOptions, buildThreadSendOptions } from "#lib/server/exchange/send-options.ts";

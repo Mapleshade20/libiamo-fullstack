@@ -22,6 +22,13 @@ const { mockDb, mockClient } = vi.hoisted(() => ({
 	},
 }));
 
+// The callers (lib/server/llm/callers.ts, through the worker) read the environment: none of it is needed here.
+vi.mock("$app/env/private", () => ({
+	LLM_CACHE_DIR: undefined,
+	LLM_CACHE_ONLY: undefined,
+	OPENROUTER_API_KEY: undefined,
+	BETTER_AUTH_SECRET: undefined,
+}));
 vi.mock("#lib/server/db/index.ts", () => ({ db: mockDb }));
 vi.mock("#lib/server/llm/client.ts", () => mockClient);
 // The setting comes from the task fixture of the exchange the test's query returns (the old row's shape).
