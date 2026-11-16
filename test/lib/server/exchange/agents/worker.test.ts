@@ -10,6 +10,13 @@ const { mockDb } = vi.hoisted(() => ({
 	},
 }));
 
+// The callers (lib/server/llm/callers.ts, through the worker) read the environment: none of it is needed here.
+vi.mock("$app/env/private", () => ({
+	LLM_CACHE_DIR: undefined,
+	LLM_CACHE_ONLY: undefined,
+	OPENROUTER_API_KEY: undefined,
+	BETTER_AUTH_SECRET: undefined,
+}));
 vi.mock("#lib/server/db/index.ts", () => ({ db: mockDb }));
 // The exchange's setting, from the task fixture of whatever the test's queries return (the old row's shape): the
 // exchange the executor last read, else the batch being delivered.
