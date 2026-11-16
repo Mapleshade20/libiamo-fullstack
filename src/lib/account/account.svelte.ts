@@ -185,10 +185,15 @@ export async function cancelEmailChange() {
 	await cancelChange();
 	await hydrate();
 }
-/** Saves the learner's key (the settings page and the welcome); the server keeps it encrypted. */
+/**
+ * Saves the learner's key (the settings page and the welcome); the server tries it, then keeps it encrypted. A key the
+ * provider would not answer comes back as the catalog key saying why (and the provider's words, for `setKeyOther`).
+ */
 export async function setKey(provider: string, model: string, key: string) {
-	await saveKey({ provider: provider as never, model, key });
+	const problem = await saveKey({ provider: provider as never, model, key });
+	if (problem) return problem;
 	await hydrate();
+	return null;
 }
 /** Which model checks what the learner sends; applies at once. */
 export async function setDecisionModel(model: string) {

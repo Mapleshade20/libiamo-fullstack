@@ -541,6 +541,11 @@ on the server on real data.
   the user's review before launch.
 - **The page for visitors** is a placeholder at `/about` for now (§11): a visitor at `/` goes there; it says what
   Libiamo is and leads to signing up or in.
+- **Asked for after the first run** (2026-11-16). A key is tried before it is saved (one single-token request, as the
+  old app did); a wrong key, one without credit, a model the provider does not run or no answer is said under the
+  field. The tour can be taken again from the account menu. The settings switch did not respond to a click (its wider
+  hit area covered the input, in the demo too): it is a label now. Google and GitHub sign-in build their requests and
+  handle a failed return; the whole round trip needs the production credentials and is checked at launch.
 - **Search and errors** (missed at first; `DEPLOYMENT.md` promised them for this phase). `/robots.txt` and
   `/sitemap.xml` are back, built from `ORIGIN` at runtime; the public pages carry their title, description, canonical
   address and sharing tags, every other page `noindex` (`lib/seo.ts`, the root layout's head); the manifest and its

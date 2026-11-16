@@ -20,6 +20,7 @@ import {
 import { PROVIDERS } from "#lib/llm/providers.ts";
 import { gravatarOf } from "#lib/server/account/gravatar.ts";
 import { encryptKey } from "#lib/server/account/key.ts";
+import { checkKey } from "#lib/server/account/key-check.ts";
 import { clientIp, logAuthEvent } from "#lib/server/auth/audit.ts";
 import { auth } from "#lib/server/auth/auth.ts";
 import { captchaKeys } from "#lib/server/auth/captcha.ts";
@@ -158,16 +159,22 @@ export const finishWelcome = command(Prefs, async (p) => {
 		.where(eq(user.id, u.id));
 });
 
-/** The learner's own key, encrypted; replacing it replaces the setup too. It is never sent back. */
+/**
+ * The learner's own key, encrypted; replacing it replaces the setup too. It is never sent back. It is tried first
+ * (server/account/key-check.ts): a key the provider will not answer is not saved, and the page says why.
+ */
 export const saveKey = command(
 	z.object({ provider: z.enum(KEY_PROVIDERS), model: z.string().trim().min(1).max(200), key: z.string().trim().min(8).max(1000) }),
 	async ({ provider, model, key }) => {
 		const u = learner();
+		const check = await checkKey(provider, model, key);
+		if (!check.ok) return { problem: check.problem, detail: check.detail };
 		const row = { provider, model, encryptedKey: encryptKey(key) };
 		await db
 			.insert(userKey)
 			.values({ userId: u.id, ...row })
 			.onConflictDoUpdate({ target: userKey.userId, set: row });
+		return null;
 	},
 );
 

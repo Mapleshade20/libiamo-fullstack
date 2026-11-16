@@ -70,7 +70,7 @@ The app is being rebuilt from the product's demo (rehearsal-lab `app/`, now an a
 
 - Every way a password is set passes Better Auth's `before` hook, which refuses with a catalog key (`auPwShort`, `auPwGuessable`) from `passwordProblem`; pages ask first only to answer sooner. Turnstile guards only the signed-out endpoints, from the `interaction-only` widget in the auth layout.
 - Answers never tell whether an address has an account: sign-up, password reset and address changes answer the same either way, and the mailbox is told instead.
-- A learner's key is stored AES-GCM-encrypted under `BETTER_AUTH_SECRET` (`server/account/key.ts`) and never sent back to a page.
+- A learner's key is tried before it is saved (one chat request for a single token, `server/account/key-check.ts`; not a Caller call, nothing recorded), then stored AES-GCM-encrypted under `BETTER_AUTH_SECRET` (`server/account/key.ts`) and never sent back to a page.
 
 ### Interface strings
 
