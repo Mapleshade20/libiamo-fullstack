@@ -541,6 +541,11 @@ on the server on real data.
   the user's review before launch.
 - **The page for visitors** is a placeholder at `/about` for now (§11): a visitor at `/` goes there; it says what
   Libiamo is and leads to signing up or in.
+- **Search and errors** (missed at first; `DEPLOYMENT.md` promised them for this phase). `/robots.txt` and
+  `/sitemap.xml` are back, built from `ORIGIN` at runtime; the public pages carry their title, description, canonical
+  address and sharing tags, every other page `noindex` (`lib/seo.ts`, the root layout's head); the manifest and its
+  icons are linked again. Each page has one `<title>` (app.html had a second that browsers showed instead). A page that
+  cannot be shown has `+error.svelte` again (English, like the documents) instead of Kit's bare default.
 
 **Phase 5, admin: done** (2026-11-14; the user has not looked at it yet). The demo's admin pages on the server, in four
 commits:

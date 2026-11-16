@@ -1,5 +1,3 @@
-<svelte:head><title>Privacy Policy · Libiamo</title></svelte:head>
-
 <h1>Privacy Policy</h1>
 <p class="updated">Last updated November 16, 2026</p>
 

@@ -6,13 +6,17 @@ import { onMount, type Snippet, setContext } from "svelte";
 import { followSystem } from "#lib/account/look.svelte.ts";
 import Toast from "#lib/components/shell/Toast.svelte";
 import Tour from "#lib/components/tour/Tour.svelte";
+import { metaOf } from "#lib/seo.ts";
 import { DISPLAY_CLOCK_CONTEXT, type DisplayClock } from "#lib/time/display-clock.ts";
 import { onNavigate } from "$app/navigation";
+import { page } from "$app/state";
 
-let { children, data }: { children: Snippet; data: { clock: DisplayClock } } = $props();
+let { children, data }: { children: Snippet; data: { clock: DisplayClock; origin: string } } = $props();
 onMount(followSystem);
 // The places' dates and times (lib/time/display-clock.ts): in the learner's time zone, the same on both sides.
 setContext(DISPLAY_CLOCK_CONTEXT, () => data.clock);
+// The head: only the public pages are indexed (lib/seo.ts); a page may name itself after this (the admin's do).
+const meta = $derived(metaOf(data.origin, page.error ? null : page.route.id));
 
 /*
  * Every navigation is a view transition (the root owns them, as in the main app). Pages name the parts that carry
@@ -43,6 +47,30 @@ onNavigate((nav) => {
 	});
 });
 </script>
+
+<svelte:head>
+	<title>{meta.title}</title>
+	<meta name="robots" content={meta.robots}>
+	{#if meta.canonical && meta.description}
+		<link rel="canonical" href={meta.canonical}>
+		<meta name="description" content={meta.description}>
+		<meta property="og:url" content={meta.canonical}>
+		<meta property="og:description" content={meta.description}>
+	{/if}
+	<meta property="og:site_name" content="Libiamo">
+	<meta property="og:title" content={meta.title}>
+	<meta property="og:type" content="website">
+	<meta property="og:image" content={meta.image}>
+	<meta property="og:image:width" content="512">
+	<meta property="og:image:height" content="512">
+	<meta property="og:image:alt" content="Libiamo">
+	<meta name="twitter:card" content="summary">
+	<meta name="application-name" content="Libiamo">
+	<meta name="apple-mobile-web-app-title" content="Libiamo">
+	<link rel="icon" href="/brand/libiamo-icon.svg" type="image/svg+xml" sizes="any">
+	<link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180">
+	<link rel="manifest" href="/manifest.webmanifest">
+</svelte:head>
 
 {@render children()}
 <Toast />

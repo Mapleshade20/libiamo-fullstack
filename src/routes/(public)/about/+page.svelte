@@ -4,8 +4,6 @@ import { account } from "#lib/account/account.svelte.ts";
 /* What a visitor sees at the site's address. A placeholder until the real page is designed (design §11). */
 </script>
 
-<svelte:head><title>Libiamo · Write for real readers</title></svelte:head>
-
 <div class="hero">
 	<h1>Write for real readers.</h1>
 	<p class="lede">

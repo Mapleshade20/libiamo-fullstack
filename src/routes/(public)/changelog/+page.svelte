@@ -1,5 +1,3 @@
-<svelte:head><title>Changelog · Libiamo</title></svelte:head>
-
 <h1>Changelog</h1>
 <p class="lede">
 	What changed in Libiamo, newest first. Tell us what to build next at
