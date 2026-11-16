@@ -1,5 +1,3 @@
-<svelte:head><title>Terms of Service · Libiamo</title></svelte:head>
-
 <h1>Terms of Service</h1>
 <p class="updated">Last updated November 16, 2026</p>
 

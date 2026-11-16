@@ -11,5 +11,5 @@ export function load({ data }) {
 	adopt(data.me);
 	writing.list = data.pieces;
 	shell.folded = data.folded;
-	return { clock: data.clock };
+	return { clock: data.clock, origin: data.origin };
 }

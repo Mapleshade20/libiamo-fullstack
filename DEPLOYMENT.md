@@ -255,8 +255,10 @@ any external allowlists that explicitly contain the old hostname.
 
 ### Search indexing
 
-The public welcome page, the privacy policy, the sitemap and `robots.txt` return with the public pages (phase 6 of the
-rebuild, `docs/design/2026-11-13-step-3-rebuild.md`); until then every page needs an account.
+Only the public pages (`/about`, `/terms`, `/privacy`, `/changelog`) are indexed: they carry a canonical address and a
+description, every other page says `noindex` (`src/lib/seo.ts`). `/robots.txt` keeps crawlers off the signed-in pages
+and `/sitemap.xml` lists the public ones; both build their addresses from `ORIGIN` at runtime, so moving the canonical
+host changes them with no rebuild. Submit `https://<ORIGIN>/sitemap.xml` to the search consoles after a cutover.
 
 ---
 
