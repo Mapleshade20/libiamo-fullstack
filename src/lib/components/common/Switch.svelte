@@ -63,11 +63,11 @@ let { checked = $bindable(false), class: className, ...rest }: Omit<HTMLInputAtt
 	pointer-events: none;
 	transition: translate 350ms var(--ease-spring);
 }
-.switch input:checked + .thumb {
-	translate: 16px 0;
-}
 :global([data-theme="dark"]) .thumb {
 	background: linear-gradient(#f2f2f2, #d2d2d2);
+}
+.switch input:checked + .thumb {
+	translate: 16px 0;
 }
 @media (prefers-reduced-motion: reduce) {
 	.switch input,

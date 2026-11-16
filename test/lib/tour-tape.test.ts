@@ -6,7 +6,12 @@ import { playTape, stopTape, type Tape } from "#lib/components/tour/tape.ts";
 const reached: string[] = [];
 const g = globalThis as unknown as { window: { fetch: typeof fetch }; location: { origin: string } };
 g.location = { origin: "http://localhost" };
-g.window = { fetch: (async (input: RequestInfo | URL) => (reached.push(String(input)), new Response("real"))) as typeof fetch };
+g.window = {
+	fetch: (async (input: RequestInfo | URL) => {
+		reached.push(String(input));
+		return new Response("real");
+	}) as typeof fetch,
+};
 
 const tape: Tape = [
 	{ key: "/api/s/*/material", body: '{"id":"s2"}', status: 200, reply: '{"n":2}', ms: 0 },

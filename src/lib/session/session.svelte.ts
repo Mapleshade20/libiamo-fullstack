@@ -766,7 +766,15 @@ export class Session {
 				this.remove(s, dots);
 				if (e instanceof Cancelled || !alive()) throw new Cancelled();
 				await new Promise<void>((go) => {
-					const id = this.push(s, { who: null, kind: "fail", halt: stopOf(e), retry: () => (this.remove(s, id), go()) });
+					const id = this.push(s, {
+						who: null,
+						kind: "fail",
+						halt: stopOf(e),
+						retry: () => {
+							this.remove(s, id);
+							go();
+						},
+					});
 					this.peek();
 				});
 				if (!alive()) throw new Cancelled();

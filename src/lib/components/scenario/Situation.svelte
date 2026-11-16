@@ -98,12 +98,9 @@ article {
 	font-size: 13.5px;
 }
 .by span {
-	color: #990000;
+	color: light-dark(#990000, #e07a6c);
 	text-decoration: underline;
 	text-underline-offset: 2px;
-}
-:global([data-theme="dark"]) .by span {
-	color: #e07a6c;
 }
 .ao3 :global(.prose) {
 	font-family: var(--font-serif-stack);
@@ -143,7 +140,8 @@ article {
 	padding: 0 0 0 14px;
 	border-inline-start: 2px solid var(--line-soft);
 }
-.comments li + li {
+/* The gap between comments, at the least weight so a place's own rules for its items win. */
+.comments :where(li + li) {
 	margin-top: 10px;
 }
 .who {

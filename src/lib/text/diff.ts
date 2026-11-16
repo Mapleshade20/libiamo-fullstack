@@ -51,14 +51,19 @@ export function align(original: string, rewrite: string, lang: string): { hunks:
 
 	const opens: Open[] = [];
 	for (let k = 0; k < ops.length; ) {
-		if (!ops[k].open || !ops[k].orig) {
+		const first = ops[k].orig;
+		if (!ops[k].open || !first) {
 			k++;
 			continue;
 		}
 		let end = k;
-		for (let m = k; m < ops.length && ops[m].open; m++) if (ops[m].orig) end = m;
-		const from = ops[k].orig!.at;
-		const to = ops[end].orig!.at + ops[end].orig!.s.length;
+		let last = first;
+		for (let m = k; m < ops.length && ops[m].open; m++) {
+			const o = ops[m].orig;
+			if (o) [end, last] = [m, o];
+		}
+		const from = first.at;
+		const to = last.at + last.s.length;
 		opens.push({ id: opens.length + 1, from, to, text: original.slice(from, to).trim() });
 		k = end + 1;
 		while (k < ops.length && ops[k].open) k++;
@@ -103,14 +108,15 @@ export function align(original: string, rewrite: string, lang: string): { hunks:
 			continue;
 		}
 		const run = ops.slice(start, last + 1);
-		const origToks = run.filter((o) => o.orig).map((o) => o.orig!);
+		const origToks = run.flatMap((o) => (o.orig ? [o.orig] : []));
 		const anchor = origToks[0] ??
 			ops
 				.slice(0, start)
 				.reverse()
 				.find((o) => o.orig)?.orig ?? { at: 0, s: "" };
 		let from = origToks.length ? origToks[0].at : anchor.at + anchor.s.length;
-		let to = origToks.length ? origToks.at(-1)!.at + origToks.at(-1)!.s.length : from;
+		const lastTok = origToks[origToks.length - 1];
+		let to = lastTok ? lastTok.at + lastTok.s.length : from;
 		if (!keepLead) while (from < to && /\s/.test(original[from])) from++;
 		if (!keepTail) while (to > from && /\s/.test(original[to - 1])) to--;
 		hunks.push({

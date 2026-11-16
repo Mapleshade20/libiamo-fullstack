@@ -198,11 +198,6 @@ async function copyQuick() {
 :global(html[data-vt$="/translate>/live"]) .region.scene > :global(.scene-card) {
 	view-transition-name: card;
 }
-/* A scenario arrives on the sheet itself: what it came from (the translation's sheet, the box, the thread's end) grows
-   into it. */
-:global(html[data-vt$=">/live"]) .region.p1 > .sheet {
-	view-transition-name: card;
-}
 /* Pass 2: the post above, the conversation below; two sibling panes, nothing overlaps. */
 .region.p2 {
 	overflow: hidden;
@@ -412,6 +407,11 @@ async function copyQuick() {
 	.region.p2 .sheet-head {
 		display: none;
 	}
+}
+/* A scenario arrives on the sheet itself: what it came from (the translation's sheet, the box, the thread's end) grows
+   into it. */
+:global(html[data-vt$=">/live"]) .region.p1 > .sheet {
+	view-transition-name: card;
 }
 @media (prefers-reduced-motion: reduce) {
 	.waiting-draft .para {

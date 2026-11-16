@@ -177,6 +177,14 @@ const settle = (node: Element) => (reducedMotion() ? { duration: 0 } : fly(node,
 	pointer-events: none;
 	user-select: none;
 }
+.replies {
+	margin-left: 13px;
+	padding-left: 21px;
+	border-left: 2px solid var(--line-soft);
+}
+.replies:empty {
+	display: none;
+}
 .stop > .top,
 .stop > .replies {
 	transition: opacity 0.6s ease;
@@ -188,14 +196,6 @@ const settle = (node: Element) => (reducedMotion() ? { duration: 0 } : fly(node,
 .stop.done > .top,
 .stop.done > .replies {
 	opacity: 0.6;
-}
-.replies {
-	margin-left: 13px;
-	padding-left: 21px;
-	border-left: 2px solid var(--line-soft);
-}
-.replies:empty {
-	display: none;
 }
 p {
 	margin: 0 0 4px;

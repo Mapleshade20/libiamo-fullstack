@@ -122,6 +122,11 @@ type PartQ = { problem: string; question?: string; mode: "one" | "ask" | "given"
 /** A reading the learner taps: a label that names nothing ("A", "B") shows the reading itself (2026-11-10: "Yes | B"). */
 const tappable = (r: { label: string; meaning: string }) => (/^\W*[A-Za-z0-9]?\W*$/.test(r.label) ? { ...r, label: r.meaning } : r);
 const AS_WRITTEN = "Everything this passage says now: every point, question, hedge and feeling in it stays; only how it is put changes.";
+/** A stop's material: a step that works with it comes after the material was made. */
+function materialOf(stop: Stop) {
+	if (!stop.m) throw new Error(`stop ${stop.id} has no material yet`);
+	return stop.m;
+}
 type Stop = {
 	id: string;
 	from: number;
@@ -204,6 +209,17 @@ export class RevisionSession {
 	/** The pass-1 text back to the draft. */
 	private unmap: (p: number, side: "from" | "to") => number = (p) => p;
 	private rb?: Promise<string>;
+	/** Detection as `start()` set it off: every step that reads it starts first. */
+	private get detected() {
+		if (!this.det) throw new Error("detection has not started");
+		return this.det;
+	}
+	/** The stop a step names: the page only names stops it was given. */
+	private stopOf(id: string) {
+		const stop = this.stops.find((s) => s.id === id);
+		if (!stop) throw new Error(`no stop ${id}`);
+		return stop;
+	}
 	private analysis?: Analysis;
 	/** The text pass 2 read (the draft with every pass-1 change made) and the way back to the draft. */
 	private base?: Base;
@@ -495,7 +511,7 @@ export class RevisionSession {
 		if (detail) this.input.detail = detail;
 		this.start();
 		// Writers who asked only for what needs changing do not see the optional ones; the others see them marked.
-		const all = (await this.det!.pass1).findings
+		const all = (await this.detected.pass1).findings
 			.filter((f) => this.more || !f.tier)
 			.map((f) => (f.tier ? { ...f, note: `${this.opt}${f.note}` } : f));
 		// A new pass 1 (a corrected scene) means the answers are to new changes, even if they look the same.
@@ -642,11 +658,11 @@ export class RevisionSession {
 		this.start();
 		if (!this.rb && this.p1args) this.askReadBack(this.p1args);
 		if (this.ex || this.input.translation) {
-			const p2 = await this.det!.pass2;
+			const p2 = await this.detected.pass2;
 			this.base = p2.base;
 			return { reader: "", turns: this.ex ? this.howItWent() : [], stops: this.plan(p2.analysis, null).stops };
 		}
-		const [rb, p2] = await Promise.all([this.rb!, this.det!.pass2]);
+		const [rb, p2] = await Promise.all([this.rb, this.detected.pass2]);
 		this.base = p2.base;
 		const plan = this.plan(p2.analysis, null);
 		return { reader: rb, stops: plan.stops };
@@ -654,7 +670,7 @@ export class RevisionSession {
 
 	async overviewReply(said: string | null) {
 		this.start();
-		const p2 = await this.det!.pass2;
+		const p2 = await this.detected.pass2;
 		if (this.ex || this.input.translation) return { reply: "", ...this.plan(p2.analysis, null) };
 		// Without an outline (the call failed) the analysis's own flat map stands in.
 		const ol = await this.outline?.catch(() => undefined);
@@ -664,7 +680,7 @@ export class RevisionSession {
 			const p = this.plan(p2.analysis, null, ol);
 			return { reply: this.t(p.stops.length ? "agreedReply" : "agreedNone", { n: p.stops.length }), ...p };
 		}
-		const rb = await this.rb!;
+		const rb = (await this.rb) ?? "";
 		const ov = await overviewReply(this.d, this.pass1Text, rb, p2.analysis.gist, said, this.ai.for("overviewReply"));
 		return { reply: ov.reply, ...this.plan(p2.analysis, ov.newSpot ?? null, ol) };
 	}
@@ -685,9 +701,10 @@ export class RevisionSession {
 		const fixed = (quote?: string | null, problem = "") => {
 			// Pass 2 read the pass-1 text: nothing it found there was fixed before it looked.
 			if (this.base) return false;
-			const at = quote ? d.text.indexOf(quote) : -1;
+			if (!quote) return false;
+			const at = d.text.indexOf(quote);
 			if (at < 0) return false;
-			const ws = wordsIn(quote!, at);
+			const ws = wordsIn(quote, at);
 			const inHunk = (w: { from: number; to: number }) => applied.some((f) => f.from <= w.from && w.to <= f.to);
 			if (ws.length && ws.every(inHunk)) return true;
 			const named = Array.from(problem.matchAll(/['‘"“«「]([^'’"”»」]{2,40})['’"”»」]/g), (m) => m[1].trim().toLowerCase());
@@ -877,7 +894,7 @@ export class RevisionSession {
 		const own = sentences(text, this.d.target).filter((x) => x.from < stop.to && x.to > stop.from);
 		const sentence = own.map((x) => x.text).join(" ") || anchor;
 		// The reference replaces the stop's words, or the whole sentences they are in when no other stop is there.
-		const [wFrom, wTo] = own.length ? [Math.min(stop.from, own[0].from), Math.max(stop.to, own.at(-1)!.to)] : [stop.from, stop.to];
+		const [wFrom, wTo] = own.length ? [Math.min(stop.from, own[0].from), Math.max(stop.to, own[own.length - 1].to)] : [stop.from, stop.to];
 		// Once a stop has its material, what it replaces is settled: another reading rewrites the same words.
 		const wide = !stop.m && this.stops.every((o) => o === stop || o.done || o.gone || o.to <= wFrom || o.from >= wTo);
 		const many = stop.parts.length > 1;
@@ -899,7 +916,7 @@ export class RevisionSession {
 					// The rest of its paragraph: a reference must not say again what is said right next to it.
 					const pFrom = text.lastIndexOf("\n\n", stop.from) + 1;
 					const pEnd = text.indexOf("\n\n", stop.to);
-					const near = text.slice(pFrom, stop.from) + "\n" + text.slice(stop.to, pEnd < 0 ? text.length : pEnd);
+					const near = `${text.slice(pFrom, stop.from)}\n${text.slice(stop.to, pEnd < 0 ? text.length : pEnd)}`;
 					// Code checks what the model wrote before anyone sees it: it replaces what it may (the stop, or its sentences when
 					// allowed), and it carries nothing left in the writer's language. Otherwise it is asked once more, told why.
 					const wrong = (m: Material) => {
@@ -1048,7 +1065,7 @@ export class RevisionSession {
 	/** What each hint piece of a stop's current material means, with an unrelated example; asked once per set of pieces. */
 	private glosses = new Memo<Awaited<ReturnType<typeof pieceNotes>>>(() => this.onChange());
 	async pieces(id: string) {
-		const stop = this.stops.find((s) => s.id === id)!;
+		const stop = this.stopOf(id);
 		const pieces = stop.m?.pieces ?? [];
 		const key = pieces.join("\u001f");
 		let n = this.glosses.get(key);
@@ -1070,8 +1087,8 @@ export class RevisionSession {
 	/** The two hints for a stop's current material, from the learner's last failed try when there is one; asked once each. */
 	private hints = new Memo<{ plan: string; example: string }>(() => this.onChange());
 	async hint(id: string) {
-		const stop = this.stops.find((s) => s.id === id)!;
-		const m = stop.m!;
+		const stop = this.stopOf(id);
+		const m = materialOf(stop);
 		const last = stop.history.at(-1);
 		const key = [id, m.ref, last?.text ?? ""].join("\u001f");
 		let h = this.hints.get(key);
@@ -1096,7 +1113,10 @@ export class RevisionSession {
 	 * first written and as pass 1 left it.
 	 */
 	async notes(items: { id: string; orig: string; final: string }[], p1: string[] = []) {
-		const known = items.map((x) => ({ x, st: this.stops.find((s) => s.id === x.id) })).filter((y) => y.st?.m);
+		const known = items.flatMap((x) => {
+			const st = this.stops.find((s) => s.id === x.id);
+			return st?.m ? [{ x, st, m: st.m }] : [];
+		});
 		// Only the tutor's notes on words the learner kept: the material's pattern and the rest may be for a version they did not take.
 		const kept = (final: string, why: { label: string; note: string }[]) =>
 			why
@@ -1131,7 +1151,7 @@ export class RevisionSession {
 				},
 			};
 		});
-		const fromP2 = known.map(({ x, st }) => ({
+		const fromP2 = known.map(({ x, st, m }) => ({
 			id: x.id,
 			orig: x.orig,
 			final: x.final,
@@ -1141,8 +1161,8 @@ export class RevisionSession {
 				final: x.final,
 				before: x.orig,
 				after: x.final,
-				problem: st!.problem ?? "",
-				why: kept(x.final, st!.m!.why),
+				problem: st.problem ?? "",
+				why: kept(x.final, m.why),
 				how: "rebuilt" as const,
 			},
 		}));
@@ -1157,7 +1177,7 @@ export class RevisionSession {
 	}
 
 	async ownReading(id: string, k: number, said: string) {
-		const stop = this.stops.find((s) => s.id === id)!;
+		const stop = this.stopOf(id);
 		const anchor = this.text.slice(stop.from, stop.to).trim();
 		const r = await ownReading(this.d, this.text, anchor, stop.parts[k].problem, said, this.ai.for(`reading ${id}`), this.imported);
 		// What they said may be what later spots need to know (who a name is): every call from now on reads it.
@@ -1168,7 +1188,7 @@ export class RevisionSession {
 
 	/** The writer keeps this part as they wrote it: the stop closes and the post does not change. */
 	keep(id: string) {
-		const stop = this.stops.find((s) => s.id === id)!;
+		const stop = this.stopOf(id);
 		stop.done = true;
 		this.ai.lanes?.discard((x) => x.startsWith(`material ${id} · `));
 		this.decided.push(`「${this.text.slice(stop.from, stop.to).trim()}」→ kept as written`);
@@ -1179,7 +1199,7 @@ export class RevisionSession {
 
 	/** R2: the grade and the feedback the page shows. The same words always get the same answer. */
 	async grade(id: string, attempt: string): Promise<GradeOut> {
-		const stop = this.stops.find((s) => s.id === id)!;
+		const stop = this.stopOf(id);
 		// Spacing and the final mark never change a grade (the mark is placed for them); case can, so it stays.
 		const key = attempt
 			.trim()
@@ -1187,7 +1207,7 @@ export class RevisionSession {
 			.replace(/[.!?…。！？]+$/, "");
 		const seen = stop.graded.get(key);
 		if (seen) return seen.pass ? seen : { ...seen, reader: null, tutor: `${this.t("sameAgain")} ${seen.tutor}` };
-		const m = stop.m!;
+		const m = materialOf(stop);
 		// The reference (or one of its other versions) word for word passes without a call: the grader is noisy enough to
 		// fail it on a check alone (2026-11-10: a learner who pasted the reference was failed seventy times).
 		const flat = (x: string) =>
@@ -1221,7 +1241,7 @@ export class RevisionSession {
 			await grade(
 				this.d,
 				this.text,
-				{ reading: stop.reading!, problem: stop.problem!, material: { ...m, replaces: scope }, attempt, earlier: stop.history },
+				{ reading: stop.reading ?? "", problem: stop.problem ?? "", material: { ...m, replaces: scope }, attempt, earlier: stop.history },
 				this.ai.for(`grade ${id}`),
 				{ strategy: this.ai.grader },
 			)
@@ -1282,11 +1302,12 @@ export class RevisionSession {
 	 * asks for its material and grades their version against it).
 	 */
 	async question(id: string, mine: string | null, q: string) {
-		const stop = this.stops.find((s) => s.id === id)!;
+		const stop = this.stopOf(id);
+		const m = materialOf(stop);
 		const a = await answerQuestion(
 			this.d,
 			this.text,
-			stop.m!,
+			m,
 			mine,
 			q,
 			{ reading: stop.reading ?? "", problem: stop.problem ?? "", history: stop.history },
@@ -1299,15 +1320,15 @@ export class RevisionSession {
 			const x = await explainRef(
 				this.d,
 				this.text,
-				stop.m!,
-				plainRef(a.revisedRef!),
+				m,
+				plainRef(a.revisedRef),
 				mine,
 				{ reading: stop.reading ?? "", problem: stop.problem ?? "" },
 				this.ai.for(`explain ${id}`),
 			);
-			stop.m = { ...stop.m!, ref: a.revisedRef, why: x.why, alts: x.alts, construct: x.construct };
+			stop.m = { ...m, ref: a.revisedRef, why: x.why, alts: x.alts, construct: x.construct };
 			stop.ticks = [];
-			const keyed = markKeys(stop.m!.replaces, a.revisedRef, x.why);
+			const keyed = markKeys(m.replaces, a.revisedRef, x.why);
 			return { answer: a.answer, kind: a.kind, ref: keyed.ref, why: keyed.why, alts: x.alts, construct: x.construct };
 		}
 		if (a.kind === "keep") return { answer: a.answer, kind: a.kind };
@@ -1335,7 +1356,7 @@ export class RevisionSession {
 
 	/** The learner's chosen version goes into the post where it fits; every other range moves with it. */
 	apply(id: string, final: string, self: boolean) {
-		const stop = this.stops.find((s) => s.id === id)!;
+		const stop = this.stopOf(id);
 		const text = this.text;
 		const p = this.place(stop, final);
 		const { at, end } = p;

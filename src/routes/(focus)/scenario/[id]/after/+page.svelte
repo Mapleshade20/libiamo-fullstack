@@ -152,10 +152,10 @@ h1 {
 	margin: 0 0 10px;
 	color: var(--ink-2);
 }
-.set-out {
-	margin: 0 0 2px !important;
+.next .set-out {
+	margin: 0 0 2px;
 	font-size: 13px;
-	color: var(--muted) !important;
+	color: var(--muted);
 }
 .goals {
 	list-style: disc;

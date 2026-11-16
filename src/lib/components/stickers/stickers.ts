@@ -28,13 +28,13 @@ export const STICKERS = {
 		<path class="nav-cut" d="m6.4 11.8 3.3-3.5 15.4.4.5 14.5-3.5 2.8-14.8-.6Z"/>
 		<path class="inside nav-stroke" d="m6.8 12 3-3.4 15 .4-3.3 3.7Z"/>
 		<path class="side nav-stroke" d="m21.5 12.7 3.3-3.7.3 13.9-3.1 2.5Z"/>
-		<path class="front" d="m6.8 12 14.7.7.5 12.7-14.5-.5Z"/>
+		<path class="panel" d="m6.8 12 14.7.7.5 12.7-14.5-.5Z"/>
 		<path class="shade" d="m19.7 12.6 1.8.1.5 12.7-14.5-.5-.1-1.1 12.4.4Z"/>
 		<path class="nav-stroke" d="m6.8 12 14.7.7.5 12.7-14.5-.5Z"/>
 		<path class="label nav-stroke nav-stroke-thin" d="m10 17.4 8.7.3-.1 4.2-8.6-.3Z"/>
 		<path class="writing nav-stroke nav-stroke-thin" d="m11.6 19 5.3.2m-5.3 1.3 3.3.1"/>
 		<path class="fold nav-stroke nav-stroke-thin" d="m23.4 15 .1 5.3"/>
-		<g class="lid"><path class="top nav-stroke" d="m6 11.2 3.5-3.6 16 .5-3.6 3.8Z"/><path class="side nav-stroke" d="m21.9 11.9 3.6-3.8.2 3.2-3.5 3.6Z"/><path class="front nav-stroke" d="m6 11.2 15.9.7.3 3L6.2 14Z"/><path class="fold nav-stroke nav-stroke-thin" d="m9.9 9 10.9.4"/></g>
+		<g class="lid"><path class="top nav-stroke" d="m6 11.2 3.5-3.6 16 .5-3.6 3.8Z"/><path class="side nav-stroke" d="m21.9 11.9 3.6-3.8.2 3.2-3.5 3.6Z"/><path class="panel nav-stroke" d="m6 11.2 15.9.7.3 3L6.2 14Z"/><path class="fold nav-stroke nav-stroke-thin" d="m9.9 9 10.9.4"/></g>
 	</svg>`,
 	pr: `<svg class="st st-pr" viewBox="0 0 32 32" aria-hidden="true">
 		<g class="nav-cut"><path class="nav-cut-line" d="M8.4 8.1q.8 7.8.1 15.8"/><path d="M5 8c.1-2.3 2-3.9 4.2-3.7s3.6 1.9 3.4 4.2-1.9 3.5-4 3.3S4.8 10.2 5 8Z"/><path d="M5.1 23.6c.2-2.2 1.9-3.5 4.1-3.4s3.6 1.9 3.3 4.2-1.9 3.5-4.2 3.2-3.5-1.8-3.2-4Z"/><path d="M19.5 24c-.2-2.1 1.5-4 3.8-3.9s3.9 1.8 3.8 4-1.9 3.7-4.2 3.5-3.4-1.7-3.4-3.6Z"/></g>

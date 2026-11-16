@@ -204,7 +204,11 @@ export async function vetMaterial(
 	const r = await chatJson([{ role: "user", content: user }], VetSchema, { ai, sample, effort: "low", tag: "e3/vet-material" });
 	const of = new Map(r.value.verdicts.map((v) => [v.n - 1, v]));
 	// A change that holds keeps its row, with its reason corrected where the reason itself was untrue.
-	const why = m.why.map((w, i) => ({ ...w, note: of.get(i)?.holds !== false && of.get(i)?.note?.trim() ? of.get(i)!.note!.trim() : w.note }));
+	const why = m.why.map((w, i) => {
+		const v = of.get(i);
+		const note = v?.note?.trim();
+		return { ...w, note: v?.holds !== false && note ? note : w.note };
+	});
 	const off = r.value.verdicts.filter((v) => !v.holds && m.why[v.n - 1]);
 	if (!off.length || !r.value.ref?.trim()) return { value: { ...m, why }, dropped: [], calls: r.calls };
 	const gone = new Set(off.map((v) => v.n - 1));

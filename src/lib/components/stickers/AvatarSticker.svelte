@@ -52,21 +52,33 @@ svg {
 	height: 100%;
 	overflow: visible;
 	scale: 1.08;
-	transition:
-		opacity 320ms ease,
-		transform 400ms cubic-bezier(0.32, 0.9, 0.35, 1);
+	transition: opacity 150ms;
 }
 .stranger {
 	opacity: 0;
-	transform: scale(0.9) rotate(-8deg);
 }
 .drawn .stranger {
 	opacity: 1;
-	transform: rotate(-3deg);
 }
 .drawn .face {
 	opacity: 0;
-	transform: scale(1.08);
+}
+/* The stranger is drawn in with a turn, for those who have not asked for less motion; else the faces only fade. */
+@media (prefers-reduced-motion: no-preference) {
+	svg {
+		transition:
+			opacity 320ms ease,
+			transform 400ms cubic-bezier(0.32, 0.9, 0.35, 1);
+	}
+	.stranger {
+		transform: scale(0.9) rotate(-8deg);
+	}
+	.drawn .stranger {
+		transform: rotate(-3deg);
+	}
+	.drawn .face {
+		transform: scale(1.08);
+	}
 }
 .initial-disc {
 	fill: color-mix(in oklch, var(--ink-wine) 78%, #fff);
@@ -74,11 +86,5 @@ svg {
 text {
 	fill: #fff;
 	font: 600 13px var(--font-sans-stack);
-}
-@media (prefers-reduced-motion: reduce) {
-	svg {
-		transition: opacity 150ms;
-		transform: none !important;
-	}
 }
 </style>
