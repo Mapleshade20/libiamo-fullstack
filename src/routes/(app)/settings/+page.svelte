@@ -15,7 +15,6 @@ import ChangeEmail from "#lib/components/auth/ChangeEmail.svelte";
 import ChangePassword from "#lib/components/auth/ChangePassword.svelte";
 import DeleteAccount from "#lib/components/auth/DeleteAccount.svelte";
 import KeyForm from "#lib/components/auth/KeyForm.svelte";
-import { ofDay, SERIES } from "#lib/components/backdrop/backdrops.ts";
 import ChoiceGroup from "#lib/components/common/ChoiceGroup.svelte";
 import InfoTip from "#lib/components/common/InfoTip.svelte";
 import LanguageFlag from "#lib/components/common/LanguageFlag.svelte";
@@ -93,14 +92,9 @@ let pwOpen = $state(false);
 let deleteOpen = $state(false);
 // Appearance: kept on the account, like every setting.
 const backdrop = $derived(app.look.backdrop);
-const pictures = $derived(backdrop === "painting" && app.dark ? null : SERIES[backdrop as keyof typeof SERIES]?.());
-const backdropHelp = $derived(
-	app.dark && backdrop === "painting"
-		? tx("paintingLightOnly")
-		: pictures?.length
-			? tx("bgToday", { credit: ofDay(pictures, new Date()).credit })
-			: "",
-);
+// The day's picture, chosen on the server for the learner's day (server/backdrop/today.ts).
+const today = $derived(backdrop === "image" || backdrop === "painting" ? page.data.pictures?.[backdrop] : undefined);
+const backdropHelp = $derived(app.dark && backdrop === "painting" ? tx("paintingLightOnly") : today ? tx("bgToday", { credit: today.credit }) : "");
 
 const fmt = (o: Intl.DateTimeFormatOptions, d: Date) => new Intl.DateTimeFormat(app.lang, o).format(d);
 

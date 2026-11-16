@@ -1,5 +1,6 @@
-/* The backdrop behind the home page and the scene card (backdrops.ts draws it): nothing, a wallpaper over the
-   whole page, or an old print along the bottom. The page colour itself is always the plain paper. */
+/* The backdrop behind the home page and the scene card (Backdrop.svelte): nothing, a wallpaper over the whole page, an
+   old print along the bottom, or a faint painting over the whole page. The page colour itself is always the plain
+   paper. */
 .backdrop {
 	position: fixed;
 	inset: 0;
@@ -30,6 +31,17 @@
 [data-theme="dark"] .pattern {
 	opacity: 0.2;
 }
+/* The wallpaper is drawn in both inks; the theme shows one. */
+:root:not([data-theme="dark"]) .inks.dark,
+[data-theme="dark"] .inks.light {
+	display: none;
+}
+/* A picture is not there until it has arrived, then fades in. */
+.print img,
+.painting img {
+	opacity: 0;
+	transition: opacity 0.6s var(--ease-panel);
+}
 .print {
 	position: absolute;
 	inset: 0;
@@ -48,12 +60,19 @@
 	translate: -50% 0;
 	filter: grayscale(1) sepia(0.35) contrast(1.5) brightness(1.18);
 	mix-blend-mode: multiply;
-	opacity: calc(0.55 * var(--ink, 1));
+}
+.print img.in {
+	opacity: calc(0.46 * var(--ink, 1));
 }
 /* A painting covers the whole page, faint; seeing the whole picture shows it at full strength. */
 .painting {
 	position: absolute;
 	inset: 0;
+	/* Its colour, as faint as the picture, while it comes. */
+	background: color-mix(in srgb, var(--wait) 30%, transparent);
+}
+[data-theme="dark"] .painting {
+	display: none;
 }
 .painting img {
 	position: absolute;
@@ -64,14 +83,18 @@
 	object-fit: cover;
 	object-position: var(--x) var(--y);
 	filter: saturate(0.8);
-	opacity: 0.3;
-	transition: opacity 0.35s var(--ease-panel);
 }
-.viewing .painting img {
+.painting img.in {
+	opacity: 0.3;
+	transition-duration: 0.35s;
+}
+.viewing .painting img.in {
 	opacity: 1;
 }
 [data-theme="dark"] .print img {
 	filter: grayscale(1) contrast(1.5) brightness(1.18) invert(1);
 	mix-blend-mode: screen;
+}
+[data-theme="dark"] .print img.in {
 	opacity: calc(0.22 * var(--ink, 1));
 }

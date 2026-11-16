@@ -551,6 +551,20 @@ on the server on real data.
   address and sharing tags, every other page `noindex` (`lib/seo.ts`, the root layout's head); the manifest and its
   icons are linked again. Each page has one `<title>` (app.html had a second that browsers showed instead). A page that
   cannot be shown has `+error.svelte` again (English, like the documents) instead of Kit's bare default.
+- **The backdrop pictures off Wikimedia** (2026-11-15; agreed 2026-10-30, a CDN such as jsDelivr ruled out on
+  2026-11-15: unreliable in mainland China, a third party seeing learners' addresses). The 12 prints and 23 paintings
+  the demo hotlinked are WebP files in `src/lib/assets/backdrops` (1600 and 800 wide, slightly blurred and at quality 50:
+  about 6 MB, 90 KB a picture on average, 314 KB at most; the canvas grain was most of the bytes), so they are Vite assets under `_app/immutable` with a year's cache, which Cloudflare in front of
+  the site keeps at its edge without any setting. The list is `server/backdrop/pictures.ts`; `scripts/backdrops.ts`
+  downloads what is missing (Commons API, public domain or CC0 only, refused otherwise) and writes `meta.json` (size,
+  average colour, page, licence). The server picks the day's print and painting for the learner's time zone
+  (`server/backdrop/today.ts`; the demo used the browser's date) and the root layout hands only those two to the page,
+  so no list of pictures is in the browser's code; the backdrop is drawn on the server (the wallpaper in both inks,
+  the painting hidden in the dark by CSS, not downloaded there) and a picture fades in once it has arrived, a painting
+  over its faint average colour. Seeing the whole picture now shows a painting at full strength: the class the CSS
+  waited for was never set, in the demo too. The privacy policy no longer names Wikimedia. Checked in a browser on the
+  dev server: each choice in light, dark and a dark system, the switch in settings then home without a reload, the
+  whole picture, no console errors.
 
 **Phase 5, admin: done** (2026-11-14; the user has not looked at it yet). The demo's admin pages on the server, in four
 commits:

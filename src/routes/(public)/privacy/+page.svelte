@@ -80,10 +80,7 @@
 		</li>
 		<li>Cloudflare Turnstile, which checks that a person is signing up, signing in or resetting a password.</li>
 		<li>The mail, hosting and database providers that run Libiamo.</li>
-		<li>
-			Services your browser loads from directly: Google Fonts (a typeface), Wikimedia Commons (the pictures behind the home page, if you choose them)
-			and unpkg (the emoji list in a Discord scenario).
-		</li>
+		<li>Services your browser loads from directly: Google Fonts (a typeface) and unpkg (the emoji list in a Discord scenario).</li>
 		<li>Authorities or others when the law requires it, or to protect people, the service or legal rights.</li>
 	</ul>
 	<p>Each of these may see technical details such as your IP address and browser.</p>
