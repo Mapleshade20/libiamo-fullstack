@@ -54,12 +54,12 @@ const digits = $derived(String(Math.max(0, Math.trunc(value))).split(""));
 	animation: digit-in calc(280ms * var(--streak-speed, 1)) cubic-bezier(0.2, 0, 0.15, 1);
 }
 
-.digits:not(.ready) .digit {
-	animation: none;
-}
-
 .down .digit {
 	animation-name: digit-in-down;
+}
+
+.digits:not(.ready) .digit {
+	animation: none;
 }
 
 @keyframes digit-in {

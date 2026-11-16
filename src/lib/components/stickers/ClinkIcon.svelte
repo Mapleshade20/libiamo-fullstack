@@ -104,12 +104,6 @@ svg {
 .right {
 	transform: rotate(-2deg);
 }
-:global([aria-current="page"]) .left {
-	transform: rotate(14deg);
-}
-:global([aria-current="page"]) .right {
-	transform: rotate(-14deg);
-}
 
 /* The sparks only exist at the moment of the strike. */
 .sparks {
@@ -124,6 +118,12 @@ svg {
 
 .playing .right {
 	animation: clink-right 540ms cubic-bezier(0.34, 1.35, 0.5, 1);
+}
+:global([aria-current="page"]) .left {
+	transform: rotate(14deg);
+}
+:global([aria-current="page"]) .right {
+	transform: rotate(-14deg);
 }
 
 .playing .sparks {

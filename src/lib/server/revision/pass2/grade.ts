@@ -42,7 +42,7 @@ export function placeAt(text: string, from: number, to: number, attempt: string)
 	// Mid-sentence, a capital the original did not have goes, unless the word is capitalised elsewhere (a name).
 	else if (!starts && first && /^\p{Lu}\p{Ll}/u.test(first) && /^\p{Ll}/u.test(span) && !new RegExp(`[^.!?\\s]\\s+${first}\\b`, "u").test(text))
 		a = a[0].toLowerCase() + a.slice(1);
-	const spaced = /[ \t]$/.test(left) || (before !== "" && !/[\n(“"‘'—\-（「]$/.test(before) && !CJK.test(before.at(-1)!) && !CJK.test(a[0] ?? ""));
+	const spaced = /[ \t]$/.test(left) || (before !== "" && !/[\n(“"‘'—\-（「]$/.test(before) && !CJK.test(before.slice(-1)) && !CJK.test(a[0] ?? ""));
 	const glue = /^[,.;:!?)、。，！？）]/.test(a) || !spaced || /\n$/.test(before) ? "" : " ";
 	const out = `${before}${glue}${a}${after}`;
 	const start = before.length + glue.length;

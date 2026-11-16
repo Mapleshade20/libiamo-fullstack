@@ -1,7 +1,7 @@
 <script lang="ts" module>
-import type { Component } from "svelte";
+import type { LucideIcon } from "@lucide/svelte";
 /** `icon`: a lucide icon before the label; with `iconsOnNarrow` only the icon shows on a phone. */
-export type SegmentedItem = { value: string; label: string; href?: string; disabled?: boolean; icon?: Component<any> };
+export type SegmentedItem = { value: string; label: string; href?: string; disabled?: boolean; icon?: LucideIcon };
 </script>
 
 <script lang="ts">

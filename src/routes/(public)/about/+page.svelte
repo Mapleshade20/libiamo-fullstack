@@ -56,9 +56,9 @@ import { account } from "#lib/account/account.svelte.ts";
 .btn:hover {
 	filter: brightness(1.05);
 }
-.note {
-	margin-top: 22px !important;
-	color: var(--muted) !important;
+.hero .note {
+	margin-top: 22px;
+	color: var(--muted);
 	font-size: 14px;
 }
 </style>

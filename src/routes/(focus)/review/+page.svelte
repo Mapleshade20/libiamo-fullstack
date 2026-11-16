@@ -38,16 +38,31 @@ let given = $state("");
 let placeholder = $state("");
 let input: HTMLInputElement | undefined = $state();
 let doneBtn: HTMLElement | null = $state(null);
-const item = $derived((void v, sitting.current));
+const item = $derived.by(() => {
+	void v;
+	return sitting.current;
+});
 const card = $derived(item?.card);
 $effect(() => {
 	void item;
 	shownAt = Date.now();
 });
-const counts = $derived((void v, sitting.counts()));
-const reviewed = $derived((void v, sitting.done.length));
-const finished = $derived((void v, !item && sitting.waiting === 0));
-const next = $derived((void v, item ? sitting.intervals(item) : []));
+const counts = $derived.by(() => {
+	void v;
+	return sitting.counts();
+});
+const reviewed = $derived.by(() => {
+	void v;
+	return sitting.done.length;
+});
+const finished = $derived.by(() => {
+	void v;
+	return !item && sitting.waiting === 0;
+});
+const next = $derived.by(() => {
+	void v;
+	return item ? sitting.intervals(item) : [];
+});
 const progress = $derived(reviewed / Math.max(1, reviewed + counts.new + counts.learning + counts.review));
 const TONE: Record<Rating, string> = { again: "--bad", hard: "--warn", good: "--ok", easy: "--cool" };
 const LABEL: Record<Rating, string> = { again: "rvAgain", hard: "rvHard", good: "rvGood", easy: "rvEasy" };
@@ -100,7 +115,10 @@ const sending = ratingSender<Job>(
 		void focusNow();
 	},
 );
-const failed = $derived((void v, sending.failed));
+const failed = $derived.by(() => {
+	void v;
+	return sending.failed;
+});
 let discarding = false;
 function reloadSaved() {
 	discarding = true;

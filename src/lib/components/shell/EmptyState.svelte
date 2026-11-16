@@ -30,7 +30,7 @@ const labelTurn = turn(-7, 4);
 </script>
 
 <div class="empty-state" class:compact class:playing={play.playing} role="presentation" onpointerenter={() => play.play()}>
-	<div class="sheet" style:rotate="{sheetTurn}deg" aria-hidden="true">
+	<div class="sheet" style:--turn="{sheetTurn}deg" aria-hidden="true">
 		<span class="line"></span><span class="line short"></span><span class="line"></span>
 		<span class="sticker-wrap"><Sticker name={art} size={compact ? 30 : 46} tilt={labelTurn} playing={play.playing} /></span>
 	</div>
@@ -72,10 +72,8 @@ const labelTurn = turn(-7, 4);
 	background: var(--raised);
 	border: 1px solid var(--edge);
 	box-shadow: var(--lift);
+	rotate: var(--turn);
 	transition: rotate 300ms var(--ease-spring);
-}
-.empty-state:hover .sheet {
-	rotate: 0deg !important;
 }
 .compact .sheet {
 	width: 52px;
@@ -84,6 +82,9 @@ const labelTurn = turn(-7, 4);
 	gap: 5px;
 	padding: 0 8px;
 	border-radius: 6px;
+}
+.empty-state:hover .sheet {
+	rotate: 0deg;
 }
 .line {
 	display: block;
@@ -104,13 +105,13 @@ const labelTurn = turn(-7, 4);
 		opacity 250ms var(--ease-panel),
 		filter 250ms var(--ease-panel);
 }
-.empty-state:hover .sticker-wrap {
-	opacity: 1;
-	filter: none;
-}
 .compact .sticker-wrap {
 	right: -10px;
 	top: -10px;
+}
+.empty-state:hover .sticker-wrap {
+	opacity: 1;
+	filter: none;
 }
 .words {
 	max-width: 34ch;

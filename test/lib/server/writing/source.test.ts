@@ -3,6 +3,13 @@ import { test } from "vitest";
 import { replyIn } from "#lib/server/revision/draft.ts";
 import { parseSource, plainSource, renderSource, sourceKind, withoutDraft } from "#lib/server/writing/source.ts";
 
+/** A capture that must parse. */
+function parsed(text: string) {
+	const s = parseSource(text);
+	if (!s) throw new Error("the capture did not parse");
+	return s;
+}
+
 const draft = "Actually later revealed as Stormfang xD";
 const capture = JSON.stringify({
 	platform: "ao3",
@@ -27,7 +34,7 @@ const capture = JSON.stringify({
 });
 
 test("the writer's own posted draft and the replies under it are not context", () => {
-	const s = withoutDraft(parseSource(capture)!, draft);
+	const s = withoutDraft(parsed(capture), draft);
 	assert.deepEqual(
 		s.messages.map((m) => m.id),
 		["c1", "c4", "c5"],
@@ -35,7 +42,7 @@ test("the writer's own posted draft and the replies under it are not context", (
 });
 
 test("a reply whose parent was not captured stands at the top level, and the import reads with what each answers", () => {
-	const s = parseSource(capture)!;
+	const s = parsed(capture);
 	assert.equal(s.messages.find((m) => m.id === "c5")?.parent, null);
 	assert.match(renderSource(s), /Maplefur \(replying to Icej \[c1\]\)/);
 	assert.match(renderSource(s), /Brokentail lay waiting/);
@@ -68,7 +75,7 @@ test("text without spaces: the writer's own posted Chinese draft is found and dr
 		],
 	});
 	assert.deepEqual(
-		withoutDraft(parseSource(cap)!, zh).messages.map((m) => m.id),
+		withoutDraft(parsed(cap), zh).messages.map((m) => m.id),
 		["1"],
 	);
 });

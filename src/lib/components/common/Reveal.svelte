@@ -25,36 +25,33 @@ onMount(() => {
 	display: grid;
 	grid-template-rows: 0fr;
 }
-.reveal.ready {
-	transition: grid-template-rows 150ms var(--ease-panel);
-}
 .reveal.open {
 	grid-template-rows: 1fr;
-}
-.reveal.ready.open {
-	transition-duration: 250ms;
 }
 .reveal-inner {
 	min-height: 0;
 	overflow: hidden;
 	opacity: 0;
 }
-.ready > .reveal-inner {
-	transition: opacity 120ms ease-out;
-}
 .open > .reveal-inner {
 	opacity: 1;
-}
-.ready.open > .reveal-inner {
-	transition: opacity 220ms ease-out 60ms;
 }
 .reveal-inner.visible {
 	overflow: visible;
 }
-@media (prefers-reduced-motion: reduce) {
-	.reveal,
-	.reveal-inner {
-		transition: none !important;
+/* It slides open only for those who have not asked for less motion. */
+@media (prefers-reduced-motion: no-preference) {
+	.reveal.ready {
+		transition: grid-template-rows 150ms var(--ease-panel);
+	}
+	.reveal.ready.open {
+		transition-duration: 250ms;
+	}
+	.ready > .reveal-inner {
+		transition: opacity 120ms ease-out;
+	}
+	.ready.open > .reveal-inner {
+		transition: opacity 220ms ease-out 60ms;
 	}
 }
 </style>

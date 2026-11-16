@@ -87,8 +87,9 @@ $effect(() => {
 		aria-label={labels.aria}
 		onkeydown={(e) => {
 			if (frozen) return;
-			if (e.key === "ArrowDown") e.preventDefault(), to(cur + 1);
-			if (e.key === "ArrowUp") e.preventDefault(), to(cur - 1);
+			if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+			e.preventDefault();
+			to(e.key === "ArrowDown" ? cur + 1 : cur - 1);
 		}}
 	>
 		<div class="pk-band" style:height="{band}px"></div>

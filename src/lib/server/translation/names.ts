@@ -32,9 +32,21 @@ const strip = (html: string) =>
 		.replace(/&#39;/g, "'")
 		.trim();
 
+/** What the wiki APIs answer, as far as this file reads it. */
+type Labels = Record<string, { value: string }>;
+type WikiAnswer = {
+	search?: { id: string }[];
+	entities?: Record<string, { labels?: Labels; descriptions?: Labels }>;
+	parse?: { displaytitle?: string };
+	query?: {
+		pages?: Record<string, { title: string; langlinks?: { "*": string }[]; pageprops?: Record<string, string> }>;
+		search?: { title: string; snippet?: string }[];
+	};
+};
+
 let last = 0;
 /** One polite request: sequential, a little apart, ten seconds at most, never throws. */
-async function get(url: string): Promise<any> {
+async function get(url: string): Promise<WikiAnswer | null> {
 	const wait = last + 250 - Date.now();
 	if (wait > 0) await new Promise((r) => setTimeout(r, wait));
 	last = Date.now();
@@ -53,7 +65,7 @@ async function fromWikidata(term: string, locale: Lang): Promise<Candidate[]> {
 	const s = await get(
 		`https://www.wikidata.org/w/api.php?${qs({ action: "wbsearchentities", search: term, language: "en", type: "item", limit: "5" })}`,
 	);
-	const ids: string[] = (s?.search ?? []).map((x: { id: string }) => x.id);
+	const ids = (s?.search ?? []).map((x) => x.id);
 	if (!ids.length) return [];
 	const e = await get(
 		`https://www.wikidata.org/w/api.php?${qs({ action: "wbgetentities", ids: ids.join("|"), props: "labels|descriptions", languages: ["en", ...labels].join("|") })}`,
@@ -67,7 +79,7 @@ async function fromWikidata(term: string, locale: Lang): Promise<Candidate[]> {
 				rendering: label,
 				source: "wikidata",
 				url: `https://www.wikidata.org/wiki/${id}`,
-				about: `${it.labels?.en?.value ?? term}: ${it.descriptions?.en?.value ?? ""}`,
+				about: `${it?.labels?.en?.value ?? term}: ${it?.descriptions?.en?.value ?? ""}`,
 			});
 	}
 	return out;
@@ -85,7 +97,7 @@ async function fromWikipedia(term: string, locale: Lang): Promise<Candidate[]> {
 	const q = await get(
 		`https://en.wikipedia.org/w/api.php?${qs({ action: "query", titles: term, redirects: "1", prop: "langlinks|pageprops", lllang: wiki })}`,
 	);
-	const page: any = Object.values(q?.query?.pages ?? {})[0];
+	const page = Object.values(q?.query?.pages ?? {})[0];
 	const link = page?.langlinks?.[0]?.["*"];
 	if (!link) return [];
 	const rendering = await titleIn(`https://${wiki}.wikipedia.org/w/api.php`, link, variant);
@@ -107,7 +119,7 @@ async function fromWorkWikis(term: string, locale: Lang, work: Work): Promise<Ca
 		if (w.lang === "en") {
 			// The original's wiki, linking its page to the same page in the locale's language.
 			const q = await get(`${w.api}?${qs({ action: "query", titles: term, redirects: "1", prop: "langlinks", lllang: wiki })}`);
-			const page: any = Object.values(q?.query?.pages ?? {})[0];
+			const page = Object.values(q?.query?.pages ?? {})[0];
 			const link = page?.langlinks?.[0]?.["*"];
 			if (link)
 				out.push({

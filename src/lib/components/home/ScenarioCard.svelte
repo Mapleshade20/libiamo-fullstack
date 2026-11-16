@@ -152,6 +152,13 @@ const st = $derived(siteOf(site));
 .square {
 	display: none;
 }
+/* Written already: the stamp is cancelled, the card a little quieter. */
+.written .cover {
+	filter: saturate(0.6);
+}
+.written .postmark {
+	opacity: 0.35;
+}
 :global([data-theme="dark"]) .cover {
 	background: var(--deep);
 	justify-content: center;
@@ -167,13 +174,6 @@ const st = $derived(siteOf(site));
 }
 :global([data-theme="dark"]) .compact .badge :global(.site-art) {
 	scale: 0.85;
-}
-/* Written already: the stamp is cancelled, the card a little quieter. */
-.written .cover {
-	filter: saturate(0.6);
-}
-.written .postmark {
-	opacity: 0.35;
 }
 .body {
 	flex: 1;

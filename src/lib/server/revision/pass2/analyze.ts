@@ -31,20 +31,21 @@ type SpotWhere = { sentences: number[]; phrase?: string | null; quote?: string |
  * widen to their sentence or the listed sentences by scope; earlier versions use the phrase inside the sentences.
  */
 export function spotRange(text: string, ss: Sentence[], s: SpotWhere): [number, number] {
-	if (s.quote) {
+	const quote = s.quote;
+	if (quote) {
 		const listed = ss.filter((x) => s.sentences.includes(x.id));
 		const find = (from: number, to: number) => {
-			const i = text.indexOf(s.quote!, from);
-			return i >= 0 && i + s.quote!.length <= to ? i : -1;
+			const i = text.indexOf(quote, from);
+			return i >= 0 && i + quote.length <= to ? i : -1;
 		};
 		let at = -1;
 		for (const x of listed) {
 			at = find(x.from, x.to);
 			if (at >= 0) break;
 		}
-		if (at < 0) at = text.indexOf(s.quote);
+		if (at < 0) at = text.indexOf(quote);
 		if (at >= 0) {
-			const end = at + s.quote.length;
+			const end = at + quote.length;
 			if (s.scope === "words") return [at, end];
 			const own = ss.filter((x) => x.from < end && x.to > at);
 			const cover = s.scope === "sentences" ? [...own, ...listed.filter((x) => x.para === own[0]?.para)] : own;
@@ -59,7 +60,7 @@ export function spotRange(text: string, ss: Sentence[], s: SpotWhere): [number, 
 			if (i >= 0 && i < x.to) return [i, i + s.phrase.length];
 		}
 	}
-	return [inS[0].from, inS.at(-1)!.to];
+	return [inS[0].from, inS[inS.length - 1].to];
 }
 
 /** The prompt line for the spans pass 1 left for pass 2 (pipeline/base.ts). */

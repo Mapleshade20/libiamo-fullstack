@@ -190,15 +190,6 @@
 	--radius-2xl: 8px;
 }
 
-/* iOS zooms into any focused field under 16px and stays zoomed. */
-@media (pointer: coarse) {
-	input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"], [type="hidden"]),
-	textarea,
-	select {
-		font-size: max(1rem, 1em) !important;
-	}
-}
-
 @layer base {
 	* {
 		@apply border-border outline-ring/50;
@@ -265,9 +256,6 @@
 	}
 	a {
 		color: inherit;
-	}
-	[hidden] {
-		display: none !important;
 	}
 }
 
@@ -456,6 +444,19 @@ html[data-side="in"]::view-transition-new(side) {
 	}
 }
 
+/*
+ * What the device asks for wins over every component's own rules, so these two alone are !important: iOS zooms into a
+ * focused field under 16px and stays zoomed (the other cure, maximum-scale, stops pinch zoom on Android), and reduced
+ * motion is the learner's setting.
+ */
+/* biome-ignore-start lint/complexity/noImportantStyles: overrides the device asks for (above) */
+@media (pointer: coarse) {
+	input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"], [type="hidden"]),
+	textarea,
+	select {
+		font-size: max(1rem, 1em) !important;
+	}
+}
 @media (prefers-reduced-motion: reduce) {
 	*,
 	*::before,
@@ -465,6 +466,7 @@ html[data-side="in"]::view-transition-new(side) {
 		transition-duration: 0.01ms !important;
 	}
 }
+/* biome-ignore-end lint/complexity/noImportantStyles: overrides the device asks for (above) */
 
 /* The hover tip (lib/components/common/tip.ts): a small slip of paper, after a rest of the pointer. */
 .tip-pill {

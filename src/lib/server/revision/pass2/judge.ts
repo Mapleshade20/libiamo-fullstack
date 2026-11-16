@@ -119,7 +119,9 @@ export async function judgeSpots(
 		spots: spots
 			.filter((_, i) => of.get(i)?.verdict !== "wrong")
 			.map((s) => (of.get(spots.indexOf(s))?.verdict === "better" ? { ...s, tier: "better" as const } : s)),
-		wrong: items.filter((x) => of.get(x.i)?.verdict === "wrong").map((x) => ({ words: x.words, why: of.get(x.i)!.why, heard: heardOf.get(x.i) })),
+		wrong: items
+			.filter((x) => of.get(x.i)?.verdict === "wrong")
+			.map((x) => ({ words: x.words, why: of.get(x.i)?.why ?? "", heard: heardOf.get(x.i) })),
 		all: items.map((x) => ({ words: x.words, verdict: of.get(x.i)?.verdict ?? "?", why: of.get(x.i)?.why ?? "", heard: heardOf.get(x.i) })),
 		calls: [...(heard?.calls ?? []), ...r.calls],
 	};

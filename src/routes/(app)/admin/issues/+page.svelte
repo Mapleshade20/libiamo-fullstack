@@ -94,6 +94,9 @@ const LABEL = { scheduled: "Scheduled", current: "On the shelf", past: "In the p
 	font-family: var(--font-serif-stack);
 	line-height: 1.1;
 }
+.past .band {
+	filter: saturate(0.4);
+}
 :global([data-theme="dark"]) .band {
 	background: color-mix(in srgb, var(--tone) 24%, var(--raised));
 	color: var(--tone);
@@ -104,9 +107,6 @@ const LABEL = { scheduled: "Scheduled", current: "On the shelf", past: "In the p
 .band .y {
 	font-size: 13px;
 	opacity: 0.8;
-}
-.past .band {
-	filter: saturate(0.4);
 }
 .body {
 	display: flex;

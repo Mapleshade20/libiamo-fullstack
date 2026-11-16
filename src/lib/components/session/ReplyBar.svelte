@@ -91,7 +91,10 @@ function send() {
 							placeholder={spec.compose}
 							spellcheck="false"
 							readonly={bar.waiting}
-							oninput={() => (grow(), spec.onInput?.(text))}
+							oninput={() => {
+								grow();
+								spec.onInput?.(text);
+							}}
 							onkeydown={(e) => {
 								if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
 									e.preventDefault();

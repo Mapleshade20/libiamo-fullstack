@@ -398,7 +398,7 @@ postgres.js 4, `src/env.ts` declaring the environment (Kit 3's replacement for `
 
 | Check | State |
 |---|---|
-| `pnpm check` | 0 errors; about 100 Biome warnings (non-null assertions, CSS specificity order), left for when the pages are touched |
+| `pnpm check` | 0 errors; about 100 Biome warnings (non-null assertions, CSS specificity order), left for when the pages are touched (all fixed in the code 2026-11-16; CI runs `biome ci --error-on-warnings`) |
 | `pnpm test` | 21 files, 109 tests pass |
 | replay | the lab's 2026-11-12 session: 14 steps identical, then `notes` differs by the `was` field the lab added after recording |
 | pages | the production build matches the demo pixel for pixel on 32 of 36 screenshots (desktop and phone); the rest differ by subpixels or data |
