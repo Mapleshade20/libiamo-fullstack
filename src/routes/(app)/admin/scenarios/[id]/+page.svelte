@@ -11,6 +11,7 @@ import RotateCcw from "@lucide/svelte/icons/rotate-ccw";
 import Trash2 from "@lucide/svelte/icons/trash-2";
 import Undo2 from "@lucide/svelte/icons/undo-2";
 import X from "@lucide/svelte/icons/x";
+import { type CaptureCut, mergePeople } from "#lib/admin/capture.ts";
 import { type FlatComment, flattenComments, isThreaded, nestComments } from "#lib/admin/opening-form.ts";
 import { fmtDay, langEn } from "#lib/admin/records.ts";
 import { confirm, deleteOne, remake, saveOne, scenarioOne, withdrawOne } from "#lib/admin/scenarios.remote.ts";
@@ -230,6 +231,21 @@ function importJson() {
 	} catch (e) {
 		jsonError = e instanceof SyntaxError ? "That is not valid JSON." : `It cannot be imported: ${(e as Error).message}.`;
 	}
+}
+
+/** A capture's cut (CaptureImport, which refused one the version would not save): its opening, what followed, its people. */
+function importCapture(cut: CaptureCut) {
+	if (!ev) return;
+	const opening = structuredClone(cut.opening) as Record<string, unknown>;
+	if (isThreaded(d.place)) {
+		threads[lang] = flattenComments(d.place, opening.previousComments);
+		delete opening.previousComments;
+	}
+	ev.opening = opening;
+	ev.followed = cut.followed;
+	ev.people = mergePeople(ev.people, cut.people);
+	view = "edit";
+	toast("Imported: check the opening and the people, then save");
 }
 
 /** Whoever writes in the opening must be one of the People (the server refuses it otherwise). */
@@ -709,7 +725,14 @@ const sourceAct = (fn: typeof remake, sourceId: string, generation: string) =>
 	{/if}
 </div>
 
-<CaptureImport bind:open={importing} site={SITE_OF[d.place]} />
+<CaptureImport
+	bind:open={importing}
+	site={SITE_OF[d.place]}
+	place={d.place as ExchangePlace}
+	{lang}
+	people={ev?.people ?? []}
+	onimport={importCapture}
+/>
 
 <ModalDialog bind:open={jsonOpen} labelledby="json-h">
 	<h2 id="json-h" class="mb-2">Import JSON</h2>
