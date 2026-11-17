@@ -15,8 +15,9 @@ import { page } from "$app/state";
  * again first.
  */
 const id = $derived(page.params.id ?? "");
-const u = $derived(await userOne(id));
-const calls = $derived(await userCalls(id));
+// Asked for together: a `$derived(await …)` is not begun until the one before it has its answer, and a query is not
+// asked for until it is awaited (await_waterfall).
+const [u, calls] = $derived(await Promise.all([userOne(id), userCalls(id)]));
 let deleting = $state(false);
 let typed = $state("");
 let busy = $state(false);

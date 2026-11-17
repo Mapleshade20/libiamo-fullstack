@@ -28,10 +28,13 @@ const follow = $derived(followUp());
 const openPiece = $derived(shelfNow().open[0]);
 // Four at most: continue, follow-up, then scenarios; the "+" card only when there is room.
 revalidate(!sandboxed() && hasScenarios(app.lang) ? shelfScenarios(app.lang) : null, dueNow());
-const offered = $derived(sandboxed() ? tourScenarios(app.lang) : hasScenarios(app.lang) ? await shelfScenarios(app.lang) : []);
+// Asked for together: a `$derived(await …)` is not begun until the one before it has its answer, and a query is not
+// asked for until it is awaited (await_waterfall).
+const [offered, deck] = $derived(
+	await Promise.all([sandboxed() ? tourScenarios(app.lang) : hasScenarios(app.lang) ? shelfScenarios(app.lang) : [], dueNow()]),
+);
 const prompts = $derived(offered.slice(0, 4 - (openPiece ? 1 : 0) - (follow ? 1 : 0)));
 const roomForAdd = $derived((openPiece ? 1 : 0) + (follow ? 1 : 0) + prompts.length < 4);
-const deck = $derived(await dueNow());
 const add = createPlay();
 
 /* Review: how many cards are due and, in turns with it (half a minute each), one or two of those cards asked back.
