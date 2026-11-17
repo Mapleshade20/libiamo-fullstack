@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, sql as drizzleSql, eq, gte, inArray, isNotNull, lte, ne, or, type SQL } from "drizzle-orm";
-import type { ExchangePlace, Urgency } from "#lib/constants.ts";
+import type { ExchangeEndReason, ExchangePlace, Urgency } from "#lib/constants.ts";
 import { flattenOpeningComments, getCommentId, persistedMessageRef } from "#lib/exchange/comment-thread.ts";
 import { URGENCY_PRESETS } from "#lib/exchange/limits.ts";
 import { foldedChainIds } from "#lib/exchange/messages.ts";
@@ -465,7 +465,8 @@ export class AgentReplyWorker {
 	private async expireSessions(now: WorkerNow): Promise<void> {
 		const expired = await db
 			.update(exchange)
-			.set({ status: "abandoned", completionReason: "max_session_age", completedAt: now })
+			// The reasons are the check's (EXCHANGE_END_REASONS); a word outside them fails every scan.
+			.set({ status: "abandoned", completionReason: "max_age" satisfies ExchangeEndReason, completedAt: now })
 			.where(and(eq(exchange.status, "in_progress"), lte(exchange.expiresAt, now)))
 			.returning({ id: exchange.id });
 
