@@ -10,7 +10,7 @@ import { dayKey, practised, recordTourPiece, type Sandbox } from "./sandbox.svel
  * where they all go and how they come back, what to write when they have nothing, and how a day counts.
  */
 const content = () => contentFor(app.lang);
-const base = (): Partial<Sandbox> => ({ glass: { day: dayKey(), look: "down", drink: drinkOf().id } });
+const base = (): Partial<Sandbox> => ({ glass: { day: dayKey(), look: "down", drink: drinkOf(dayKey()).id } });
 const withPiece = () => ({ ...base(), pieces: [content().piece(Date.now())] });
 const withKept = () => ({ ...withPiece(), collected: [content().kept(Date.now())] });
 
@@ -222,7 +222,7 @@ const scenario: Chapter = {
 const week: Chapter = {
 	key: "tourWeek",
 	start: "/",
-	seed: () => ({ ...withKept(), days: { [dayKey()]: "learned" }, glass: { day: dayKey(), look: "up", drink: drinkOf().id } }),
+	seed: () => ({ ...withKept(), days: { [dayKey()]: "learned" }, glass: { day: dayKey(), look: "up", drink: drinkOf(dayKey()).id } }),
 	async run(d) {
 		await d.say("tourK1", ".week-btn");
 		await d.click(".week-btn");

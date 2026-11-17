@@ -43,7 +43,7 @@ test("accidental remote queries and writes fail closed; replaying a chapter rese
 	const before = reached.length;
 	playTape(tape, { pace: 0 });
 	await assert.rejects(g.window.fetch("/_app/remote/hash/scenarioView?arg=x"), /live application data/);
-	await assert.rejects(post("/_app/remote/hash/saveDraft", "{}"), /live application data/);
+	await assert.rejects(post("/_app/remote/hash/sendSheet", "{}"), /live application data/);
 	assert.equal(reached.length, before);
 	assert.equal((await post("/api/gate")).status, 200);
 	playTape(tape, { pace: 0 });

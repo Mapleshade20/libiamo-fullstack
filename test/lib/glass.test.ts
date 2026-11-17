@@ -35,8 +35,8 @@ test("the liquid settles after a poke", () => {
 
 test("each day of the week has its own glass, Monday first", () => {
 	assert.equal(new Set(DRINKS.map((d) => d.id)).size, 7);
-	assert.equal(drinkOf(new Date(2026, 10, 9)).id, DRINKS[0].id); // a Monday
-	assert.equal(drinkOf(new Date(2026, 10, 8)).id, DRINKS[6].id); // a Sunday
+	assert.equal(drinkOf("2026-11-09").id, DRINKS[0].id); // a Monday
+	assert.equal(drinkOf("2026-11-08").id, DRINKS[6].id); // a Sunday
 	for (const d of DRINKS) assert.ok(insideHalf(d, d.level) > 0 && d.level > d.rim.y, `${d.id}: its level is inside, below the rim`);
 });
 

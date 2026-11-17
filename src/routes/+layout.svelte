@@ -2,19 +2,22 @@
 import "./layout.css";
 import "#lib/components/stickers/stickers.css";
 import "#lib/components/shell/sheet.css";
-import { onMount, type Snippet, setContext } from "svelte";
+import { onMount, type Snippet } from "svelte";
 import { followSystem } from "#lib/account/look.svelte.ts";
+import { followTimeZone } from "#lib/account/time-zone.ts";
 import Toast from "#lib/components/shell/Toast.svelte";
 import Tour from "#lib/components/tour/Tour.svelte";
 import { metaOf } from "#lib/seo.ts";
-import { DISPLAY_CLOCK_CONTEXT, type DisplayClock } from "#lib/time/display-clock.ts";
+import { runClock } from "#lib/time/clock.svelte.ts";
 import { onNavigate } from "$app/navigation";
 import { page } from "$app/state";
 
-let { children, data }: { children: Snippet; data: { clock: DisplayClock; origin: string } } = $props();
+let { children, data }: { children: Snippet; data: { origin: string } } = $props();
 onMount(followSystem);
-// The places' dates and times (lib/time/display-clock.ts): in the learner's time zone, the same on both sides.
-setContext(DISPLAY_CLOCK_CONTEXT, () => data.clock);
+// Dates read the server's clock until the page runs, then the browser moves it on (lib/time/clock.svelte.ts); the
+// learner's time zone follows this device's.
+onMount(runClock);
+onMount(followTimeZone);
 // The head: only the public pages are indexed (lib/seo.ts); a page may name itself after this (the admin's do).
 const meta = $derived(metaOf(data.origin, page.error ? null : page.route.id));
 

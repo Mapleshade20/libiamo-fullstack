@@ -12,7 +12,7 @@ import {
 	placeholderThread,
 } from "#lib/exchange/messages.ts";
 import { getDeliveryDelayMs } from "#lib/exchange/reply-timing.ts";
-import { getDisplayClock } from "#lib/time/display-clock.ts";
+import { clock } from "#lib/time/clock.svelte.ts";
 import { goto } from "$app/navigation";
 import type { ExchangeApi, SendResult } from "./actions.ts";
 import { createHintAssist } from "./hint/hint-assist.svelte.ts";
@@ -62,9 +62,8 @@ function toTime(value: string | Date | null | undefined): number | null {
  * placeholders hidden while their retry is in flight, and agent messages held back for pacing.
  */
 export function createExchange(getProps: () => SurfaceProps, options: { agentName: () => string }) {
-	const clock = getDisplayClock();
 	const props = $derived(getProps());
-	const formatTimestamp = $derived(createTimeFormatter(clock().timeZone));
+	const formatTimestamp = $derived(createTimeFormatter(clock.timeZone));
 	const openingState = $derived((props.openingState ?? {}) as ChatOpeningState);
 	const agentName = $derived(options.agentName());
 

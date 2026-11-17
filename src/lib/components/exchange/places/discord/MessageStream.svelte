@@ -8,7 +8,7 @@ import { getSceneMessageRef } from "#lib/exchange/comment-thread.ts";
 import { memberColor } from "#lib/exchange/discord-members.ts";
 import type { ChatMessage } from "#lib/exchange/messages.ts";
 import { t as translate } from "#lib/i18n/index.svelte.ts";
-import { getDisplayClock } from "#lib/time/display-clock.ts";
+import { clock } from "#lib/time/clock.svelte.ts";
 import { highlightMentions, mentionsName } from "./helpers.ts";
 import type { DiscordText } from "./i18n.ts";
 
@@ -35,7 +35,6 @@ let {
 	onReply: (message: ChatMessage) => void;
 } = $props();
 
-const clock = getDisplayClock();
 // Pending placeholders only drive polling; Discord shows the typing indicator instead.
 const visibleMessages = $derived(exchange.messages.filter((message) => message.deliveryState !== "pending"));
 const byRef = $derived(new Map(visibleMessages.map((message) => [getSceneMessageRef("discord", message), message])));
@@ -46,7 +45,7 @@ let tapped = $state<string | null>(null);
 <div bind:this={exchange.scroller} class="flex-1 overflow-y-auto px-4 py-6 motion-safe:scroll-smooth">
 	<div class="my-4 mt-auto flex items-center justify-center">
 		<div class="h-px flex-1 bg-[#404249]"></div>
-		<span class="px-2 text-xs font-semibold text-[#949BA4]">{getTodayDateString(language, clock())}</span>
+		<span class="px-2 text-xs font-semibold text-[#949BA4]">{getTodayDateString(language, clock)}</span>
 		<div class="h-px flex-1 bg-[#404249]"></div>
 	</div>
 

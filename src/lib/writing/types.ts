@@ -19,8 +19,9 @@ export type PieceItem = {
 	lang: string;
 	at: number;
 	open: boolean;
-	/** writing: a scenario still in its place (or a translation on its sheet); revising: inside the two passes. */
-	phase?: "writing" | "revising" | "finished";
+	/** writing: a scenario still in its place (or a translation on its sheet); revising: inside the two passes;
+	    abandoned: left unfinished, what was written kept (server/revision/abandon.ts). */
+	phase?: "writing" | "revising" | "finished" | "abandoned";
 	scenarioId?: string;
 	finishedAt?: number;
 	/** What the notebook keeps from it, and since when its entries are on their way. */
@@ -28,12 +29,25 @@ export type PieceItem = {
 	notesPending?: number;
 	posted?: Posted;
 	askedAt?: number;
-	again?: { text: string; at: number };
+	/** Written again from memory (the text only on the piece's own page). */
+	again?: { text?: string; at: number };
 	state?: "posted" | "revised";
 };
 
+/* The shelf's second slot: one card at most, for one piece: first whether it was posted (not again for a day after "not
+   yet"), then, three days after it was finished, writing it again from memory (lib/writing/follow-up.ts). */
+export type FollowUp = { kind: "posted" | "again"; w: PieceItem };
+
+/**
+ * What every page shows of the learner's pieces in one language, the same size however much they have written: the
+ * unfinished ones, the six most recent, at most one follow-up, and how many are finished (server/writing/pieces.ts).
+ */
+export type Shelf = { open: PieceItem[]; recent: PieceItem[]; followUp?: FollowUp; finished: number };
+/** A page of My writing, and where the next one starts. */
+export type PiecesPage = { items: PieceItem[]; next?: string };
+
 /** A piece in the lists, with what its page shows when the tour's sandbox holds it. */
-export type Writing = PieceItem & { result?: PieceResult };
+export type Writing = PieceItem & { result?: PieceResult; draft?: string };
 
 /** What a finished revision left, as the piece's page shows it. */
 export type PieceResult = {
@@ -55,8 +69,8 @@ export type PieceResult = {
 	finishedAt: number;
 };
 
-/** A piece's own page. */
-export type PieceView = PieceItem & { result?: PieceResult };
+/** A piece's own page; an abandoned one shows what was written. */
+export type PieceView = PieceItem & { result?: PieceResult; draft?: string };
 
 /** Whether a piece's notebook entries are still on their way (a call takes seconds; after two minutes it is given up). */
 export const notesPending = (r: { notesPending?: number } | undefined, now = Date.now()) => !!r?.notesPending && now - r.notesPending < 120_000;

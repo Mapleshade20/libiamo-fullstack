@@ -5,8 +5,12 @@
  * stranger of the other stickers, the same selected/unselected sense as the carton's lid. The two dissolve into each
  * other, each through a small change of size.
  */
-let { name, photo, drawn = false, size = 28 }: { name: string; photo?: string; drawn?: boolean; size?: number } = $props();
+import { loadedPicture } from "#lib/account/picture.svelte.ts";
+
+let { name, photo, drawn = false, size = 28 }: { name: string; photo?: string | null; drawn?: boolean; size?: number } = $props();
 const id = $props.id();
+// The initial is drawn until the picture has loaded in the browser (and stays if it does not come).
+const picture = loadedPicture(() => photo);
 const initial = $derived((name.trim()[0] ?? "?").toUpperCase());
 </script>
 
@@ -16,11 +20,20 @@ const initial = $derived((name.trim()[0] ?? "?").toUpperCase());
 			<clipPath id="{id}-c"><circle cx="16" cy="16" r="13.8" /></clipPath>
 		</defs>
 		<path class="nav-cut" d="M1.8 15.2C2.1 7.1 8.5 1.5 16.5 1.9S30.6 8.8 30 16.6 23.8 30.8 15.5 30.2 1.2 23.2 1.8 15.2Z" />
-		{#if photo}
-			<image href={photo} x="2.2" y="2.2" width="27.6" height="27.6" preserveAspectRatio="xMidYMid slice" clip-path="url(#{id}-c)" />
-		{:else}
-			<circle class="initial-disc" cx="16" cy="16" r="13.8" />
-			<text x="16" y="16" dy="0.36em" text-anchor="middle">{initial}</text>
+		<circle class="initial-disc" cx="16" cy="16" r="13.8" />
+		<text x="16" y="16" dy="0.36em" text-anchor="middle">{initial}</text>
+		{#if picture.current}
+			<image
+				class="photo"
+				class:arrived={picture.arrived}
+				href={picture.current}
+				x="2.2"
+				y="2.2"
+				width="27.6"
+				height="27.6"
+				preserveAspectRatio="xMidYMid slice"
+				clip-path="url(#{id}-c)"
+			/>
 		{/if}
 	</svg>
 	<svg class="stranger st-me" viewBox="0 0 32 32" aria-hidden="true">
@@ -86,5 +99,16 @@ svg {
 text {
 	fill: #fff;
 	font: 600 13px var(--font-sans-stack);
+}
+/* The picture settles over the initial when it arrives. */
+@media (prefers-reduced-motion: no-preference) {
+	.photo.arrived {
+		animation: photo-in 240ms ease-out;
+	}
+}
+@keyframes photo-in {
+	from {
+		opacity: 0;
+	}
 }
 </style>

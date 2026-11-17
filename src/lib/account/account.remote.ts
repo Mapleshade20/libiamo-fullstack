@@ -39,20 +39,19 @@ import type { Me } from "./me.ts";
 export const me = query(async (): Promise<Me | null> => {
 	const u = getRequestEvent().locals.user;
 	if (!u) return null;
-	const [accounts, [key], picture] = await Promise.all([
+	const [accounts, [key]] = await Promise.all([
 		db
 			.select({ id: account.id, providerId: account.providerId, createdAt: account.createdAt })
 			.from(account)
 			.where(eq(account.userId, u.id))
 			.orderBy(asc(account.createdAt)),
 		db.select({ provider: userKey.provider, model: userKey.model, decision: userKey.decisionModel }).from(userKey).where(eq(userKey.userId, u.id)),
-		gravatarOf(u.email),
 	]);
 	const first = accounts[0]?.providerId;
 	return {
 		email: u.email,
 		name: u.name,
-		picture,
+		picture: gravatarOf(u.email),
 		verified: u.emailVerified,
 		via: first === "google" || first === "github" ? first : "email",
 		hasPassword: accounts.some((a) => a.providerId === "credential"),
@@ -134,6 +133,15 @@ export const savePrefs = command(Prefs, async (p) => {
 		await setWeekGoal(u, p.weeklyGoal);
 		await week().refresh();
 	}
+});
+
+/**
+ * The learner's time zone, following the device they are on (lib/account/time-zone.ts): their days, weeks and reviews
+ * are counted in it from then on.
+ */
+export const keepTimeZone = command(timeZone, async (tz) => {
+	const u = learner();
+	if (u.timeZone !== tz) await db.update(user).set({ timeZone: tz }).where(eq(user.id, u.id));
 });
 
 /** How the pages look (and how much pass 1 marks): any of it, at once. */

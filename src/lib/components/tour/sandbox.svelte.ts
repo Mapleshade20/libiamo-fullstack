@@ -2,6 +2,8 @@ import { app } from "#lib/account/app.svelte.ts";
 import type { Note, ReviewCard } from "#lib/notebook/types.ts";
 import { noteFaces } from "#lib/review/faces.ts";
 import type { RatingName } from "#lib/review/types.ts";
+import { today } from "#lib/time/clock.svelte.ts";
+import { addDays, weekStartOf } from "#lib/time/local-day.ts";
 import type { DayKind, WeekView } from "#lib/week/types.ts";
 import type { PieceItem, PieceResult } from "#lib/writing/types.ts";
 import { notesPending } from "#lib/writing/types.ts";
@@ -16,7 +18,7 @@ import { freshReview, rateTourReview, type TourReview, tourOutcomes } from "./re
  */
 
 /** A piece the tour finished (with what its page shows). */
-export type TourPiece = PieceItem & { result?: PieceResult };
+export type TourPiece = PieceItem & { result?: PieceResult; draft?: string };
 /** A phrase the tour collected, with the sentence it was read in. */
 export type Collected = {
 	phrase: string;
@@ -178,8 +180,8 @@ export function editTourNote(id: string, edit: NoteEdit) {
 }
 
 /* ---------- The week ---------- */
-/** A day on this device, as the server names the learner's days: `YYYY-MM-DD`. */
-export const dayKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+/** The learner's today, as the server names their days: `YYYY-MM-DD` (lib/time/clock.svelte.ts). */
+export const dayKey = () => today();
 /** Credits the sandbox's today with one half. */
 export function practised(what: "learned" | "reviewed") {
 	const s = the();
@@ -189,17 +191,17 @@ export function practised(what: "learned" | "reviewed") {
 	s.days[dayKey()] = learned && reviewed ? "both" : learned ? "learned" : "reviewed";
 }
 /** The sandbox's week, Monday first. */
-export function tourWeek(now = new Date()): WeekView {
-	const mon = (now.getDay() + 6) % 7;
+export function tourWeek(): WeekView {
+	const now = today();
+	const monday = weekStartOf(now);
 	const days = box?.days ?? {};
 	const KIND: Record<string, DayKind> = { both: "full", learned: "learned", reviewed: "reviewed" };
 	return {
-		today: dayKey(now),
+		today: now,
 		goal: app.prefs.weeklyGoal,
 		days: Array.from({ length: 7 }, (_, i) => {
-			const d = new Date(now);
-			d.setDate(now.getDate() - mon + i);
-			return { day: dayKey(d), kind: i > mon ? "later" : (KIND[days[dayKey(d)]] ?? "none") };
+			const day = addDays(monday, i);
+			return { day, kind: day > now ? "later" : (KIND[days[day]] ?? "none") };
 		}),
 	};
 }

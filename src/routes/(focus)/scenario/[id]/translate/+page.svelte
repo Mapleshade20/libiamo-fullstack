@@ -2,6 +2,7 @@
 import ArrowRight from "@lucide/svelte/icons/arrow-right";
 import { untrack } from "svelte";
 import { app } from "#lib/account/app.svelte.ts";
+import { dropLocalDraft, keepLocalDraft, localDraft } from "#lib/client/drafts.ts";
 import { autogrow } from "#lib/components/common/motion.ts";
 import { tip } from "#lib/components/common/tip.ts";
 import EmptyState from "#lib/components/shell/EmptyState.svelte";
@@ -9,11 +10,11 @@ import FocusBar from "#lib/components/shell/FocusBar.svelte";
 import { toast } from "#lib/components/shell/toast.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
 import { nameOf, tx } from "#lib/i18n/tx.ts";
-import { saveDraft, sheet } from "#lib/scenario/scenario.remote.ts";
+import { sendSheet, sheet } from "#lib/scenario/scenario.remote.ts";
 import { startPiece } from "#lib/session/start.ts";
 import type { Setup } from "#lib/session/types.ts";
 import { blockAt, blocksOf, isByLine, termRuns } from "#lib/translation/blocks.ts";
-import { beforeNavigate, goto } from "$app/navigation";
+import { goto } from "$app/navigation";
 import { page } from "$app/state";
 
 /*
@@ -22,8 +23,9 @@ import { page } from "$app/state";
  * paragraph the caret is in lights up in the source, so a long text needs no box per paragraph and sentences can still
  * be joined or split freely. Names and terms the scenario gives are marked in the source (their meaning on hover) and can
  * be put in with a click. What the learner cannot say yet they leave in their own language: those words become the
- * revision's stops. Nothing here helps or checks; the two passes come after, straight from "done". The draft is the
- * piece's text on the server, saved as they type (the first words create the piece, which then waits on the shelf).
+ * revision's stops. Nothing here helps or checks; the two passes come after, straight from "done". The draft stays on
+ * this device as it is typed (lib/client/drafts.ts: a learner comes back to it on the same device); "done" sends it, and
+ * only then is it a piece (with the plan typed on the scenario's page).
  */
 const id = $derived(page.params.id ?? "");
 const data = $derived(await sheet({ id, lang: app.lang }));
@@ -35,13 +37,14 @@ const units = $derived(s ? blocksOf(s.source, byLine).map((b) => s.source.slice(
 const terms = $derived(s?.glossary ?? []);
 
 let text = $state("");
-// The draft as the server keeps it, once per scenario (what is typed after is the page's own).
+const draftKey = $derived(data ? `${id}|${data.language}` : "");
+// The draft on this device, once per scenario (a piece taken up again brings its text, if the device has none).
 let loaded = "";
 $effect(() => {
 	const d = data;
 	if (!d || loaded === d.scenario.id) return;
 	loaded = d.scenario.id;
-	untrack(() => (text = d.draft));
+	untrack(() => (text = localDraft("sheet", `${id}|${d.language}`) || d.draft));
 	// Already gone into its revision (another tab, another device): it goes on there.
 	if (d.revising && d.pieceId) goto(`/live/${d.pieceId}`, { replace: true });
 });
@@ -61,30 +64,9 @@ function track() {
 	caret = area.selectionStart;
 }
 
-// Saves one after another, the last text winning; a pause in typing saves, and so do leaving and "done".
-let chain: Promise<string | null> = Promise.resolve(null);
-let saved = "";
-let timer: ReturnType<typeof setTimeout> | undefined;
-function flush() {
-	clearTimeout(timer);
-	const now = text;
-	if (!data) return chain;
-	const where = { id, lang: data.language, ...data.binding };
-	chain = chain.then(async (pieceId) => {
-		if (now === saved && pieceId) return pieceId;
-		const r = await saveDraft({ ...where, text: now }).catch(() => {
-			toast(tx("auSomethingWrong"));
-			return null;
-		});
-		if (!r?.pieceId) return null;
-		saved = now;
-		return r.pieceId ?? pieceId;
-	});
-	return chain;
-}
+/** What is typed is kept on this device at once (nothing goes to the server until "done"). */
 function save() {
-	clearTimeout(timer);
-	timer = setTimeout(flush, 700);
+	if (draftKey) keepLocalDraft("sheet", draftKey, text);
 }
 /** A given name or term goes in where the caret is, and the caret stays after it. */
 function insert(term: string) {
@@ -104,7 +86,11 @@ let leaving = $state(false);
 async function done() {
 	if (!scenario || !text.trim() || leaving) return;
 	leaving = true;
-	const pieceId = await flush();
+	const key = draftKey;
+	const sent = data
+		? await sendSheet({ id, lang: data.language, text: text.trim(), plan: localDraft("plan", key), ...data.binding }).catch(() => null)
+		: null;
+	const pieceId = sent?.pieceId ?? null;
 	// The server hands the revision the source and the original from the piece.
 	const started = pieceId
 		? await startPiece({
@@ -119,12 +105,11 @@ async function done() {
 		leaving = false;
 		return toast(tx("startFailed"));
 	}
+	// It is a piece now: what this device kept for it goes.
+	dropLocalDraft("sheet", key);
+	dropLocalDraft("plan", key);
 	goto(`/live/${started}`);
 }
-// Leaving keeps what is written: the piece waits on the shelf, and opens this page again.
-beforeNavigate(() => {
-	if (!leaving && text !== saved && (text.trim() || data?.pieceId)) void flush();
-});
 $effect(() => {
 	document.title = `${scenario?.title ?? ""} · Libiamo`;
 });
@@ -203,10 +188,7 @@ $effect(() => {
 						focused = true;
 						track();
 					}}
-					onblur={() => {
-						focused = false;
-						void flush();
-					}}
+					onblur={() => (focused = false)}
 				></textarea>
 				<div class="foot">
 					<p class="stuck">{tx("trStuck", { lang: native })}</p>

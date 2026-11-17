@@ -2,6 +2,7 @@ import { learner } from "#lib/server/guard.ts";
 import { stopOf } from "#lib/server/llm/transport.ts";
 import type { RevisionSession } from "#lib/server/revision/revision.ts";
 import {
+	abandon,
 	act,
 	bookmark,
 	dropRevision,
@@ -47,8 +48,15 @@ export async function POST({ params, request }) {
 	if (!p) return Response.json({ error: "No such piece." }, { status: 404 });
 	// Coming back to a finished piece is coming back to its page.
 	if (params.action === "resume" && p.state === "finished") return Response.json({ finished: true });
+	// One abandoned opens on its page, which offers to take it up again.
+	if (p.state === "abandoned") return Response.json({ abandoned: true }, { status: params.action === "resume" ? 200 : 409 });
 	const h = await openRevision(u, params.id);
-	if (!h) return Response.json({ error: "This revision is gone. Start again." }, { status: 404 });
+	if (!h) {
+		// A revision that can no longer be opened (its snapshot gone, or from an older version) is abandoned here, rather
+		// than leaving the piece open with nowhere to go.
+		if (await abandon(params.id)) return Response.json({ abandoned: true }, { status: params.action === "resume" ? 200 : 409 });
+		return Response.json({ error: "This revision is gone. Start again." }, { status: 404 });
+	}
 	// Where the page was, with what it was started from; and the page's bookmark. Neither is a step on the tape.
 	if (params.action === "resume") {
 		const i = h.session.input;

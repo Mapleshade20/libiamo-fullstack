@@ -11,6 +11,7 @@ import { SUGGESTION_PLACES, type SuggestionPlace } from "#lib/constants.ts";
 import { endonym, tx } from "#lib/i18n/tx.ts";
 import { mySuggestions, suggest } from "#lib/scenario/suggestion.remote.ts";
 import { SITE_OF } from "#lib/scenario/types.ts";
+import { dateAt } from "#lib/time/clock.svelte.ts";
 import { sourceStatus } from "#lib/writing/source-status.ts";
 
 /*
@@ -36,7 +37,7 @@ let sitEl: HTMLTextAreaElement | undefined = $state();
 let purposeEl: HTMLInputElement | undefined = $state();
 let errors = $state<{ situation?: boolean; purpose?: boolean }>({});
 const status = $derived(sourceStatus(situation, tx));
-const fmt = (at: number) => new Intl.DateTimeFormat(app.lang, { month: "short", day: "numeric" }).format(at);
+const fmt = (at: number) => dateAt(at, { month: "short", day: "numeric" });
 
 async function submit(e: SubmitEvent) {
 	e.preventDefault();

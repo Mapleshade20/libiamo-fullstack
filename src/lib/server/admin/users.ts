@@ -1,11 +1,14 @@
-import { count, desc, eq, max, sql, sum } from "drizzle-orm";
+import { and, count, desc, eq, ilike, inArray, max, or, sql, sum } from "drizzle-orm";
 import { db } from "#lib/server/db/index.ts";
 import { llmCall, note, piece, session, user, userKey } from "#lib/server/db/schema.ts";
 
 /*
- * Every account, for the admin: who they are, their setup, how much they write, and their model calls (the thirty days
- * `llm_call` keeps). Deleting one deletes the row; everything of theirs goes with it (on delete cascade).
+ * Every account, for the admin, a page at a time: who they are, their setup, how much they write, and their model calls
+ * (the thirty days `llm_call` keeps), counted for that page's accounts only (each an index lookup by user). Deleting
+ * one deletes the row; everything of theirs goes with it (on delete cascade).
  */
+export const USERS_PAGE = 50;
+export type UsersPage = { rows: UserRow[]; total: number; more: boolean };
 export type UserRow = {
 	id: string;
 	name: string;
@@ -40,27 +43,49 @@ export type UserCall = {
 	error: string | null;
 };
 
-export async function users(): Promise<UserRow[]> {
-	const [rows, pieces, notes, calls, seen] = await Promise.all([
+/** A page of accounts, newest first; `q` finds a name, an address or an id. */
+export async function users(o: { q?: string; offset?: number; ids?: string[] } = {}): Promise<UsersPage> {
+	const q = o.q?.trim();
+	const like = q ? `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%` : undefined;
+	const where = and(
+		like ? or(ilike(user.name, like), ilike(user.email, like), eq(user.id, q as string)) : undefined,
+		o.ids ? inArray(user.id, o.ids) : undefined,
+	);
+	const [found, [{ total }]] = await Promise.all([
 		db
 			.select({ u: user, provider: userKey.provider, model: userKey.model })
 			.from(user)
 			.leftJoin(userKey, eq(userKey.userId, user.id))
-			.orderBy(desc(user.createdAt)),
-		db.select({ id: piece.userId, n: count() }).from(piece).groupBy(piece.userId),
-		db.select({ id: note.userId, n: count() }).from(note).where(sql`${note.deletedAt} is null`).groupBy(note.userId),
+			.where(where)
+			.orderBy(desc(user.createdAt), desc(user.id))
+			.limit(USERS_PAGE + 1)
+			.offset(o.offset ?? 0),
+		db.select({ total: count() }).from(user).where(where),
+	]);
+	const rows = found.slice(0, USERS_PAGE);
+	const ids = rows.map((r) => r.u.id);
+	if (!ids.length) return { rows: [], total, more: false };
+	const [pieces, notes, calls, seen] = await Promise.all([
+		db.select({ id: piece.userId, n: count() }).from(piece).where(inArray(piece.userId, ids)).groupBy(piece.userId),
+		db
+			.select({ id: note.userId, n: count() })
+			.from(note)
+			.where(and(inArray(note.userId, ids), sql`${note.deletedAt} is null`))
+			.groupBy(note.userId),
 		db
 			.select({ id: llmCall.userId, n: count(), cost: sum(llmCall.costUsd) })
 			.from(llmCall)
+			.where(inArray(llmCall.userId, ids))
 			.groupBy(llmCall.userId),
 		db
 			.select({ id: session.userId, at: max(session.updatedAt) })
 			.from(session)
+			.where(inArray(session.userId, ids))
 			.groupBy(session.userId),
 	]);
 	const by = <T extends { id: string | null }>(xs: T[]) => new Map(xs.map((x) => [x.id, x]));
 	const [p, n, c, s] = [by(pieces), by(notes), by(calls), by(seen)];
-	return rows.map(({ u, provider, model }) => ({
+	const out = rows.map(({ u, provider, model }) => ({
 		id: u.id,
 		name: u.name,
 		email: u.email,
@@ -79,6 +104,7 @@ export async function users(): Promise<UserRow[]> {
 		calls: c.get(u.id)?.n ?? 0,
 		cost: Number(c.get(u.id)?.cost ?? 0),
 	}));
+	return { rows: out, total, more: found.length > USERS_PAGE };
 }
 
 /** A learner's calls, newest first (at most `limit`), with the piece each was for. */

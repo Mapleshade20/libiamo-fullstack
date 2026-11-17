@@ -2,21 +2,22 @@ import { me } from "#lib/account/account.remote.ts";
 import { pageSetup } from "#lib/server/account/page.ts";
 import { picturesOf } from "#lib/server/backdrop/today.ts";
 import { dictsFor } from "#lib/server/i18n.ts";
-import { pieces } from "#lib/writing/writing.remote.ts";
+import { shelves } from "#lib/writing/writing.remote.ts";
 import { ORIGIN } from "$app/env/private";
 
 /* Who is signed in, their pieces, and the strings the page speaks, once per page load (lib/account/account.svelte.ts,
    lib/writing/writing.svelte.ts keep them up to date after). */
 export async function load(event) {
 	const setup = pageSetup(event);
-	const who = await me();
+	// Who they are and their shelf at once (the shelf only once they are set up).
+	const [who, shelf] = await Promise.all([me(), event.locals.user?.onboardedAt ? shelves() : {}]);
 	const p = who?.prefs;
 	const tutor = p ? (p.feedback === "native" ? p.native : p.active) : setup.firstLang;
 	const now = Date.now();
 	const timeZone = event.locals.user?.timeZone ?? "UTC";
 	return {
 		me: who,
-		pieces: who?.onboarded ? await pieces() : [],
+		shelves: shelf,
 		firstLang: setup.firstLang,
 		folded: setup.folded,
 		/** The public origin, for the addresses in the page's head (lib/seo.ts). */

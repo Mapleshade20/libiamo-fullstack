@@ -1,4 +1,5 @@
-import { dayKey, sandboxed, tourWeek } from "#lib/components/tour/sandbox.svelte.ts";
+import { sandboxed, tourWeek } from "#lib/components/tour/sandbox.svelte.ts";
+import { addDays } from "#lib/time/local-day.ts";
 import type { DayKind, HistoryWeek, WeekView } from "./types.ts";
 import { history, week } from "./week.remote.ts";
 
@@ -11,13 +12,8 @@ export function weekNow(): WeekView | Promise<WeekView> {
 export function historyNow(weeks: number): HistoryWeek[] | Promise<HistoryWeek[]> {
 	if (!sandboxed()) return history(weeks);
 	const now = tourWeek();
-	const start = (i: number) => {
-		const d = new Date(`${now.days[0].day}T00:00:00`);
-		d.setDate(d.getDate() - 7 * (weeks - 1 - i));
-		return dayKey(d);
-	};
 	return Array.from({ length: weeks }, (_, i) => ({
-		start: start(i),
+		start: addDays(now.days[0].day, -7 * (weeks - 1 - i)),
 		goal: now.goal,
 		days: i === weeks - 1 ? now.days.map((d) => d.kind) : Array<DayKind>(7).fill("none"),
 	}));

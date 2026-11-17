@@ -4,13 +4,12 @@ import type { ExchangeController } from "#lib/components/exchange/controller.sve
 import { getTodayDateString, renderEmojiShortcodes } from "#lib/components/exchange/message-format.ts";
 
 import { t as translate } from "#lib/i18n/index.svelte.ts";
-import { getDisplayClock } from "#lib/time/display-clock.ts";
+import { clock } from "#lib/time/clock.svelte.ts";
 import type { IMessageText } from "./i18n.ts";
 import { getBubbleCorners, getLastOutgoingMessageId, getRenderableMessages, isLastOutgoingMessageRead } from "./presentation.ts";
 
 let { exchange, group, language, t }: { exchange: ExchangeController; group: boolean; language: string; t: IMessageText } = $props();
 
-const clock = getDisplayClock();
 const messages = $derived(getRenderableMessages(exchange.messages));
 const lastOutgoingId = $derived(getLastOutgoingMessageId(messages));
 const lastOutgoingRead = $derived(isLastOutgoingMessageRead(messages, exchange.agentReadUpToMessageId));
@@ -19,7 +18,7 @@ const lastOutgoingRead = $derived(isLastOutgoingMessageRead(messages, exchange.a
 <div bind:this={exchange.scroller} class="flex-1 overflow-y-auto px-3 py-4 md:bg-[#F9F9FB] md:px-8 md:py-6">
 	<div class="mb-4 flex items-center justify-center md:hidden">
 		<div class="h-px flex-1 bg-[#E5E5EA]"></div>
-		<span class="px-2 text-[11px] text-[#8E8E93]">{getTodayDateString(language, clock())}</span>
+		<span class="px-2 text-[11px] text-[#8E8E93]">{getTodayDateString(language, clock)}</span>
 		<div class="h-px flex-1 bg-[#E5E5EA]"></div>
 	</div>
 

@@ -38,8 +38,12 @@ vi.mock("#lib/server/translation/source.ts", () => ({
 }));
 
 import { encryptKey } from "#lib/server/account/key.ts";
+import { sessions } from "#lib/server/admin/sessions.ts";
+import { users } from "#lib/server/admin/users.ts";
 import { db, sql } from "#lib/server/db/index.ts";
 import {
+	exchange,
+	exchangeMessage,
 	llmCall,
 	llmPrompt,
 	note,
@@ -49,20 +53,23 @@ import {
 	reviewLog,
 	scenario,
 	scenarioSource,
+	sessionCase,
 	user,
 	userKey,
 } from "#lib/server/db/schema.ts";
 import { Caller, type CallRecord, chat } from "#lib/server/llm/caller.ts";
 import { learnerCaller } from "#lib/server/llm/callers.ts";
 import { pruneCalls, writeRecord } from "#lib/server/llm/records.ts";
-import { rateNote } from "#lib/server/notebook/notes.ts";
+import { NOTEBOOK_PAGE, notebookGlance, notebookPage, rateNote } from "#lib/server/notebook/notes.ts";
 import { newCard } from "#lib/server/review/scheduler.ts";
-import { act, dropRevision, openRevision, startRevision } from "#lib/server/revision/store.ts";
+import { abandon, abandonStale, act, dropRevision, openRevision, pruneRevisions, pruneTapes, startRevision } from "#lib/server/revision/store.ts";
 import { importContent } from "#lib/server/scenario/content.ts";
 import { scenarioViewOf } from "#lib/server/scenario/scenarios.ts";
 import { sourceIdentity } from "#lib/server/translation/identity.ts";
 import { makeSourceRow, queueSources } from "#lib/server/translation/runner.ts";
 import { saveSheet, sheetOf, translationFor } from "#lib/server/translation/sheet.ts";
+import { PIECES_PAGE, piecesPage, shelvesOf } from "#lib/server/writing/pieces.ts";
+import { takeUp } from "#lib/server/writing/take-up.ts";
 
 describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 	const admin = postgres(config.url ?? "postgres://localhost/postgres", { max: 1 });
@@ -130,6 +137,263 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 		await db.insert(user).values({ id: learner.id, email: "learner@example.test", name: "Learner" });
 		config.send.mockReset().mockResolvedValue({ text: "OK", usage: {}, ms: 1, costUsd: 0 });
 		config.makeSource.mockReset().mockResolvedValue({ title: "菜单", source: ["汤"], glossary: [] });
+	});
+
+	it("prunes the snapshots finished pieces left behind, and only those", async () => {
+		const day = 864e5;
+		const make = async (state: "finished" | "revising", finishedAgo?: number, notesPending = false) => {
+			const [p] = await db
+				.insert(piece)
+				.values({
+					userId: learner.id,
+					language: "en",
+					kind: "own",
+					text: "A draft.",
+					tutorLanguage: "zh-CN",
+					state,
+					finishedAt: finishedAgo === undefined ? null : new Date(Date.now() - finishedAgo),
+					notesRequestedAt: notesPending ? new Date() : null,
+				})
+				.returning({ id: piece.id });
+			await db.insert(pieceRevision).values({ pieceId: p.id, version: 1, state: {} });
+			return p.id;
+		};
+		const old = await make("finished", 2 * day);
+		const waiting = await make("finished", 2 * day, true);
+		const recent = await make("finished", 3_600_000);
+		const open = await make("revising");
+		expect(await pruneRevisions()).toBe(1);
+		const left = new Set((await db.select({ id: pieceRevision.pieceId }).from(pieceRevision)).map((r) => r.id));
+		expect(left.has(old)).toBe(false);
+		expect([waiting, recent, open].every((id) => left.has(id))).toBe(true);
+	});
+
+	it("keeps a finished piece's tape as long as its model calls, and not at all for a learner who does not help", async () => {
+		const day = 864e5;
+		await db.insert(user).values({ id: "quiet", email: "quiet@example.test", name: "Quiet", helpImprove: false });
+		const make = async (owner: string, state: "finished" | "revising" | "abandoned", finishedAgo?: number) => {
+			const [p] = await db
+				.insert(piece)
+				.values({
+					userId: owner,
+					language: "en",
+					kind: "own",
+					text: "A draft.",
+					tutorLanguage: "zh-CN",
+					state,
+					finishedAt: finishedAgo === undefined ? null : new Date(Date.now() - finishedAgo),
+				})
+				.returning({ id: piece.id });
+			await db.insert(pieceStep).values([0, 1].map((seq) => ({ pieceId: p.id, seq, action: "pass1", body: {}, response: {} })));
+			return p.id;
+		};
+		const old = await make(learner.id, "finished", 31 * day);
+		const held = await make(learner.id, "finished", 31 * day);
+		await db.insert(sessionCase).values({ pieceId: held, note: "wrong flag" });
+		const recent = await make(learner.id, "finished", day);
+		const quiet = await make("quiet", "finished", day);
+		const open = await make("quiet", "revising");
+		// An abandoned piece's tape was kept for a case: it goes once the case is closed.
+		const settled = await make(learner.id, "abandoned");
+		await db.insert(sessionCase).values({ pieceId: settled, note: "wrong flag", status: "fixed" });
+		const studied = await make(learner.id, "abandoned");
+		await db.insert(sessionCase).values({ pieceId: studied, note: "wrong flag" });
+		expect(await pruneTapes()).toBe(3);
+		const left = new Set((await db.select({ id: pieceStep.pieceId }).from(pieceStep)).map((r) => r.id));
+		expect(left.has(old) || left.has(quiet) || left.has(settled)).toBe(false);
+		expect([held, recent, open, studied].every((id) => left.has(id))).toBe(true);
+	});
+
+	it("reads the notebook a page at a time, newest first, filtered on the server", async () => {
+		const card = newCard(new Date(), "UTC");
+		const total = NOTEBOOK_PAGE + 5;
+		// One at a time, so each has its own (later) uuidv7.
+		for (let i = 0; i < total; i++)
+			await db.insert(note).values({
+				userId: learner.id,
+				language: "en",
+				kind: i % 5 === 0 ? "collected" : "own",
+				phrase: `phrase ${i}`,
+				meaningLanguage: "zh-CN",
+				fsrs: card,
+				due: new Date(card.dueAt),
+				deletedAt: i === 1 ? new Date() : null,
+			});
+		const first = await notebookPage(learner, "en", "all");
+		expect(first.rows).toHaveLength(NOTEBOOK_PAGE);
+		expect(first.rows[0].phrase).toBe(`phrase ${total - 1}`);
+		expect(first.next).toBe(first.rows.at(-1)?.id);
+		const second = await notebookPage(learner, "en", "all", first.next);
+		// The rest, without the deleted one, and no more pages.
+		expect(second.rows.map((n) => n.phrase)).toEqual(["phrase 4", "phrase 3", "phrase 2", "phrase 0"]);
+		expect(second.next).toBeUndefined();
+		const read = await notebookPage(learner, "en", "collected");
+		expect(read.rows.every((n) => n.from === "collected")).toBe(true);
+		expect(read.rows).toHaveLength(Math.ceil(total / 5));
+		expect(await notebookGlance(learner, "en")).toEqual({ count: total - 1, latest: [104, 103, 102, 101].map((i) => `phrase ${i}`) });
+	});
+
+	it("abandons what nobody will finish, and keeps what was written", async () => {
+		const day = 864e5;
+		const old = new Date(Date.now() - 31 * day);
+		const make = async (values: Partial<typeof piece.$inferInsert> = {}) => {
+			const [p] = await db
+				.insert(piece)
+				.values({ userId: learner.id, language: "en", kind: "own", text: "My draft", tutorLanguage: "zh-CN", state: "revising", ...values })
+				.returning({ id: piece.id });
+			return p.id;
+		};
+		const snapshot = (pieceId: string, version = 1, updatedAt = new Date()) =>
+			db.insert(pieceRevision).values({ pieceId, version, state: {}, updatedAt });
+		const place = async (pieceId: string, completedAt: Date, said: boolean) => {
+			const [e] = await db
+				.insert(exchange)
+				.values({ userId: learner.id, pieceId, expiresAt: completedAt, status: "abandoned", completionReason: "max_age", completedAt })
+				.returning({ id: exchange.id });
+			if (said) await db.insert(exchangeMessage).values({ exchangeId: e.id, role: "user", content: "Hi!" });
+		};
+		const stale = await make();
+		await snapshot(stale, 1, old);
+		await db.insert(pieceStep).values({ pieceId: stale, seq: 0, action: "create" });
+		const outdated = await make();
+		await snapshot(outdated, 0);
+		const going = await make();
+		await snapshot(going);
+		const silent = await make({ kind: "scenario", state: "writing", text: "" });
+		await place(silent, new Date(), false);
+		const talked = await make({ kind: "scenario", state: "writing", text: "" });
+		await place(talked, new Date(Date.now() - 2 * day), true);
+		const longAgo = await make({ kind: "scenario", state: "writing", text: "", updatedAt: old });
+		await place(longAgo, old, true);
+		const sheet = await make({ kind: "translation", state: "writing", updatedAt: old });
+
+		expect(await abandonStale()).toBe(5);
+		const state = new Map((await db.select({ id: piece.id, state: piece.state, text: piece.text }).from(piece)).map((p) => [p.id, p]));
+		for (const id of [stale, outdated, silent, longAgo, sheet]) expect(state.get(id)?.state).toBe("abandoned");
+		for (const id of [going, talked]) expect(state.get(id)?.state).not.toBe("abandoned");
+		// What was written stays; the revision and its tape go.
+		expect(state.get(stale)?.text).toBe("My draft");
+		expect(await db.select().from(pieceRevision).where(eq(pieceRevision.pieceId, stale))).toHaveLength(0);
+		expect(await db.select().from(pieceStep).where(eq(pieceStep.pieceId, stale))).toHaveLength(0);
+		expect(await db.select().from(exchangeMessage)).toHaveLength(2);
+	});
+
+	it("abandons a piece only if it is still stale in its turn, and never while its revision is in use", async () => {
+		const day = 864e5;
+		// A revision the learner came back to: in memory, its snapshot still from a month ago until they change something.
+		const back = await startRevision(learner, { text: "Back again", learner: "en", feedback: "native" }, { kind: "own", language: "en" });
+		ids.add(back);
+		await db
+			.update(pieceRevision)
+			.set({ updatedAt: new Date(Date.now() - 31 * day) })
+			.where(eq(pieceRevision.pieceId, back));
+		expect(await abandonStale()).toBe(0);
+		expect((await db.select({ state: piece.state }).from(piece).where(eq(piece.id, back)))[0].state).toBe("revising");
+		// Out of memory, a revision that opens is not abandoned for being unopenable; one that cannot is.
+		const [p] = await db
+			.insert(piece)
+			.values({ userId: learner.id, language: "en", kind: "own", text: "Draft", tutorLanguage: "zh-CN", state: "revising" })
+			.returning({ id: piece.id });
+		await db.insert(pieceRevision).values({ pieceId: p.id, version: 1, state: {} });
+		expect(await abandon(p.id)).toBe(false);
+		await db.delete(pieceRevision).where(eq(pieceRevision.pieceId, p.id));
+		expect(await abandon(p.id)).toBe(true);
+	});
+
+	it("takes an abandoned piece up again where it was before its revision", async () => {
+		await importContent(db, content());
+		const [own] = await db
+			.insert(piece)
+			.values({ userId: learner.id, language: "en", kind: "own", text: "My draft", tutorLanguage: "zh-CN", state: "abandoned" })
+			.returning({ id: piece.id });
+		ids.add(own.id);
+		expect(await takeUp(learner, own.id)).toEqual({ to: `/live/${own.id}` });
+		const [again] = await db.select().from(piece).where(eq(piece.id, own.id));
+		expect(again.state).toBe("revising");
+		expect(await db.select().from(pieceRevision).where(eq(pieceRevision.pieceId, own.id))).toHaveLength(1);
+
+		const sheet = await sheetOf(learner, "menu", "en");
+		if (!sheet) throw new Error("missing sheet");
+		const sent = await saveSheet(learner, { scenarioId: "menu", language: "en", ...sheet.binding, text: "My soup", plan: "Keep it short" });
+		if (!sent) throw new Error("not sent");
+		expect((await db.select().from(piece).where(eq(piece.id, sent.id)))[0].background).toBe("Keep it short");
+		await db.update(piece).set({ state: "abandoned" }).where(eq(piece.id, sent.id));
+		expect(await takeUp(learner, sent.id)).toEqual({ to: "/scenario/menu/translate" });
+		expect((await sheetOf(learner, "menu", "en"))?.draft).toBe("My soup");
+		// Not abandoned (any more): nothing to take up.
+		expect(await takeUp(learner, sent.id)).toBeNull();
+
+		const [silent] = await db
+			.insert(piece)
+			.values({ userId: learner.id, language: "en", kind: "scenario", scenarioId: "menu", text: "", tutorLanguage: "zh-CN", state: "abandoned" })
+			.returning({ id: piece.id });
+		// Nothing of theirs in its conversation: the scenario starts again.
+		expect(await takeUp(learner, silent.id)).toEqual({ to: "/scenario/menu" });
+	});
+
+	it("gives every page a shelf of the same size however much was written, and My writing a page at a time", async () => {
+		const day = 864e5;
+		const total = PIECES_PAGE + 3;
+		for (let i = 0; i < total; i++)
+			await db.insert(piece).values({
+				userId: learner.id,
+				language: i % 10 === 0 ? "es" : "en",
+				kind: "own",
+				title: `piece ${i}`,
+				text: "A draft.",
+				tutorLanguage: "zh-CN",
+				state: i === total - 1 ? "revising" : i === total - 2 ? "abandoned" : "finished",
+				finishedAt: i >= total - 2 ? null : new Date(Date.now() - (total - i) * day),
+				posted: i === total - 4 ? null : "yes",
+			});
+		const shelves = await shelvesOf(learner.id);
+		const en = shelves.en;
+		expect(en.open.map((w) => w.title)).toEqual([`piece ${total - 1}`]);
+		// The six most recent, without the abandoned one.
+		expect(en.recent).toHaveLength(6);
+		expect(en.recent.some((w) => w.phase === "abandoned")).toBe(false);
+		expect(en.followUp).toMatchObject({ kind: "posted", w: { title: `piece ${total - 4}` } });
+		const finishedEn = Array.from({ length: total - 2 }, (_, i) => i).filter((i) => i % 10 !== 0).length;
+		expect(en.finished).toBe(finishedEn);
+		expect(shelves.es.recent.every((w) => w.lang === "es")).toBe(true);
+
+		const enTotal = Array.from({ length: total }, (_, i) => i).filter((i) => i % 10 !== 0).length;
+		const first = await piecesPage(learner.id, "en");
+		expect(first.items).toHaveLength(Math.min(PIECES_PAGE, enTotal));
+		const rest = first.next ? (await piecesPage(learner.id, "en", first.next)).items : [];
+		expect(first.items.length + rest.length).toBe(enTotal);
+		expect(new Set([...first.items, ...rest].map((w) => w.id)).size).toBe(enTotal);
+	});
+
+	it("lists the admin's accounts a page at a time, counted for that page, and sessions from a few fields of each step", async () => {
+		await db.insert(user).values({ id: "other", email: "someone@example.test", name: "Someone" });
+		const [p] = await db
+			.insert(piece)
+			.values({ userId: learner.id, language: "en", kind: "own", text: "A draft.", tutorLanguage: "zh-CN", state: "revising" })
+			.returning({ id: piece.id });
+		const step = (seq: number, action: string, body: unknown, response: unknown, ms = 500) => ({ pieceId: p.id, seq, action, body, response, ms });
+		await db
+			.insert(pieceStep)
+			.values([
+				step(0, "overview", {}, { stops: [{}, {}, {}] }),
+				step(1, "keep", { id: "s1" }, {}),
+				step(2, "grade", { id: "s2" }, { pass: false }),
+				step(3, "grade", { id: "s2" }, { pass: false }),
+				step(4, "grade", { id: "s2" }, { pass: false }, 9500),
+				step(5, "apply", { id: "s2", self: false }, {}),
+				step(6, "end", {}, { issues: [{}] }),
+			]);
+
+		const page = await users({ q: "LEARNER@" });
+		expect(page.total).toBe(1);
+		expect(page.rows[0]).toMatchObject({ id: learner.id, pieces: 1, notes: 0 });
+		expect((await users()).rows.map((u) => u.id).sort()).toEqual([learner.id, "other"].sort());
+		// A search cannot be a pattern.
+		expect((await users({ q: "%" })).total).toBe(0);
+
+		const [row] = await sessions();
+		expect(row.stops).toBe(3);
+		expect(row.signals.map((x) => x.kind)).toEqual(["kept", "tries", "answer", "lost", "slow"]);
 	});
 
 	it("deletes owned dynamic prompts with the account and refuses records arriving after deletion", async () => {

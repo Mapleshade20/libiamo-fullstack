@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, inArray, ne, sql, sum } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, ne, type SQL, sql, sum } from "drizzle-orm";
 import type { CaseRow, RecordedCall, RecordedStep, SessionRow, SessionView, Signal, SignalKind } from "#lib/admin/records.ts";
 import { db } from "#lib/server/db/index.ts";
 import { llmCall, llmPrompt, piece, pieceStep, sessionCase, user } from "#lib/server/db/schema.ts";
@@ -184,15 +184,21 @@ export async function sessions(o: { limit?: number; ids?: string[] } = {}, now =
 		.limit(o.limit ?? 200);
 	if (!rows.length) return [];
 	const ids = rows.map((r) => r.p.id);
-	const [steps, calls, cases] = await Promise.all([
+	const length = (doc: SQL) => sql<number | null>`case when jsonb_typeof(${doc}) = 'array' then jsonb_array_length(${doc}) end`;
+	const [slim, calls, cases] = await Promise.all([
+		// Only what the list's signals read of each step (its documents stay in the database): which stop, whether it
+		// passed or was the learner's own, how many issues or stops.
 		db
 			.select({
 				pieceId: pieceStep.pieceId,
 				action: pieceStep.action,
-				body: pieceStep.body,
-				response: pieceStep.response,
 				ms: pieceStep.ms,
 				at: pieceStep.at,
+				stop: sql<string | null>`${pieceStep.body}->>'id'`,
+				self: sql<boolean | null>`(${pieceStep.body}->>'self')::boolean`,
+				pass: sql<boolean | null>`(${pieceStep.response}->>'pass')::boolean`,
+				issues: length(sql`${pieceStep.response}->'issues'`),
+				stops: length(sql`${pieceStep.response}->'stops'`),
 			})
 			.from(pieceStep)
 			.where(inArray(pieceStep.pieceId, ids))
@@ -214,6 +220,16 @@ export async function sessions(o: { limit?: number; ids?: string[] } = {}, now =
 			.where(and(inArray(sessionCase.pieceId, ids), eq(sessionCase.status, "open")))
 			.groupBy(sessionCase.pieceId),
 	]);
+	// The steps as signalsOf reads them, rebuilt from those fields.
+	const list = (n: number | null) => (n === null ? undefined : Array.from({ length: n }, () => 0));
+	const steps = slim.map((s) => ({
+		pieceId: s.pieceId,
+		action: s.action,
+		ms: s.ms,
+		at: s.at,
+		body: { id: s.stop ?? undefined, self: s.self ?? undefined },
+		response: { pass: s.pass ?? undefined, issues: list(s.issues), stops: list(s.stops) },
+	}));
 	const callsOf = new Map(calls.map((c) => [c.pieceId as string, c]));
 	const casesOf = new Map(cases.map((c) => [c.pieceId, c.n]));
 	const stepsOf = Map.groupBy(steps, (s) => s.pieceId);

@@ -7,7 +7,6 @@ import { live, type TranslationVersion } from "#lib/scenario/versions.ts";
 import { db } from "#lib/server/db/index.ts";
 import { piece, scenario, scenarioSource } from "#lib/server/db/schema.ts";
 import type { Lang } from "#lib/server/revision/draft.ts";
-import { takePlan } from "#lib/server/scenario/plans.ts";
 import { Assignment, sourceIdentity } from "./identity.ts";
 
 type SheetUser = { id: string; nativeLanguage?: string | null; tutorLanguage: string };
@@ -96,8 +95,14 @@ export async function sheetOf(u: SheetUser, scenarioId: string, language: string
 	};
 }
 
-/** The first save must refer to the source displayed; later saves use the immutable assignment. */
-export async function saveSheet(u: SheetUser, input: { scenarioId: string; language: string; text: string; sourceId: string; generation: string }) {
+/**
+ * The sheet sent in: it must refer to the source displayed, or, for a piece taken up again, keep its own assignment. The
+ * draft lives on the learner's device until now (lib/client/drafts.ts); this is the one save.
+ */
+export async function saveSheet(
+	u: SheetUser,
+	input: { scenarioId: string; language: string; text: string; plan?: string; sourceId: string; generation: string },
+) {
 	if (!(LEARNABLE as readonly string[]).includes(input.language)) return null;
 	return db.transaction(async (tx) => {
 		const [open] = await tx.select().from(piece).where(openFor(u.id, input.scenarioId)).for("update");
@@ -121,7 +126,7 @@ export async function saveSheet(u: SheetUser, input: { scenarioId: string; langu
 				place: SITE_OF.translation,
 				title: a.version.title,
 				text: input.text,
-				background: await takePlan(tx, u.id, input.scenarioId, a.language),
+				background: input.plan?.trim() || null,
 				tutorLanguage: u.tutorLanguage === "target" ? a.language : a.native,
 				state: "writing",
 			})

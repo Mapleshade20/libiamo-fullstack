@@ -18,7 +18,8 @@ export function followSystem() {
 	follow();
 	q.addEventListener("change", follow);
 }
-export function setTheme(theme: Theme) {
-	app.saveLook({ theme });
+export function setTheme(theme: Theme): Promise<boolean> {
+	const sent = app.saveLook({ theme });
 	paint();
+	return sent;
 }

@@ -30,6 +30,7 @@ import { APP_LANGS, BACKDROPS, type Backdrop, hasScenarios, LEARNABLE, PATTERN_N
 import { loadLang } from "#lib/i18n/index.svelte.ts";
 import { endonym, nameOf, tx } from "#lib/i18n/tx.ts";
 import { decisionModelFor, PROVIDERS } from "#lib/llm/providers.ts";
+import { dateAt } from "#lib/time/clock.svelte.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
 
@@ -57,6 +58,8 @@ onMount(() => {
    help behind an ⓘ, and its control at the row's end; a list or a form takes the row's full width under its label.
    Every change applies at once and says so quietly; only what is typed (the key) waits for a button. */
 const saved = () => toast(tx("setSaved"));
+// A change says "Saved" once the server has it (app.save says so itself when it has not).
+const keep = (sent: Promise<boolean>) => sent.then((ok) => ok && saved());
 // The model that checks what is sent, when the key's provider runs more than one.
 const deciders = $derived(account.me.key ? (PROVIDERS[account.me.key.provider as keyof typeof PROVIDERS]?.decisions?.models ?? []) : []);
 
@@ -66,16 +69,14 @@ function setNative(v: string) {
 	app.prefs.learning = app.prefs.learning.filter((l) => l !== v);
 	if (!app.prefs.learning.length) app.prefs.learning = [v === "en" ? "es" : "en"];
 	if (!app.prefs.learning.includes(app.prefs.active)) app.prefs.active = app.prefs.learning[0];
-	app.save();
+	keep(app.save());
 	loadLang(v);
-	saved();
 }
 let adding = $state("");
 function addLanguage(v: string) {
 	if (!v) return;
 	app.prefs.learning.push(v);
-	app.save();
-	toast(tx("setAdded", { lang: endonym(v) }));
+	app.save().then((ok) => ok && toast(tx("setAdded", { lang: endonym(v) })));
 	tick().then(() => (adding = ""));
 }
 function dropLanguage(l: string) {
@@ -95,8 +96,6 @@ const backdrop = $derived(app.look.backdrop);
 // The day's picture, chosen on the server for the learner's day (server/backdrop/today.ts).
 const today = $derived(backdrop === "image" || backdrop === "painting" ? page.data.pictures?.[backdrop] : undefined);
 const backdropHelp = $derived(app.dark && backdrop === "painting" ? tx("paintingLightOnly") : today ? tx("bgToday", { credit: today.credit }) : "");
-
-const fmt = (o: Intl.DateTimeFormatOptions, d: Date) => new Intl.DateTimeFormat(app.lang, o).format(d);
 
 onMount(() => {
 	document.title = `${tx("navSettings")} · ${tx("homeTitle")}`;
@@ -193,8 +192,7 @@ onMount(() => {
 					value={app.prefs.feedback}
 					onValueChange={(v) => {
 						app.prefs.feedback = v as "native" | "target";
-						app.save();
-						saved();
+						keep(app.save());
 					}}
 					items={[
 						{ value: "native", label: tx("fbNativeIn", { lang: nameOf(app.prefs.native) }) },
@@ -209,8 +207,7 @@ onMount(() => {
 					value={String(app.prefs.weeklyGoal)}
 					onValueChange={(v) => {
 						app.prefs.weeklyGoal = Number(v);
-						app.save();
-						saved();
+						keep(app.save());
 					}}
 					items={[1, 2, 3, 4, 5, 6, 7].map((n) => ({ value: String(n), label: String(n) }))}
 				/>
@@ -227,8 +224,7 @@ onMount(() => {
 					label={tx("setTheme")}
 					value={app.look.theme}
 					onValueChange={(v) => {
-						setTheme(v as Theme);
-						saved();
+						keep(setTheme(v as Theme));
 					}}
 					items={THEMES.map((v) => ({ value: v, label: tx(`themeOpt_${v}`) }))}
 				/>
@@ -239,8 +235,7 @@ onMount(() => {
 					label={tx("backdropLabel")}
 					value={app.look.backdrop}
 					onValueChange={(v) => {
-						app.saveLook({ backdrop: v as Backdrop });
-						saved();
+						keep(app.saveLook({ backdrop: v as Backdrop }));
 					}}
 					items={BACKDROPS.map((v) => ({
 						value: v,
@@ -255,8 +250,7 @@ onMount(() => {
 					label={tx("patternLabel")}
 					value={app.look.pattern}
 					onValueChange={(v) => {
-						app.saveLook({ pattern: v as PatternName });
-						saved();
+						keep(app.saveLook({ pattern: v as PatternName }));
 					}}
 					items={PATTERN_NAMES.map((v) => ({ value: v, label: tx(`pat_${v}`) }))}
 				/>
@@ -277,10 +271,7 @@ onMount(() => {
 					<Select
 						aria-label={tx("setDecider")}
 						value={decisionModelFor(account.me.key?.provider as keyof typeof PROVIDERS, account.me.key?.decision) ?? ""}
-						onValueChange={async (v) => {
-							await setDecisionModel(v);
-							saved();
-						}}
+						onValueChange={(v) => keep(setDecisionModel(v))}
 						items={deciders.map((m, i) => ({ value: m.id, label: m.name, description: i === 0 ? tx("setRecommended") : undefined }))}
 					/>
 				</div>
@@ -292,8 +283,7 @@ onMount(() => {
 					checked={app.prefs.helpImprove}
 					onchange={(e: Event) => {
 						app.prefs.helpImprove = (e.currentTarget as HTMLInputElement).checked;
-						app.save();
-						saved();
+						keep(app.save());
 					}}
 				/>
 			{/snippet}
@@ -330,7 +320,7 @@ onMount(() => {
 					<div class="main">
 						<div class="t">{p.label}</div>
 						<div class="s">
-							{link ? tx("setConnectedSince", { date: fmt({ year: "numeric", month: "short" }, new Date(link.since)) }) : tx("setNotConnected")}
+							{link ? tx("setConnectedSince", { date: dateAt(link.since, { year: "numeric", month: "short" }) }) : tx("setNotConnected")}
 						</div>
 					</div>
 					{#if link}

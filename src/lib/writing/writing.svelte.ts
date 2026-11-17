@@ -1,26 +1,58 @@
 import { account } from "#lib/account/account.svelte.ts";
 import { app } from "#lib/account/app.svelte.ts";
 import { practised, recordTourPiece, sandboxed, tourPieces } from "#lib/components/tour/sandbox.svelte.ts";
+import type { LEARNABLE } from "#lib/constants.ts";
 import { tx } from "#lib/i18n/tx.ts";
 import { learnerState } from "#lib/scope.ts";
-import type { PieceItem, Posted, Writing } from "./types.ts";
-import { answerPosted, pieces, writeAgain } from "./writing.remote.ts";
+import { clock, dateAt, daysAgo } from "#lib/time/clock.svelte.ts";
+import { dueOf, pickFollowUp } from "./follow-up.ts";
+import type { PieceItem, PiecesPage, Posted, Shelf } from "./types.ts";
+import { answerPosted, piecesInPage, shelves, writeAgain } from "./writing.remote.ts";
 
 /*
- * The learner's pieces: the server's list (given to the root layout's load) poured into state the lists read (the
- * sidebar, My writing, the shelf), asked for again after anything that changes it. One refresh at a time (an older
+ * The learner's pieces: the server's shelf of each language (given to the root layout's load: the unfinished, the six
+ * most recent, the follow-up, how many are finished; the same size however much they have written) poured into state the
+ * sidebar and the home page read, asked for again after anything that changes it. My writing reads its own pages. One refresh at a time (an older
  * answer can overwrite a newer one, sveltejs/kit#17354); one asked for meanwhile runs once the first is in. While the
  * tour plays, its sandbox's pieces stand in, and what it does to them stays there.
  */
 export const writing = learnerState(() => {
-	const w = $state<{ list: PieceItem[] }>({ list: [] });
+	const w = $state<{ shelves: Record<string, Shelf> }>({ shelves: {} });
 	return w;
 });
 
-/** The learner's pieces in the language being worked in, newest first. */
-export function myWriting(): Writing[] {
-	const all: Writing[] = sandboxed() ? tourPieces() : writing.list;
-	return all.filter((w) => w.lang === app.lang).toSorted((x, y) => y.at - x.at);
+const EMPTY: Shelf = { open: [], recent: [], finished: 0 };
+
+/** The tour's pieces in the language being worked in, newest first, as its own shelf. */
+function tourShelf(): Shelf {
+	const all = tourPieces()
+		.filter((w) => w.lang === app.lang)
+		.toSorted((x, y) => y.at - x.at);
+	return {
+		open: all.filter((w) => w.open),
+		recent: all.filter((w) => w.phase !== "abandoned").slice(0, 6),
+		finished: all.filter((w) => w.finishedAt).length,
+		followUp: pickFollowUp(dueOf(all, clock.now)),
+	};
+}
+
+/** What every page shows of the learner's pieces in the language being worked in (types.ts `Shelf`). */
+export function shelfNow(): Shelf {
+	return sandboxed() ? tourShelf() : (writing.shelves[app.lang] ?? EMPTY);
+}
+
+/** The shelf's follow-up: one card at most (lib/writing/follow-up.ts). */
+export const followUp = () => shelfNow().followUp;
+
+/** A page of My writing (the first without `after`); the tour's holds its pieces on one. */
+export function piecesPageNow(after?: string): PiecesPage | Promise<PiecesPage> {
+	if (sandboxed())
+		return {
+			items: tourPieces()
+				.filter((w) => w.lang === app.lang)
+				.toSorted((x, y) => y.at - x.at),
+		};
+	return piecesInPage({ lang: app.lang as (typeof LEARNABLE)[number], ...(after ? { after } : {}) });
 }
 
 let running: Promise<void> | null = null;
@@ -34,12 +66,12 @@ export function refreshWriting(): Promise<void> {
 	running = (async () => {
 		do {
 			again = false;
-			writing.list = await pieces()
+			writing.shelves = await shelves()
 				.refresh()
-				.then(() => pieces());
+				.then(() => shelves());
 		} while (again);
 	})()
-		.catch((e) => console.error("the list of pieces was not loaded", e))
+		.catch((e) => console.error("the shelf was not loaded", e))
 		.finally(() => {
 			running = null;
 		});
@@ -64,24 +96,7 @@ export async function wroteAgain(id: string, text: string) {
 }
 
 /** When a piece was last touched, as a list says it: today, yesterday, or the date. */
-export function whenOf(w: Writing): string {
-	const days = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(w.at).setHours(0, 0, 0, 0)) / 864e5);
-	return days === 0
-		? tx("when_today")
-		: days === 1
-			? tx("when_yesterday")
-			: new Intl.DateTimeFormat(app.lang, { month: "short", day: "numeric" }).format(w.at);
-}
-
-/* The shelf's second slot: one card at most, for one piece: first whether it was posted (a day after it was finished,
-   not again for a day after "not yet"), then, three days on, writing it again from memory. */
-export type FollowUp = { kind: "posted" | "again"; w: Writing };
-export function followUp(now = Date.now()): FollowUp | undefined {
-	const done = myWriting().filter((w) => w.finishedAt);
-	// A scenario's piece was sent in the simulation already: nothing to ask about posting.
-	const ask = done.find((w) => !w.scenarioId && (!w.posted || (w.posted === "not-yet" && now - (w.askedAt ?? 0) > 864e5)));
-	if (ask && !(ask.posted === "not-yet")) return { kind: "posted", w: ask };
-	const again = done.find((w) => !w.again && now - (w.finishedAt ?? now) >= 3 * 864e5 - 36e5);
-	if (again) return { kind: "again", w: again };
-	return ask ? { kind: "posted", w: ask } : undefined;
+export function whenOf(w: PieceItem): string {
+	const days = daysAgo(w.at);
+	return days === 0 ? tx("when_today") : days === 1 ? tx("when_yesterday") : dateAt(w.at, { month: "short", day: "numeric" });
 }

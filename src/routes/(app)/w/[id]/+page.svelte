@@ -1,5 +1,6 @@
 <script lang="ts">
 import ArrowLeft from "@lucide/svelte/icons/arrow-left";
+import ArrowRight from "@lucide/svelte/icons/arrow-right";
 import Copy from "@lucide/svelte/icons/copy";
 import ExternalLink from "@lucide/svelte/icons/external-link";
 import { diffWords } from "diff";
@@ -13,10 +14,12 @@ import { toast } from "#lib/components/shell/toast.svelte.ts";
 import { sandboxed, tourPiece } from "#lib/components/tour/sandbox.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
 import { tx } from "#lib/i18n/tx.ts";
+import { dateAt } from "#lib/time/clock.svelte.ts";
 import { siteOf } from "#lib/writing/sites.ts";
 import { notesPending, type Posted } from "#lib/writing/types.ts";
-import { pieceById } from "#lib/writing/writing.remote.ts";
+import { pieceById, takeUpPiece } from "#lib/writing/writing.remote.ts";
 import { refreshWriting, setPosted } from "#lib/writing/writing.svelte.ts";
+import { goto } from "$app/navigation";
 import { page } from "$app/state";
 
 /*
@@ -66,6 +69,18 @@ function copy() {
 	if (!r) return;
 	navigator.clipboard?.writeText(r.final).then(() => toast(tx("copied")));
 }
+// Taking it up again goes where it was before its revision; the server says where.
+let taking = $state(false);
+async function takeUp() {
+	if (!w || taking) return;
+	taking = true;
+	const to = await takeUpPiece(w.id)
+		.then((r) => r?.to)
+		.catch(() => undefined);
+	if (to) return goto(to);
+	taking = false;
+	toast(tx("error"));
+}
 async function posted(v: string) {
 	if (!w) return;
 	try {
@@ -81,7 +96,26 @@ $effect(() => {
 });
 </script>
 
-{#if !w || !r}
+{#if w?.phase === "abandoned"}
+	<!-- Left unfinished and abandoned: what was written, and taking it up again from there (server/writing/take-up.ts). -->
+	<main class="piece" style:--tone={st.tone} style:--deep={st.deep}>
+		<a class="back" href="/writing"><ArrowLeft class="size-4" aria-hidden="true" />{tx("navWriting")}</a>
+		<header>
+			<h1>{w.title}</h1>
+			<p class="meta">
+				{#if w.site}
+					<span class="place">{w.site}</span>
+				{/if}
+				<span>{tx("wrAbandoned")}</span>
+			</p>
+		</header>
+		<p class="gone">{tx("pcAbandonedBody")}</p>
+		{#if w.draft}
+			<div class="ready draft">{w.draft}</div>
+		{/if}
+		<Button class="again" onclick={takeUp} disabled={taking}>{tx("pcTakeUp")}<ArrowRight aria-hidden="true" /></Button>
+	</main>
+{:else if !w || !r}
 	<main class="piece">
 		<EmptyState art="box" title={tx("pcMissing")} body={tx("pcMissingBody")} action={{ label: tx("navWriting"), href: "/writing" }} />
 	</main>
@@ -91,8 +125,7 @@ $effect(() => {
 		<header>
 			<h1>{w.title}</h1>
 			<p class="meta">
-				<span class="place">{w.site}</span
-				><span>{tx("pcRevised", { when: new Intl.DateTimeFormat(app.lang, { month: "short", day: "numeric" }).format(r.finishedAt) })}</span>
+				<span class="place">{w.site}</span><span>{tx("pcRevised", { when: dateAt(r.finishedAt, { month: "short", day: "numeric" }) })}</span>
 				{#if w.posted === "yes"}
 					<span>{tx("wrPosted")}</span>
 				{/if}
@@ -294,6 +327,17 @@ h1 {
 :global([data-theme="dark"]) .place {
 	background: var(--deep);
 	color: var(--ink);
+}
+.gone {
+	margin: 0 0 16px;
+	color: var(--ink-2);
+}
+.draft {
+	margin-bottom: 18px;
+	white-space: pre-wrap;
+	font-family: var(--font-serif-stack);
+	font-size: 17px;
+	line-height: 1.6;
 }
 .cols {
 	display: grid;

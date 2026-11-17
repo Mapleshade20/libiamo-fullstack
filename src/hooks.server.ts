@@ -8,7 +8,7 @@ import { auth } from "#lib/server/auth/auth.ts";
 import { sql } from "#lib/server/db/index.ts";
 import { ensureAgentReplyWorker, stopAgentReplyWorker } from "#lib/server/exchange/agents/boot.ts";
 import { pruneCalls } from "#lib/server/llm/records.ts";
-import { flushRevisions } from "#lib/server/revision/store.ts";
+import { abandonStale, flushRevisions, pruneRevisions, pruneTapes } from "#lib/server/revision/store.ts";
 import { ensureSourceRunner, stopSourceRunner } from "#lib/server/translation/runner.ts";
 import { building } from "$app/env";
 import { getRequestEvent } from "$app/server";
@@ -31,14 +31,29 @@ process.on("unhandledRejection", (e) => console.error("unhandled rejection:", e)
 ensureAgentReplyWorker();
 ensureSourceRunner();
 
-/* Model call records older than thirty days go (design §5.7): a minute after start, then every six hours. */
+/* Model call records older than thirty days go (design §5.7), finished pieces' tapes as long after, and revision
+   snapshots finished pieces left behind: a minute after start, then every six hours. */
 if (!building) {
-	const prune = () =>
+	const prune = () => {
 		pruneCalls()
 			.then((n) => n && console.log(`llm_call: ${n} records past thirty days removed`))
 			.catch((e) => console.error("llm_call prune failed:", e));
+		pruneRevisions()
+			.then((n) => n && console.log(`piece_revision: ${n} snapshots of finished pieces removed`))
+			.catch((e) => console.error("piece_revision prune failed:", e));
+		pruneTapes()
+			.then((n) => n && console.log(`piece_step: the tapes of ${n} finished pieces removed`))
+			.catch((e) => console.error("piece_step prune failed:", e));
+	};
 	setTimeout(prune, 60_000).unref();
 	setInterval(prune, 6 * 3_600_000).unref();
+	// Unfinished pieces nobody will finish are abandoned (what was written stays): every half hour.
+	const sweep = () =>
+		abandonStale()
+			.then((n) => n && console.log(`piece: ${n} unfinished pieces abandoned`))
+			.catch((e) => console.error("abandoning stale pieces failed:", e));
+	setTimeout(sweep, 90_000).unref();
+	setInterval(sweep, 30 * 60_000).unref();
 }
 
 /* The state that belongs to a learner (lib/scope.ts) is kept per request on the server, never shared between them. */
