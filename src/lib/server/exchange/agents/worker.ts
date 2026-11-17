@@ -12,7 +12,6 @@ import { inferAddressees } from "#lib/server/exchange/addressee/infer.ts";
 import { allocateParticipants, drawWorldParticipant } from "#lib/server/exchange/agents/floor.ts";
 import {
 	type AgentGenerationArtifacts,
-	AgentGenerationError,
 	type AgentHistoryMessage,
 	generateAgentResponse,
 	type PreservedDelivery,
@@ -304,7 +303,7 @@ export async function scheduleWorldMoment(
 				// >= , not > : an overlap moment created in the same transaction as the learner
 				// message shares its now() timestamp and already belongs to the new window.
 				windowStart ? gte(agentBatch.createdAt, windowStart) : undefined,
-				or(isNotNull(agentBatch.parsedResult), isNotNull(agentBatch.rawResponse), isNotNull(agentBatch.error)),
+				or(isNotNull(agentBatch.parsedResult), isNotNull(agentBatch.error)),
 			),
 		);
 	if ((spent[0]?.count ?? 0) >= WORLD_WINDOW_LIMIT) return false;
@@ -717,10 +716,7 @@ export class AgentReplyWorker {
 				.update(agentBatch)
 				.set({
 					status: worldSessionEnded ? "cancelled" : deliveries.length > 0 ? "delivery_pending" : terminated ? "terminated" : "no_reply",
-					requestMessages: result.requestMessages,
-					rawResponse: result.rawResponse,
 					parsedResult: result.parsedResult,
-					providerMetadata: result.providerMetadata,
 					allowIdleFollowUp: result.parsedResult.allowIdleFollowUp,
 					completedAt: deliveries.length > 0 ? null : now,
 					error: null,
@@ -799,7 +795,6 @@ export class AgentReplyWorker {
 
 	private async handleGenerationFailure(batch: ClaimedBatch, now: WorkerNow, error: unknown): Promise<void> {
 		const retry = shouldRetryGeneration(batch.generationCount);
-		const failureArtifacts = error instanceof AgentGenerationError ? error.failureArtifacts : null;
 		try {
 			await db.transaction(async (tx) => {
 				// The failure settlement writes message flags from sibling batches: lock the session
@@ -811,9 +806,6 @@ export class AgentReplyWorker {
 						status: retry ? "pending" : "failed",
 						...(retry ? { dueAt: new Date(now.getTime() + this.retryBackoffMs) } : { completedAt: now }),
 						error: safeError(error),
-						requestMessages: failureArtifacts?.requestMessages ?? batch.requestMessages,
-						rawResponse: failureArtifacts?.rawResponse ?? batch.rawResponse,
-						providerMetadata: failureArtifacts?.providerMetadata ?? batch.providerMetadata,
 						workerId: null,
 						claimToken: null,
 						leaseExpiresAt: null,
@@ -888,16 +880,14 @@ export class AgentReplyWorker {
 						.update(agentDelivery)
 						.set({ status: "cancelled" })
 						.where(and(eq(agentDelivery.id, delivery.id), eq(agentDelivery.status, "delivered")));
-					const providerMetadata = (batch.providerMetadata ?? {}) as { contractWarnings?: string[] };
+					// Recorded with the turn's own contract warnings (generator.ts `resolveSceneTurn`).
+					const turn = (batch.parsedResult ?? {}) as { warnings?: string[] };
 					await tx
 						.update(agentBatch)
 						.set({
-							providerMetadata: {
-								...providerMetadata,
-								contractWarnings: [
-									...(providerMetadata.contractWarnings ?? []),
-									`Delivery ${delivery.sequence} replyTo ${delivery.replyTo} is missing its target; dropped`,
-								],
+							parsedResult: {
+								...turn,
+								warnings: [...(turn.warnings ?? []), `Delivery ${delivery.sequence} replyTo ${delivery.replyTo} is missing its target; dropped`],
 							},
 						})
 						.where(eq(agentBatch.id, batch.id));

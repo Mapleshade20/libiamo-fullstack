@@ -90,52 +90,20 @@ export type AgentHistoryMessage = {
 	llmMetadata?: unknown;
 };
 
-export type AgentGenerationArtifacts = {
-	requestMessages: Message[];
-	rawResponse: string;
-	parsedResult: SceneTurn;
-	providerMetadata: {
-		id?: string;
-		model?: string;
-		finishReason: string | null;
-		usage?: unknown;
-		quota?: unknown;
-		raw: unknown;
-		repair: null | { initialContent: string; initialRaw: unknown; errors: string[] };
-		contractWarnings?: string[];
-	};
-};
+/*
+ * What a turn of the cast produced. The request and the raw reply are not kept here: the call is recorded like every
+ * other (server/llm/records.ts), as the learner's privacy setting allows and for as long.
+ */
+export type AgentGenerationArtifacts = { parsedResult: SceneTurn };
 
-/** Failure evidence available even when generation does not produce a parsed result. */
-export type AgentGenerationFailureArtifacts = {
-	requestMessages: Message[];
-	rawResponse: string | null;
-	providerMetadata: {
-		id?: string;
-		model?: string;
-		finishReason: string | null;
-		usage?: unknown;
-		raw: unknown;
-		validationErrors?: string[];
-		failureStage: "provider" | "parse";
-		attempts?: Array<{
-			stage: "initial" | "repair";
-			requestMessages: Message[];
-			content: string | null;
-			raw: unknown;
-			errors: string[];
-			finishReason: string | null;
-		}>;
-	};
-};
-
+/** A turn that did not come back as a valid decision: "provider" (the call failed) or "parse" (no valid JSON, repaired once). */
 export class AgentGenerationError extends Error {
-	readonly failureArtifacts: AgentGenerationFailureArtifacts;
+	readonly stage: "provider" | "parse";
 
-	constructor(message: string, failureArtifacts: AgentGenerationFailureArtifacts, options?: { cause?: unknown }) {
+	constructor(message: string, stage: "provider" | "parse", options?: { cause?: unknown }) {
 		super(message, options);
 		this.name = "AgentGenerationError";
-		this.failureArtifacts = failureArtifacts;
+		this.stage = stage;
 	}
 }
 
@@ -356,29 +324,8 @@ export async function generateAgentResponse(input: GenerateAgentResponseInput): 
 	} catch (error) {
 		const message = error instanceof Error && error.message ? error.message : "Agent generation failed";
 		const parse = error instanceof LimitError && /invalid JSON/.test(error.message);
-		throw new AgentGenerationError(
-			message,
-			{
-				requestMessages: messages,
-				rawResponse: null,
-				providerMetadata: { finishReason: null, raw: null, failureStage: parse ? "parse" : "provider" },
-			},
-			{ cause: error },
-		);
+		throw new AgentGenerationError(message, parse ? "parse" : "provider", { cause: error });
 	}
 	const value = resolveSceneTurn(result.value, recipeInput);
-	const [first, last] = [result.calls[0], result.calls.at(-1) ?? result.calls[0]];
-	return {
-		requestMessages: messages,
-		rawResponse: last.text,
-		parsedResult: value,
-		providerMetadata: {
-			model: ai.route?.model,
-			finishReason: null,
-			usage: result.calls.map((c) => c.usage),
-			raw: null,
-			repair: result.calls.length > 1 ? { initialContent: first.text, initialRaw: null, errors: [] } : null,
-			...(value.warnings.length > 0 ? { contractWarnings: value.warnings } : {}),
-		},
-	};
+	return { parsedResult: value };
 }

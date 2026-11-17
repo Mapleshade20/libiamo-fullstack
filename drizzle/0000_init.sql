@@ -31,10 +31,7 @@ CREATE TABLE "agent_batch" (
 	"lease_expires_at" timestamp with time zone,
 	"generation_count" integer DEFAULT 0 NOT NULL,
 	"stale_count" integer DEFAULT 0 NOT NULL,
-	"request_messages" jsonb,
-	"raw_response" text,
 	"parsed_result" jsonb,
-	"provider_metadata" jsonb,
 	"error" text,
 	"allow_idle_follow_up" boolean,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -516,6 +513,7 @@ CREATE INDEX "agent_delivery_status_due_idx" ON "agent_delivery" USING btree ("s
 CREATE INDEX "exchange_user_idx" ON "exchange" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "exchange_expiry_idx" ON "exchange" USING btree ("status","expires_at");--> statement-breakpoint
 CREATE INDEX "exchange_message_exchange_idx" ON "exchange_message" USING btree ("exchange_id");--> statement-breakpoint
+CREATE INDEX "exchange_message_response_batch_idx" ON "exchange_message" USING btree ("response_batch_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "exchange_message_delivery_idx" ON "exchange_message" USING btree ("delivery_id");--> statement-breakpoint
 CREATE INDEX "exchange_message_unread_idx" ON "exchange_message" USING btree ("exchange_id","id") WHERE "exchange_message"."role" = 'assistant';--> statement-breakpoint
 CREATE INDEX "llm_call_piece_idx" ON "llm_call" USING btree ("piece_id");--> statement-breakpoint
@@ -527,6 +525,7 @@ CREATE INDEX "note_due_idx" ON "note" USING btree ("user_id","language","due") W
 CREATE INDEX "note_list_idx" ON "note" USING btree ("user_id","language","id") WHERE "note"."deleted_at" is null;--> statement-breakpoint
 CREATE INDEX "note_user_idx" ON "note" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "note_piece_idx" ON "note" USING btree ("piece_id");--> statement-breakpoint
+CREATE INDEX "note_reading_idx" ON "note" USING btree ("reading_id");--> statement-breakpoint
 CREATE INDEX "piece_user_idx" ON "piece" USING btree ("user_id","language","id");--> statement-breakpoint
 CREATE INDEX "piece_scenario_idx" ON "piece" USING btree ("scenario_id") WHERE "piece"."scenario_id" is not null;--> statement-breakpoint
 CREATE INDEX "piece_notes_retry_idx" ON "piece" USING btree ("notes_requested_at") WHERE "piece"."notes_requested_at" is not null;--> statement-breakpoint

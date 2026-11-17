@@ -1,5 +1,5 @@
 {
-  "id": "c1afe292-ec86-448a-921d-5e62674cfd12",
+  "id": "371ff20a-7339-4a84-8df9-7c52176b32e4",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -259,26 +259,8 @@
           "notNull": true,
           "default": 0
         },
-        "request_messages": {
-          "name": "request_messages",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "raw_response": {
-          "name": "raw_response",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "parsed_result": {
           "name": "parsed_result",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "provider_metadata": {
-          "name": "provider_metadata",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": false
@@ -933,6 +915,21 @@
           "columns": [
             {
               "expression": "exchange_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "exchange_message_response_batch_idx": {
+          "name": "exchange_message_response_batch_idx",
+          "columns": [
+            {
+              "expression": "response_batch_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1899,6 +1896,21 @@
           "columns": [
             {
               "expression": "piece_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "note_reading_idx": {
+          "name": "note_reading_idx",
+          "columns": [
+            {
+              "expression": "reading_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

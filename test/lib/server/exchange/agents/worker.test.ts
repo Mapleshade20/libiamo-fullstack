@@ -324,15 +324,12 @@ describe("agent reply worker scheduling", () => {
 			inputMessageId: 501,
 		} as Parameters<AgentReplyWorker["persistGenerationOutcome"]>[0];
 		const result = {
-			requestMessages: [],
-			rawResponse: "",
 			parsedResult: {
 				decision: "terminate_abuse",
 				deliveries: [{ author: "Mario", replyTo: null, content: "Je dois couper court à cette conversation." }],
 				allowIdleFollowUp: false,
 				terminationReason: "Severe abuse",
 			},
-			providerMetadata: { finishReason: "stop" },
 		} as unknown as AgentGenerationArtifacts;
 
 		const { tx, updates, inserts } = makeRecordingTx(31, [29, 30]);
@@ -380,8 +377,6 @@ describe("agent reply worker scheduling", () => {
 			inputMessageId: 501,
 		} as Parameters<AgentReplyWorker["persistGenerationOutcome"]>[0];
 		const result = {
-			requestMessages: [],
-			rawResponse: "",
 			parsedResult: {
 				decision: "reply",
 				deliveries: [
@@ -390,7 +385,6 @@ describe("agent reply worker scheduling", () => {
 				],
 				allowIdleFollowUp: false,
 			},
-			providerMetadata: { finishReason: "stop" },
 		} as unknown as AgentGenerationArtifacts;
 
 		const { tx, inserts } = makeRecordingTx(31, []);
@@ -419,14 +413,11 @@ describe("agent reply worker scheduling", () => {
 			inputMessageId: 501,
 		} as Parameters<AgentReplyWorker["persistGenerationOutcome"]>[0];
 		const result = {
-			requestMessages: [],
-			rawResponse: "",
 			parsedResult: {
 				decision: "no_reply",
 				deliveries: [],
 				allowIdleFollowUp: false,
 			},
-			providerMetadata: { finishReason: "stop" },
 		} as unknown as AgentGenerationArtifacts;
 
 		const { tx, updates, inserts } = makeRecordingTx(31, [], { clientMessageId: "msg-1", thread: { commentId: "c1" } });
@@ -601,10 +592,7 @@ describe("agent reply worker scheduling", () => {
 		} as Parameters<AgentReplyWorker["persistGenerationOutcome"]>[0];
 		// The model chose reply, but every delivery was written for someone else.
 		const result = {
-			requestMessages: [],
-			rawResponse: "",
 			parsedResult: { decision: "reply", deliveries: [], allowIdleFollowUp: false, terminationReason: null },
-			providerMetadata: { finishReason: "stop" },
 		} as unknown as AgentGenerationArtifacts;
 		const message = { id: 501, exchangeId: 5, role: "user", llmMetadata: { attempt: 0, arrival: true } };
 		const { tx, updates, inserts } = makeRecordingTx(31, [], null, {
@@ -640,10 +628,7 @@ describe("agent reply worker scheduling", () => {
 			inputMessageId: 501,
 		} as Parameters<AgentReplyWorker["persistGenerationOutcome"]>[0];
 		const result = {
-			requestMessages: [],
-			rawResponse: "",
 			parsedResult: { decision: "no_reply", deliveries: [], allowIdleFollowUp: false, terminationReason: null },
-			providerMetadata: { finishReason: "stop" },
 		} as unknown as AgentGenerationArtifacts;
 		// A manually retried Discord message: the failure was cleared, the attempt counter never moves.
 		const message = { id: 501, exchangeId: 5, role: "user", llmMetadata: { clientMessageId: "m1", failed: false, failureError: null } };
@@ -680,15 +665,12 @@ describe("agent reply worker scheduling", () => {
 			inputMessageId: null,
 		} as Parameters<AgentReplyWorker["persistGenerationOutcome"]>[0];
 		const result = {
-			requestMessages: [],
-			rawResponse: "",
 			parsedResult: {
 				decision: "reply",
 				deliveries: [{ author: "op", replyTo: null, content: "meanwhile" }],
 				allowIdleFollowUp: false,
 				terminationReason: null,
 			},
-			providerMetadata: { finishReason: "stop" },
 		} as unknown as AgentGenerationArtifacts;
 
 		const ended = makeRecordingTx(31, [], null, { sessionRow: { status: "completed" } });
@@ -727,15 +709,12 @@ describe("agent reply worker scheduling", () => {
 			inputMessageId: null,
 		} as Parameters<AgentReplyWorker["persistGenerationOutcome"]>[0];
 		const result = {
-			requestMessages: [{ role: "system", content: "evidence" }],
-			rawResponse: "raw",
 			parsedResult: {
 				decision: "terminate_abuse",
 				deliveries: [{ author: "op", replyTo: null, content: "parting words" }],
 				allowIdleFollowUp: false,
 				terminationReason: "Severe abuse",
 			},
-			providerMetadata: { finishReason: "stop" },
 		} as unknown as AgentGenerationArtifacts;
 
 		const { tx, updates, inserts } = makeRecordingTx(31, [29, 30], null, { sessionRow: { status: "completed" } });
@@ -747,9 +726,9 @@ describe("agent reply worker scheduling", () => {
 			now,
 		);
 
-		// the world batch itself is cancelled with its generation evidence persisted...
+		// the world batch itself is cancelled with the decision it came back with, and never the prompt...
 		const cancelUpdate = updates.find((update) => update.table === agentBatch && update.set.status === "cancelled");
-		expect(cancelUpdate?.set).toMatchObject({ status: "cancelled", requestMessages: [{ role: "system", content: "evidence" }], rawResponse: "raw" });
+		expect(cancelUpdate?.set).toMatchObject({ status: "cancelled", parsedResult: result.parsedResult });
 		// ...and the abuse side effects never run: spared sibling replies and their deliveries
 		// survive, the session is not re-ended, and nothing is queued for delivery
 		expect(updates.filter((update) => update.table === exchange)).toEqual([]);
@@ -875,7 +854,6 @@ describe("agent reply worker scheduling", () => {
 			inputMessageId: 501,
 			parsedResult: null,
 			allowIdleFollowUp: false,
-			providerMetadata: {},
 			session: { task: { id: 1, ui: "reddit", urgency: "high", openingState: { post: { author: "op" } } } },
 		});
 		const message = { id: 501, exchangeId: 5, role: "user", llmMetadata: { attempt: 0, arrival: true } };
@@ -896,8 +874,8 @@ describe("agent reply worker scheduling", () => {
 		// ... and the message settles as if nothing landed, instead of waiting forever
 		const settled = operations.find((operation) => operation.kind === "update" && operation.table === exchangeMessage);
 		expect(settled?.set).toEqual({ llmMetadata: { attempt: 0, arrival: true, noReply: true, failed: false, failureError: null } });
-		const warning = operations.find((operation) => operation.kind === "update" && operation.table === agentBatch && operation.set?.providerMetadata);
-		expect((warning?.set?.providerMetadata as { contractWarnings?: string[] })?.contractWarnings?.[0]).toContain("missing its target");
+		const warning = operations.find((operation) => operation.kind === "update" && operation.table === agentBatch && operation.set?.parsedResult);
+		expect((warning?.set?.parsedResult as { warnings?: string[] })?.warnings?.[0]).toContain("missing its target");
 		// the batch still finalizes once nothing is left pending
 		expect(
 			operations.some((operation) => operation.kind === "update" && operation.table === agentBatch && operation.set?.status === "completed"),
