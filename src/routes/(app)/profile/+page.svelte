@@ -30,7 +30,9 @@ import { shelfNow } from "#lib/writing/writing.svelte.ts";
  */
 // Each week with the aim it was held to; a week's days are the learner's local days (`YYYY-MM-DD`), shown as they are.
 revalidate(historyNow(26), glanceNow());
-const weeks = $derived(await historyNow(26));
+// Asked for together: a `$derived(await …)` is not begun until the one before it has its answer, and a query is not
+// asked for until it is awaited (await_waterfall).
+const [weeks, glanced] = $derived(await Promise.all([historyNow(26), glanceNow()]));
 const goal = $derived(weeks[weeks.length - 1].goal);
 const met = (w: { days: string[]; goal: number }) => w.days.filter((d) => d === "full").length >= w.goal;
 // Weeks in a row that met the aim, counting back from last week (this one may still be under way).
@@ -43,7 +45,7 @@ const run = $derived.by(() => {
 });
 const total = $derived(weeks.reduce((n, w) => n + w.days.filter((d) => d === "full").length, 0));
 const pieces = $derived(shelfNow().finished);
-const phrases = $derived((await glanceNow()).count);
+const phrases = $derived(glanced.count);
 const months = $derived(
 	// A month is named over its first week; the first column only when its month goes on (else two names collide).
 	weeks.map((w, i) =>

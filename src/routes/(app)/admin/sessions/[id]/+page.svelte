@@ -23,8 +23,9 @@ import { page } from "$app/state";
  * by when it started, or the one opened. Any step can be flagged with a note, which makes the session a case and keeps
  * its calls past 30 days. The command copies what Claude Code runs to reproduce it locally.
  */
-const row = $derived(await sessionOne(page.params.id ?? ""));
-const cases = $derived(await caseList());
+// Asked for together: a `$derived(await …)` is not begun until the one before it has its answer, and a query is not
+// asked for until it is awaited (await_waterfall).
+const [row, cases] = $derived(await Promise.all([sessionOne(page.params.id ?? ""), caseList()]));
 const CALLS = $derived(row?.callRecords ?? []);
 const steps = $derived(row?.steps ?? []);
 const byId = $derived(new Map(CALLS.map((c) => [c.id, c])));

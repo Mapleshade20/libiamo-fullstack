@@ -16,7 +16,9 @@ import type { NoteFrom, NoteRow } from "#lib/notebook/types.ts";
 let filter = $state<NoteFrom>("all");
 // The list opens unfiltered.
 revalidate(notebookNow("all"), dueNow());
-const first = $derived(await notebookNow(filter));
+// Asked for together: a `$derived(await …)` is not begun until the one before it has its answer, and a query is not
+// asked for until it is awaited (await_waterfall).
+const [first, dueSummary] = $derived(await Promise.all([notebookNow(filter), dueNow()]));
 const key = $derived(`${lang()}|${filter}`);
 // The pages after the first, for the list as it is now filtered.
 let more = $state<{ key: string; rows: NoteRow[]; next?: string }>({ key: "", rows: [] });
@@ -47,7 +49,7 @@ function nearing(node: HTMLElement) {
 	seen.observe(node);
 	return { destroy: () => seen.disconnect() };
 }
-const due = $derived((await dueNow()).count);
+const due = $derived(dueSummary.count);
 $effect(() => {
 	document.title = `${tx("navNotebook")} · ${tx("homeTitle")}`;
 });

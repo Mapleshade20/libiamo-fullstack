@@ -30,7 +30,9 @@ import { page } from "$app/state";
  */
 const where = $derived({ id: page.params.id ?? "", lang: app.lang });
 revalidate(sandboxed() ? null : scenarioView({ id: page.params.id ?? "", lang: app.lang }), glanceNow());
-const scenario = $derived(sandboxed() ? tourScenario(where.id, where.lang) : await scenarioView(where));
+// Asked for together: a `$derived(await …)` is not begun until the one before it has its answer, and a query is not
+// asked for until it is awaited (await_waterfall).
+const [scenario, glanced] = $derived(await Promise.all([sandboxed() ? tourScenario(where.id, where.lang) : scenarioView(where), glanceNow()]));
 const s = $derived(scenario?.situation);
 const sim = $derived(scenario?.scene);
 const st = $derived(scenario ? siteOf(scenario.site) : undefined);
@@ -38,7 +40,7 @@ const progress = $derived(scenario?.state ?? "new");
 const started = $derived(scenario?.openPiece ? shelfNow().open.find((w) => w.id === scenario.openPiece) : undefined);
 const written = $derived(scenario?.writtenPiece);
 // Phrases the learner already owns that could serve here: their notebook's latest few (not yet ranked by fit).
-const owned = $derived((await glanceNow()).latest);
+const owned = $derived(glanced.latest);
 // The plan stays on this device until the piece is made, which takes it (lib/client/drafts.ts); the tour's stays on the
 // page. The server's page has none yet: the device's comes in once the page runs.
 const planKey = $derived(`${where.id}|${where.lang}`);

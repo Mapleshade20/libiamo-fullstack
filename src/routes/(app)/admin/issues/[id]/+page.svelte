@@ -30,7 +30,9 @@ const TONES = [
 	{ tone: "#e9dfb8", deep: "#4a4123" },
 ];
 const isNew = $derived(page.params.id === "new");
-const issues = $derived(await issueList());
+// Asked for together: a `$derived(await …)` is not begun until the one before it has its answer, and a query is not
+// asked for until it is awaited (await_waterfall).
+const [issues, scenarios] = $derived(await Promise.all([issueList(), scenarioList()]));
 const found = $derived(issues.find((i) => i.id === page.params.id));
 const inMonth = () => addDays(today(), 30);
 let it = $state({ title: "", line: "", date: "", tone: TONES[0].tone, deep: TONES[0].deep, scenarios: [] as string[] });
@@ -84,7 +86,7 @@ function toggle(id: string) {
 	else if (n < 6) it.scenarios.push(id);
 }
 // What can go in: published scenarios, and whatever this issue already holds.
-const pool = $derived((await scenarioList()).filter((s) => s.status === "published" || it.scenarios.includes(s.id)));
+const pool = $derived(scenarios.filter((s) => s.status === "published" || it.scenarios.includes(s.id)));
 </script>
 
 <div class="adm-page">
