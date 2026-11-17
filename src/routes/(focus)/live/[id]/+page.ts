@@ -12,6 +12,7 @@ export async function load({ params, fetch }) {
 	const handed = takeHanded(params.id);
 	if (handed) return { id: params.id, setup: handed, resumed: null };
 	const r = await fetch(`/api/s/${params.id}/resume`, { method: "POST" });
+	if (r.status === 401) redirect(307, "/sign-in");
 	const v = await r.json().catch(() => null);
 	if (v?.finished || v?.abandoned) redirect(307, `/w/${params.id}`);
 	if (!r.ok || !v?.setup) redirect(307, "/");

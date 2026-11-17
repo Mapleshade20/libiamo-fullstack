@@ -106,10 +106,13 @@ export function createAuthOptions(store: AuthStore) {
 			autoSignInAfterVerification: true,
 			expiresIn: 3600,
 			// The callers name where the link returns (/verify?done, or /settings?emailChanged for a new address); a link that
-			// no longer works returns there with `error`.
+			// no longer works returns there with `error`. Signing in names none (a callbackURL there would send the page to
+			// it), so Better Auth's "/" becomes the inbox page here.
 			sendVerificationEmail: async ({ user, url }) => {
-				const changing = new URL(url).searchParams.get("callbackURL")?.startsWith("/settings") ?? false;
-				send(changing ? mails.changeEmail(user.email, url) : mails.verify(user.email, url));
+				const link = new URL(url);
+				const back = link.searchParams.get("callbackURL") ?? "/";
+				if (back === "/") link.searchParams.set("callbackURL", "/verify?done");
+				send(back.startsWith("/settings") ? mails.changeEmail(user.email, link.href) : mails.verify(user.email, link.href));
 			},
 		},
 		hooks: {

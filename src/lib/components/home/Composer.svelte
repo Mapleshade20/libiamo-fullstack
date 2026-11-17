@@ -6,6 +6,7 @@ import NotebookPen from "@lucide/svelte/icons/notebook-pen";
 import PenLine from "@lucide/svelte/icons/pen-line";
 import { onDestroy, onMount, tick } from "svelte";
 import { app } from "#lib/account/app.svelte.ts";
+import { leaveIfSignedOut } from "#lib/client/signed-out.ts";
 import LimitNotice from "#lib/components/common/LimitNotice.svelte";
 import { autogrow, reducedMotion, shake } from "#lib/components/common/motion.ts";
 import Notice from "#lib/components/common/Notice.svelte";
@@ -165,7 +166,9 @@ async function start() {
 			method: "POST",
 			headers: { "content-type": "application/json" },
 			body: JSON.stringify({ mode: draft.mode, text: draft.text, native: app.prefs.native, learning: app.prefs.learning, active: app.lang }),
-		}).then((r: Response) => r.json());
+		})
+			.then(leaveIfSignedOut)
+			.then((r: Response) => r.json());
 	} catch {
 		g = null; // The door never keeps anyone out by failing.
 	}

@@ -1,5 +1,6 @@
 import { tick } from "svelte";
 import { app } from "#lib/account/app.svelte.ts";
+import { leaveIfSignedOut } from "#lib/client/signed-out.ts";
 import ChoiceCard from "#lib/components/session/ChoiceCard.svelte";
 import FixCard from "#lib/components/session/FixCard.svelte";
 import NoteCard from "#lib/components/session/NoteCard.svelte";
@@ -269,6 +270,7 @@ export class Session {
 			if (!this.active()) throw new Cancelled();
 			throw e;
 		});
+		leaveIfSignedOut(r);
 		const v = await r.json().catch(() => ({}));
 		if (!this.active()) throw new Cancelled();
 		// The server says what stopped a model call: no key, the key refused, or a failure a retry may fix.
@@ -291,7 +293,9 @@ export class Session {
 					method: "POST",
 					headers: { "content-type": "application/json" },
 					body: JSON.stringify(page),
-				}).catch(() => {});
+				})
+					.then(leaveIfSignedOut)
+					.catch(() => {});
 			}
 			this.marking = false;
 		})();

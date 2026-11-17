@@ -37,8 +37,7 @@ async function submit(e: SubmitEvent) {
 	if (!matches) return shake(input);
 	pending = true;
 	try {
-		await deleteAccount(typed);
-		toast(tx("acDeleted"));
+		await deleteAccount(typed, tx("acDeleted"));
 	} catch {
 		pending = false;
 		toast(tx("auSomethingWrong"));

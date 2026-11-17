@@ -2,6 +2,12 @@
 import { account } from "#lib/account/account.svelte.ts";
 import { page } from "$app/state";
 
+// 401: the session ended while a page was open (signed out elsewhere, expired). That is the way in, loaded whole.
+const signedOut = $derived(page.status === 401);
+$effect(() => {
+	if (signedOut) location.replace("/sign-in");
+});
+
 /*
  * A page that could not be shown: an address that leads nowhere, a page this account may not open, or a failure on the
  * server. In English, like the documents (routes/(public)); src/error.html is for when even this cannot render.
@@ -19,17 +25,19 @@ const copy = $derived(
 
 <svelte:head><title>{page.status} · Libiamo</title></svelte:head>
 
-<main class="err" lang="en">
-	<p class="code">{page.status}</p>
-	<h1>{copy.title}</h1>
-	<p class="line">{copy.line}</p>
-	<div class="acts">
-		{#if page.status >= 500}
-			<button class="btn" type="button" onclick={() => location.reload()}>Try again</button>
-		{/if}
-		<a class="btn main" href={account.signedIn ? "/" : "/about"}>{account.signedIn ? "Back to Libiamo" : "Go to Libiamo"}</a>
-	</div>
-</main>
+{#if !signedOut}
+	<main class="err" lang="en">
+		<p class="code">{page.status}</p>
+		<h1>{copy.title}</h1>
+		<p class="line">{copy.line}</p>
+		<div class="acts">
+			{#if page.status >= 500}
+				<button class="btn" type="button" onclick={() => location.reload()}>Try again</button>
+			{/if}
+			<a class="btn main" href={account.signedIn ? "/" : "/about"}>{account.signedIn ? "Back to Libiamo" : "Go to Libiamo"}</a>
+		</div>
+	</main>
+{/if}
 
 <style>
 .err {

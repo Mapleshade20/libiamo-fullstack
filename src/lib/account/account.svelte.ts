@@ -126,7 +126,9 @@ export function enter() {
 
 /** An address and password. Wrong ones get one message, never which of the two was wrong. */
 export async function signIn(email: string, password: string): Promise<"ok" | "wrong" | "unverified" | string> {
-	const { error } = await authClient.signIn.email({ email: email.trim(), password, callbackURL: "/verify?done" }, { headers: captchaHeaders() });
+	// No callbackURL: with one, Better Auth answers with a redirect its client follows by loading that page. The link it
+	// mails an unconfirmed address returns to the inbox page all the same (server/auth/options.ts).
+	const { error } = await authClient.signIn.email({ email: email.trim(), password }, { headers: captchaHeaders() });
 	if (error?.code === "EMAIL_NOT_VERIFIED") return "unverified"; // Better Auth has sent the link again
 	if (error?.code === "INVALID_EMAIL_OR_PASSWORD") return "wrong";
 	if (error) return refusal(error);
@@ -227,20 +229,32 @@ export async function disconnect(provider: SocialProviderId): Promise<string | n
 	return error ? refusal(error) : null;
 }
 
-/** Deletes the account (the address typed to confirm it), and leaves for the sign-in page. */
-export async function deleteAccount(email: string) {
+/**
+ * Deletes the account (the address typed to confirm it) and leaves for what Libiamo is: there is no account to sign in
+ * to any more. `said` is told there, in the language it was worked in.
+ */
+export async function deleteAccount(email: string, said: string) {
 	await remove({ email });
 	await authClient.signOut().catch(() => {});
 	forgetDrafts();
-	adopt(null);
-	await goto("/sign-in", { replace: true, refreshAll: true });
+	leave("/about", said);
 }
 
+/**
+ * Signs out and leaves for the sign-in page (or `to`), loading it whole: nothing of the account stays in this tab, and no
+ * page of it asks the server for anything once signed out (a client navigation refreshed them first, and the 401 page
+ * showed for a moment). The address typed for the auth pages goes with it (the reset page starts from it).
+ */
 export async function signOut(to = "/sign-in") {
 	await authClient.signOut();
 	forgetDrafts();
-	adopt(null);
-	await goto(to, { refreshAll: true });
+	if (auth.email) sessionStorage.setItem("authEmail", auth.email);
+	leave(to);
+}
+
+function leave(to: string, said?: string) {
+	if (said) sessionStorage.setItem("leftToast", said);
+	location.replace(to);
 }
 
 /** What was typed on this device and not sent goes with the account that typed it. */

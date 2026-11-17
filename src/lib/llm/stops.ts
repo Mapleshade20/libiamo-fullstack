@@ -1,4 +1,5 @@
 import { account } from "#lib/account/account.svelte.ts";
+import { leaveIfSignedOut } from "#lib/client/signed-out.ts";
 import { sandboxed } from "#lib/components/tour/sandbox.svelte.ts";
 
 /*
@@ -26,6 +27,7 @@ export const stopOf = (e: unknown): Stop => (e instanceof LimitError ? e.kind : 
 /** Throws the response's stop when the server did not answer. */
 export async function answered(r: Response): Promise<Response> {
 	if (r.ok) return r;
+	leaveIfSignedOut(r);
 	const v = await r
 		.clone()
 		.json()
