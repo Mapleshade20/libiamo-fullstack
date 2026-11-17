@@ -14,13 +14,21 @@ const SceneSchema = z.object({
 	platform: z.string(),
 	audience: z.string(),
 	purpose: z.string(),
-	target: z.enum(["en", "es", "fr", "ja"]),
 });
-export async function inferScene(text: string, background: string | undefined, learner: Lang, feedback: "native" | "target", ai: Caller) {
-	// In "target" mode the writer reads everything in the language they are writing in, which only the draft tells.
-	const F = feedback === "native" ? LANG_NAMES[learner] : "the language the draft is written in (the target language)";
-	const user = `A language learner (their own language: ${LANG_NAMES[learner]}) pasted a draft they are about to post or send, with an optional note.\n\nNote: ${background ?? "(none)"}\n\nDraft:\n<<<\n${text}\n>>>\n\nSay where it will be posted (platform and kind of post), who will read it, what the writer wants to do, and target: the code of the language they are learning, the one most of the draft is written in (never their own language, even when the note or a passage is in it). platform, audience and purpose in ${F} (the writer reads them), whatever language the note is in, a short phrase each (at most about twelve words). The purpose says only what the draft and note show the writer doing; never add aims they do not show.\nAlso give site: the site or medium's short name as its users write it (a site name, or "Email"); community: where on it, as its users write it (a subreddit like r/name, a fic's title, a recipient), short; and reader: a plausible handle or name for one typical reader there, written the way that site shows names.\nAnd title: the piece as an item on the writer's list, in the language of the draft, starting with a verb, the way writing prompts are titled (for example "Reply to the author of “Long Way Home”", "Ask r/WarriorCats why StarClan never came", "Thank Sam for the playlist"); at most about eight words, naming who or what it is for.\nReply with JSON only: {"site":"","community":"","reader":"","title":"","platform":"","audience":"","purpose":"","target":"en|es|fr|ja"}`;
-	return (await chatJson([{ role: "user", content: user }], SceneSchema, { ai, effort: "low", tag: "session/scene" })).value;
+/** The language is the piece's (the composer's door named it), never guessed here: every language learnt here has one. */
+export async function inferScene(
+	text: string,
+	background: string | undefined,
+	learner: Lang,
+	target: Lang,
+	feedback: "native" | "target",
+	ai: Caller,
+) {
+	// In "target" mode the writer reads everything in the language they are writing in.
+	const F = LANG_NAMES[feedback === "native" ? learner : target];
+	const user = `A language learner (their own language: ${LANG_NAMES[learner]}) pasted a draft in ${LANG_NAMES[target]}, the language they are learning, that they are about to post or send, with an optional note.\n\nNote: ${background ?? "(none)"}\n\nDraft:\n<<<\n${text}\n>>>\n\nSay where it will be posted (platform and kind of post), who will read it and what the writer wants to do. platform, audience and purpose in ${F} (the writer reads them), whatever language the note is in, a short phrase each (at most about twelve words). The purpose says only what the draft and note show the writer doing; never add aims they do not show.\nAlso give site: the site or medium's short name as its users write it (a site name, or "Email"); community: where on it, as its users write it (a subreddit like r/name, a fic's title, a recipient), short; and reader: a plausible handle or name for one typical reader there, written the way that site shows names.\nAnd title: the piece as an item on the writer's list, in ${LANG_NAMES[target]}, starting with a verb, the way writing prompts are titled (for example "Reply to the author of “Long Way Home”", "Ask r/WarriorCats why StarClan never came", "Thank Sam for the playlist"); at most about eight words, naming who or what it is for.\nReply with JSON only: {"site":"","community":"","reader":"","title":"","platform":"","audience":"","purpose":""}`;
+	const scene = (await chatJson([{ role: "user", content: user }], SceneSchema, { ai, effort: "low", tag: "session/scene" })).value;
+	return { ...scene, target };
 }
 
 // After the reader's read-back: the tutor answers the learner's confirmation or correction.

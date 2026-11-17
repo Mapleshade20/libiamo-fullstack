@@ -13,17 +13,16 @@
 		}
 	],
 	"result": {
-		"text": "### NATIVE\n\nI've read this fic since the first chapter and the ending made me cry. The scene where Bluestar doesn't look back at the camp has stayed with me, because she chooses to go alone even though she's scared.\n\n* * *\n\nI think it's more about what she'd find. She's made the journey many times, but this time StarClan might tell her Oakheart isn't waiting for her. That's why she makes herself stop thinking of him, I think.\n\n### PASS 1\n\nI've read this fic since the first chapter and the ending makes me cry. The scene when Bluestar didn't look back at the camp is staying with me, because she chooses to go alone even though she's scared.\n\n* * *\n\nI think it's more about what she finds. She has made the journey many times, but this time StarClan might tell her Oakheart isn't waiting for her. That is why she makes herself stop thinking of him, I think.",
+		"text": "### NATIVE\n\nI've read this fic since the first chapter, and the ending made me cry. The scene where Bluestar doesn't look back at the camp is really staying with me, because she chooses to go alone even though she's scared.\n\n* * *\n\nI think it's more about what she'd find. She's made the journey many times, but this time StarClan might tell her Oakheart isn't waiting for her. That's why she makes herself stop thinking of him, I think.\n\n### PASS 1\n\nI've read this fic since the first chapter and the ending made me cry. The scene when Bluestar didn't look back at the camp is staying with me, because she chooses to go alone even though she's scared.\n\n* * *\n\nI think it's more about what she'd find. She's made the journey many times, but this time maybe StarClan will tell her Oakheart isn't waiting for her. That's why she makes herself stop thinking of him, I think.",
 		"usage": {
 			"input": 2795,
-			"output": 2209,
-			"reasoning": 1928,
+			"output": 2468,
+			"reasoning": 2183,
 			"cacheRead": 0,
 			"cacheWrite": 0
 		},
-		"ms": 9667,
-		"cached": false,
-		"costUsd": 0.001384
+		"ms": 12151,
+		"costUsd": 0.0015135
 	},
 	"finish": "stop"
 }

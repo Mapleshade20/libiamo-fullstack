@@ -1,0 +1,24 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "A writer revised their English post sentence by sentence. Compare the version before the revision with the final one, as an editor protecting what the writer meant.\n\nBefore:\n<<<\nI don't think it is not StarClan's fault. When the Clans at the Moonstone and the sky is overcast, so the moonlight cannot reach the stone, maybe the clouds alone explain it?\n\n* * *\n\nNo no, I mean StarClan didn't abandon them on purpose. They wanted to come, but without moonlight the Moonstone can't work, so they can't reach the cats.\n>>>\n\nFinal:\n<<<\nI don't think it is not StarClan's fault. Maybe the clouds are the reason StarClan has gone quiet? When the Clans meet at the Moonstone under an overcast sky, the moonlight can't reach the stone.\n\n* * *\n\nNo no, I mean StarClan didn't abandon them on purpose. They wanted to come, but without moonlight the Moonstone can't work, so they can't reach the cats.\n>>>\n\nDuring the revision the writer confirmed what they meant at these places; changes that follow these are intended:\n- 「When the Clans at the Moonstone and the sky is overcast, so the moonlight cannot reach the stone, maybe the clouds alone explain it?」→ 1. the clouds explain why StarClan has been silent\n2. Everything this passage says now: every point, question, hedge and feeling in it stays; only how it is put changes.\n\nList only real problems in the final version: a point, detail, question or condition from before that is gone (lost); a claim whose meaning changed, e.g. a hedge or a hypothetical that became a flat statement (changed); text that appears twice (duplicated); a sentence that is broken where two pieces were joined (broken). Rewording, reordering and better phrasing are not problems. quote: the exact words from the final version (or, for lost, from before); note: one short English sentence to the writer, informal. [] if there is nothing.\nReply with JSON only: {\"issues\":[{\"kind\":\"lost|changed|duplicated|broken\",\"quote\":\"\",\"note\":\"\"}]}"
+		}
+	],
+	"result": {
+		"text": "{\"issues\":[{\"kind\":\"changed\",\"quote\":\"Maybe the clouds are the reason StarClan has gone quiet?\",\"note\":\"The original said the clouds alone might explain it, and the word \\\"alone\\\" is gone, so the claim no longer says they are the only explanation.\"}]}",
+		"usage": {
+			"input": 688,
+			"output": 592,
+			"reasoning": 498,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 3577,
+		"costUsd": 0.0003648
+	},
+	"finish": "stop"
+}

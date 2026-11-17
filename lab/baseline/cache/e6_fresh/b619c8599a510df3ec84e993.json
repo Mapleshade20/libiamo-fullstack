@@ -1,0 +1,28 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "medium",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "system",
+			"content": "You are a fluent, native English-speaking member of this community: Reddit question post."
+		},
+		{
+			"role": "user",
+			"content": "Readers: Warrior Cats fans who know Darktail's Judgment. What the writer wants to do: Ask about StarClan's silence at the moonstone and share their view.\nThe writer's note about it, in their words: r/WarriorCats 的提问帖。我刚开始读 Darktail’s Judgment，想问 Darkpaw 在月亮石那一段，还想说说我的看法。\nA learner's draft:\n<<<\nI’m on the early chapters of Darktail’s Judgment, and I get a little bit confused about the plot that StarClan didn’t show up when Darkpaw was at the moonstone and he went really miserable and furious for that.\n\nRavenpaw said StarClan had travelled with the Clans and left the forest skies, and it would be hard / not worth it to get back here for a distant little kittypet who want to join the Clans. But it was mentioned in the book that it was a overcast day, so without the moonlight it’s natural to be unable to reach StarClan back then when the Clans were still in the forest. (Could someone tell me if there was a similar case in the other books that the night sky’s cloudy when some cat’s at the Moonstone? Or do StarClan have the power to clear the clouds if they want to communicate?)\n\nAnd Darkpaw didn’t go for another try on a clear day; he just chose to transform himself into Darktail👿 instead.\n>>>\nWork in two steps.\nStep 1. Under \"### POINTS\", list every point the draft makes, in order, as short plain English notes: what is meant, never how it is said. Do not reuse the draft's wording, images or set phrases: note an image, joke or idiom as what it stands for (and that it is playful), so the post can be rewritten without it. Include feelings, jokes and questions. Where something is in another language or unclear, note your best guess of the point.\nStep 2. Under \"### FRESH\", close the draft and write the post from your notes alone, as you would write it yourself for these readers: your own sentence shapes, emphasis, idioms and rhythm. Keep every point, the writer's register and tone markers (emoji, \"lol\", \"~\"), a similar length, and their order unless another order clearly serves the reader better.\nReply with the two sections only."
+		}
+	],
+	"result": {
+		"text": "### POINTS\n\n1. The writer is only in the early chapters of Darktail's Judgment and is a bit confused about the plot.\n2. At the moonstone, StarClan doesn't appear to Darkpaw, and he becomes very miserable and angry about it.\n3. Ravenpaw says StarClan travelled with the Clans and left the forest skies, so getting back to reach a distant kittypet who wants to join the Clans would be hard and maybe not worth the effort.\n4. The book mentions the day was overcast. Without moonlight, it makes sense that StarClan couldn't be reached while the Clans were still in the forest.\n5. Question: are there other cases in the books where the sky is cloudy during a moonstone visit? Or can StarClan clear the clouds when they want to communicate?\n6. Darkpaw doesn't try again on a clear day. He instead transforms himself into Darktail, shown with a playful devil emoji (teasing tone, not a serious claim).\n\n### FRESH\n\nJust started Darktail's Judgment and I'm kinda lost on why StarClan never showed up for Darkpaw at the moonstone 😩 he was so miserable and furious about it, and I get why lol\n\nRavenpaw says StarClan went travelling with the Clans and left the forest skies, so it'd be too much trouble to come back just for some random kittypet who wanted to join. BUT the book also says it was overcast that day, so no moonlight, and that would explain why they couldn't reach StarClan back when the Clans were still in the forest. Has anyone seen another moonstone scene where the sky was cloudy? Or can StarClan clear the clouds if they really want to talk? ~\n\nAnd Darkpaw never tried again on a clear night, he just went and turned himself into Darktail 👿",
+		"usage": {
+			"input": 756,
+			"output": 1131,
+			"reasoning": 548,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 5861,
+		"costUsd": 0.0006411
+	},
+	"finish": "stop"
+}

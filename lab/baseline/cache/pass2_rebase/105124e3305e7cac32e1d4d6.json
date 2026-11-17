@@ -1,0 +1,24 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "A learner's German draft went through a first pass that fixed its small errors. The text as it now reads, sentences numbered:\n[S1] Hallo zusammen,\n\n[S2] ich bin seit drei Monaten in München und ich suche eine WG für nächstes Semester.\n[S3] Ich habe schon viele Nachrichten auf WG-Gesucht geschrieben, aber niemand hat mir geantwortet.\n[S4] Vielleicht liegt es daran, dass mein Deutsch nicht so gut ist, oder weil ich noch keine Schufa habe?\n\n[S5] Habt ihr Tipps, wie man eine gute Nachricht an die Vermieter schreiben kann?\n[S6] Ich bin ruhig, ich koche gern und ich kann bis 450 Euro bezahlen.\n[S7] Vielen Dank im Voraus!\n\nA tutor found these problems on the draft before the first pass. For each: the words it quoted, the first-pass changes near them (before → after), and the problem as written:\n1. quoted: \"Vielleicht liegt es daran, dass mein Deutsch\"\n   changes: \"ist \" → \"∅\"; \",\" → \"ist,\"\n   problem: 德语读者看到 Vielleicht liegt es daran, dass 通常是一个陈述式的猜测，后面的 oder weil 再加一个原因，句子因此很长，两个原因被挤在一起。德语里更常把两个可能拆成直接的问句，每个原因单独提出，读起来更清楚。\n\nThe learner now sees only the text as it reads. For each problem: keep false when the first-pass changes already did what the problem asks, so a reader would no longer stumble there; keep true when it is still a problem in the text as it reads. Small corrections (grammar, spelling, a word swapped) only fix problems about those very words: a problem about what the text says or leaves out (a missing point, evidence, a reason), what a reader takes away, or how a sentence is built stays, keep true. For a kept problem: quote, the words of the text as it reads where a reader stumbles now, copied character for character; problem, the same problem said about the text as it reads, in Simplified Chinese (as used in mainland China), at the same length: keep its reasoning and what a reader expects, but never mention an error the first pass fixed (a missing or wrong word, grammar, spelling) and never quote words that are no longer in the text. When nothing in it needs to change, repeat it as it was.\nReply with JSON only: {\"spots\":[{\"id\":1,\"keep\":true,\"quote\":\"\",\"problem\":\"\"}]}"
+		}
+	],
+	"result": {
+		"text": "{\"spots\":[{\"id\":1,\"keep\":true,\"quote\":\"Vielleicht liegt es daran, dass mein Deutsch nicht so gut ist, oder weil ich noch keine Schufa habe?\",\"problem\":\"德语读者看到 Vielleicht liegt es daran, dass 通常是一个陈述式的猜测，后面的 oder weil 再加一个原因，句子因此很长，两个原因被挤在一起。德语里更常把两个可能拆成直接的问句，每个原因单独提出，读起来更清楚。\"}]}",
+		"usage": {
+			"input": 862,
+			"output": 886,
+			"reasoning": 697,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 4865,
+		"costUsd": 0.0005292
+	},
+	"finish": "stop"
+}

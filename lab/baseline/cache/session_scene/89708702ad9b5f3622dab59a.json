@@ -1,0 +1,24 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "A language learner (their own language: Simplified Chinese (as used in mainland China)) pasted a draft in English, the language they are learning, that they are about to post or send, with an optional note.\n\nNote: (none)\n\nDraft:\n<<<\nWow... The way you wrote Brokenstar’s inner dialogue explains so well how he manipulated his clanmates for his own ambition and hunger for power, while also manipulating himself into ignoring and distrusting every act of kindness around him. It makes so much sense that he would come to see force and fear as the only real way to earn respect, and insist that what he did was the sole right path.\n\nThe effort you put into Yellowfang and Brokentail’s interactions in his final days adds so much depth to Yellowfang’s complicated relationship with her son. Especially, the canon-divergent ending struck me as more emotionally powerful than canon. “This is more than I deserve from you,” Apart from coming to terms with his fate out of, what you said, \"captain's integrity\", he's also somehow accepting her as his mother and feeling gratitude for her final care, and was there even a bit regret of what he had done to her?\n\nGreat work! Kudo attached~\n>>>\n\nSay where it will be posted (platform and kind of post), who will read it and what the writer wants to do. platform, audience and purpose in Simplified Chinese (as used in mainland China) (the writer reads them), whatever language the note is in, a short phrase each (at most about twelve words). The purpose says only what the draft and note show the writer doing; never add aims they do not show.\nAlso give site: the site or medium's short name as its users write it (a site name, or \"Email\"); community: where on it, as its users write it (a subreddit like r/name, a fic's title, a recipient), short; and reader: a plausible handle or name for one typical reader there, written the way that site shows names.\nAnd title: the piece as an item on the writer's list, in English, starting with a verb, the way writing prompts are titled (for example \"Reply to the author of “Long Way Home”\", \"Ask r/WarriorCats why StarClan never came\", \"Thank Sam for the playlist\"); at most about eight words, naming who or what it is for.\nReply with JSON only: {\"site\":\"\",\"community\":\"\",\"reader\":\"\",\"title\":\"\",\"platform\":\"\",\"audience\":\"\",\"purpose\":\"\"}"
+		}
+	],
+	"result": {
+		"text": "{\"site\":\"AO3\",\"community\":\"Warriors fanfic comments\",\"reader\":\"moonfall_writes\",\"title\":\"Reply to the author of a Warriors fic\",\"platform\":\"AO3 作品评论区\",\"audience\":\"写这篇同人的作者\",\"purpose\":\"称赞人物刻画，并追问布洛克尾的悔意与感激\"}",
+		"usage": {
+			"input": 752,
+			"output": 761,
+			"reasoning": 646,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 5186,
+		"costUsd": 0.0004557
+	},
+	"finish": "stop"
+}

@@ -1,0 +1,24 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "medium",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "A learner of English is rewriting part of a post for AO3 作品评论区:\n<<<\nWow... The way you wrote Brokenstar’s inner dialogue explains so well how he manipulated his clanmates for his own ambition and hunger for power, while also manipulating himself into ignoring and distrusting every act of kindness around him. It makes so much sense that he would come to see force and fear as the only real way to earn respect, and insist that what he did was the sole right path.\n\nThe effort you put into Yellowfang and Brokentail’s interactions in his final days adds so much depth to Yellowfang’s complicated relationship with her son. Especially, the canon-divergent ending struck me as more emotionally powerful than canon. “This is more than I deserve from you,” Apart from coming to terms with his fate out of, what you said, \"captain's integrity\", he's also somehow accepting her as his mother and feeling gratitude for her final care, and was there even a bit regret of what he had done to her?\n\nGreat work! Kudos left~\n>>>\nThe part: \"“This is more than I deserve from you,” Apart from coming to terms with his fate out of, what you said, \"captain's integrity\", he's also somehow accepting her as his mother and feeling gratitude for her final care, and was there even a bit regret of what he had done to her?\"\nWhat is wrong with it: 1. 读者读到这里会以为作者原文说过 captain's integrity，但句子中间被插入，读者无法判断这是作者原文的说法还是评论者自己的概括，也就不知道是谁在提出这个解释。\n2. 这一句同时包含三件事：接受结局、把她当母亲、感激她的照顾，然后又接一个关于悔意的问题，读者需要在一句里逐个分开，难以跟上，也不容易判断哪个问题最重要。\nWhat they mean (confirmed by them): 1. 这是作者在文中写过的说法，你在引用\n2. Everything this passage says now: every point, question, hedge and feeling in it stays; only how it is put changes.\nA version that works (never show it or any stretch of it): \"“This is more than I deserve from you,” — the way you framed it as “captain's integrity” makes it seem he's coming to terms with his fate. On top of that, he's accepting her as his mother and feeling grateful for her final care. Was there even a little regret for what he had done to her?\"\nWords they already have as hints: framed, fate, grateful, regret, accepting, a little\nTheir last try: \"“This is more than I deserve from you,” Apart from coming to terms with his fate out of, what you said, \"captain's integrity\", he's also somehow accepting her as his mother and feeling gratitude for her final care, and was there even a bit regret of what he had done to her?\"\nWhat the tutor told them about it: 你的版本里“captain's integrity”直接插在句子中间，读者会以为是你自己的概括，而不是作者原文的说法。另外接受结局、把她当母亲、感激她照顾和那个问题全挤在一句里，读者不容易分清重点。\nThey are stuck. Write two hints that help them build it themselves, never giving them the wording:\n- plan: in Simplified Chinese (as used in mainland China), one or two short sentences, as their tutor: how a fluent writer builds this part: what comes first, what follows, how the parts connect (contrast, cause, addition) and where the emphasis goes. Start from their try: what to keep and what to build differently. Name no English word except the hint words above (none from the working version), no letter counts, no fill-in blanks. It is about the words of this part, never the content they talk about (\"first the interactions between them, then…\" plans a story, not the sentence). When the part is a word or two (left in Simplified Chinese (as used in mainland China), or a missing word), say what kind of word goes there and how it sits in the sentence.\n- example: one short English sentence a fluent writer would actually write (grammatical and natural on its own), about an everyday topic unrelated to the post (different people, things and events), built the same way as the working version: the same pattern and the same connecting words, none of its other content words. Put [square brackets] around the few words it shares with the working version as they are (the frame they can borrow, at most four), never around the words that change.\nThe writer may write to you in any language; whatever they write in, everything you write for them is in Simplified Chinese (as used in mainland China).\nReply with JSON only: {\"plan\":\"\",\"example\":\"\"}"
+		}
+	],
+	"result": {
+		"text": "{\"plan\":\"先把作者原文的那句引语单独放在最前面，再用一个引入词说明后面的话是你的概括，不要把概括插进引语中间。接着把接受结局、接受她为母亲、感激她照顾这三层拆开，用递进的连接词一层层接下去，最后把悔意的问题单独放在句尾，作为重点。\",\"example\":\"\\\"Dinner is cold,\\\" — you called it a small mistake, which [makes it seem] you don't mind; [on top of that], the salt was missing.\"}",
+		"usage": {
+			"input": 1455,
+			"output": 2212,
+			"reasoning": 2035,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 11524,
+		"costUsd": 0.0012515
+	},
+	"finish": "stop"
+}

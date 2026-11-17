@@ -1,0 +1,28 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "system",
+			"content": "You read Simplified Chinese (as used in mainland China) only. If this post is written to one particular person (an email, a letter, a direct message), you are that person (Chinese travel-lovers and locals who follow food and travel notes), reading what was written to you; otherwise you are a regular on Xiaohongshu (travel post)."
+		},
+		{
+			"role": "user",
+			"content": "大家好！我是美国人，在上海学中文已经一年了。上个周末我和朋友去杭州玩，我们在西湖旁边走路了三个小时，风景非常好看。\n\n但是我有一个问题：我在一个饭馆点了西湖醋鱼，服务员说这个菜很有名，可是我觉得它太酸了，我不是很喜欢吃。是不是我点得不对？还有什么杭州菜你们推荐我试一试吗？谢谢！\n\nYou just read this post. Write the first thing you would write back (or reply in the thread): one or two short sentences in Simplified Chinese (as used in mainland China), in your own voice, that says back what you understood them to be asking or saying, so they can tell whether you got it. If something was unclear to you, say how you read it. Reply with the reply only."
+		}
+	],
+	"result": {
+		"text": "这位朋友，你是说你在杭州西湖边散步三个小时，很喜欢风景，但点的西湖醋鱼太酸，不太合你的口味，所以想问是不是点错了，也想知道还有哪些杭州菜值得试试。",
+		"usage": {
+			"input": 381,
+			"output": 88,
+			"reasoning": 0,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 1207,
+		"costUsd": 0.0000821
+	},
+	"finish": "stop"
+}

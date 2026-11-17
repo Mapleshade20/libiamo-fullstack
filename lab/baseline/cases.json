@@ -464,5 +464,36 @@
 				"target": "en"
 			}
 		}
+	},
+	{
+		"name": "own-forum-de",
+		"body": {
+			"text": "Hallo zusammen,\n\nich bin seit drei Monaten in München und ich suche eine WG für nächste Semester. Ich habe schon viele Nachrichten auf WG-Gesucht geschrieben, aber niemand hat mir geantwortet. Vielleicht liegt es daran, dass mein Deutsch ist nicht so gut, oder weil ich noch keine Schufa habe?\n\nHabt ihr Tipps, wie man eine gute Nachricht an die Vermieter schreiben kann? Ich bin ruhig, ich koche gern und ich kann bis 450 Euro bezahlen. Vielen Dank im voraus!",
+			"background": "发在 r/Munich 的德语帖子，想问大家怎么找合租房。",
+			"source": "",
+			"detail": "needed",
+			"feedback": "native",
+			"model": "haiku",
+			"grader": "haiku",
+			"cache": "on",
+			"learner": "zh-CN",
+			"lang": "de"
+		}
+	},
+	{
+		"name": "own-post-zh",
+		"body": {
+			"text": "大家好！我是美国人，在上海学中文已经一年了。上个周末我和朋友去杭州玩，我们在西湖旁边走路了三个小时，风景非常好看。\n\n但是我有一个问题：我在一个饭馆点了西湖醋鱼，服务员说这个菜很有名，可是我觉得它太酸了，我不是很喜欢吃。是不是我点得不对？还有什么杭州菜你们推荐我试一试吗？谢谢！",
+			"background": "A post on Xiaohongshu after my weekend in Hangzhou.",
+			"source": "",
+			"detail": "needed",
+			"feedback": "native",
+			"model": "haiku",
+			"grader": "haiku",
+			"cache": "on",
+			"learner": "en",
+			"lang": "zh-CN"
+		},
+		"said": "Mostly, but what I really want is food recommendations for my next trip."
 	}
 ]

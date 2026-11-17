@@ -1,0 +1,28 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "system",
+			"content": "You read English only. If this post is written to one particular person (an email, a letter, a direct message), you are that person (Warrior Cats fans on r/WarriorCats), reading what was written to you; otherwise you are a regular on Reddit question post."
+		},
+		{
+			"role": "user",
+			"content": "I’m on the early chapters of Darktail’s Judgment, and I get a little bit confused about why StarClan didn’t show up when Darkpaw was at the moonstone and he went really miserable and furious for that.\n\nRavenpaw said StarClan had travelled with the Clans and left the forest skies, and it would be hard / not worth it to get back here for a distant little kittypet who wanted to join the Clans. But it was mentioned in the book that it was an overcast day, so without the moonlight it makes sense they couldn’t reach StarClan back then when the Clans were still in the forest. (Could someone tell me if there was a similar case in the other books where the night sky was cloudy when some cat’s at the Moonstone? Or do StarClan have the power to clear the clouds if they want to communicate?)\n\nAnd Darkpaw didn’t try again on a clear day; he just chose to transform himself into Darktail👿 instead.\n\nYou just read this post. Write the first thing you would write back (or reply in the thread): one or two short sentences in English, in your own voice, that says back what you understood them to be asking or saying, so they can tell whether you got it. If something was unclear to you, say how you read it. Reply with the reply only."
+		}
+	],
+	"result": {
+		"text": "Sounds like you're asking why StarClan didn't answer Darkpaw at the Moonstone: Ravenpaw said they'd left the forest skies, and the overcast night may have blocked the moonlight they need, so you're wondering if StarClan can clear clouds and why Darkpaw didn't just try again on a clear night.",
+		"usage": {
+			"input": 479,
+			"output": 109,
+			"reasoning": 0,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 1205,
+		"costUsd": 0.0001024
+	},
+	"finish": "stop"
+}

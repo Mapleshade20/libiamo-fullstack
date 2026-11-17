@@ -1,0 +1,24 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "A learner of English is rewriting part of a post. The sentence they are working towards, for you only (never quote it or give it away): \"too hard\". Gloss each hint word in the sense it has in that sentence, not its most common sense (\"alone\" in \"the clouds alone explain it\" means \"only\", not \"by oneself\").\n\nTheir hint words, exactly 4: \"difficult\", \"effort\", \"reach\", \"tough\". \"a / b\" is a choice between two words.\n\nFor each of these hint words and no others, in this order: piece: the hint word as given. gloss: in English, what it means here and how it is used, in one or two short sentences (the kind of word, what it goes with, register if it matters; for a choice, how the two differ). example: one short, natural English sentence that uses it in the same sense, about everyday life and on a topic unrelated to the post (different people, events and subject), so it shows the word without giving away the sentence they are building.\nReply with JSON only: {\"notes\":[{\"piece\":\"\",\"gloss\":\"\",\"example\":\"\"}]}"
+		}
+	],
+	"result": {
+		"text": "{\"notes\":[{\"piece\":\"difficult\",\"gloss\":\"An adjective meaning not easy to do or understand, used with a noun or with 'to' plus a verb. It is neutral and fits both spoken and written English.\",\"example\":\"The math homework was difficult, so Sam asked his sister for help.\"},{\"piece\":\"effort\",\"gloss\":\"A noun meaning the physical or mental energy you spend trying to do something. It is usually used with 'make', 'take' or 'require', as in 'make an effort' or 'takes effort'.\",\"example\":\"Learning to swim took a lot of effort, but Maria finally managed it.\"},{\"piece\":\"reach\",\"gloss\":\"As a verb, it means to get as far as a place, a level or a point. It is often used with a goal or amount, and in this sense it does not mean stretching out your hand.\",\"example\":\"After three hours of walking, the hikers finally reached the top of the hill.\"},{\"piece\":\"tough\",\"gloss\":\"An adjective meaning difficult to do or deal with, and needing strength or endurance. It is informal to moderate in register and is often used with 'to' plus a verb or about a situation or job.\",\"example\":\"Working night shifts at the hospital is tough, but Ahmed says he enjoys it.\"}]}",
+		"usage": {
+			"input": 329,
+			"output": 790,
+			"reasoning": 387,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 5035,
+		"costUsd": 0.0004279
+	},
+	"finish": "stop"
+}

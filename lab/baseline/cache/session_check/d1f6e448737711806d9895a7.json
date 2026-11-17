@@ -1,0 +1,24 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "A writer revised their German post sentence by sentence. Compare the version before the revision with the final one, as an editor protecting what the writer meant.\n\nBefore:\n<<<\nHallo zusammen,\n\nich bin seit drei Monaten in München und ich suche eine WG für nächste Semester. Ich habe schon viele Nachrichten auf WG-Gesucht geschrieben, aber niemand hat mir geantwortet. Vielleicht liegt es daran, dass mein Deutsch nicht so gut ist, oder weil ich noch keine Schufa habe?\n\nHabt ihr Tipps, wie man eine gute Nachricht an die Vermieter schreiben kann? Ich bin ruhig, ich koche gern und ich kann bis 450 Euro bezahlen. Vielen Dank im Voraus!\n>>>\n\nFinal:\n<<<\nHallo zusammen,\n\nich bin seit drei Monaten in München und ich suche eine WG für nächste Semester. Ich habe schon viele Nachrichten auf WG-Gesucht geschrieben, aber niemand hat mir geantwortet. Liegt es vielleicht an meinem Deutsch, das noch nicht so gut ist? Oder daran, dass ich noch keine Schufa habe?\n\nHabt ihr Tipps, wie man eine gute Anfrage an die Vermieter schreibt? Ich bin ruhig, ich koche gern und ich kann bis 450 Euro bezahlen. Vielen Dank im Voraus!\n>>>\n\nDuring the revision the writer confirmed what they meant at these places; changes that follow these are intended:\n- 「Vielleicht liegt es daran, dass mein Deutsch nicht so gut ist, oder weil ich noch keine Schufa habe?」→ Everything this passage says now: every point, question, hedge and feeling in it stays; only how it is put changes.\n- 「Habt ihr Tipps, wie man eine gute Nachricht an die Vermieter schreiben kann?」→ 想请教怎样写一条给房东的好询问消息\n\nList only real problems in the final version: a point, detail, question or condition from before that is gone (lost); a claim whose meaning changed, e.g. a hedge or a hypothetical that became a flat statement (changed); text that appears twice (duplicated); a sentence that is broken where two pieces were joined (broken). Rewording, reordering and better phrasing are not problems. quote: the exact words from the final version (or, for lost, from before); note: one short Simplified Chinese (as used in mainland China) sentence to the writer, informal. [] if there is nothing.\nReply with JSON only: {\"issues\":[{\"kind\":\"lost|changed|duplicated|broken\",\"quote\":\"\",\"note\":\"\"}]}"
+		}
+	],
+	"result": {
+		"text": "```json\n{\"issues\":[{\"kind\":\"changed\",\"quote\":\"das noch nicht so gut ist\",\"note\":\"你原来说德语“不太好”，改成“noch nicht”后带上了“以后会变好”的意思，建议去掉“noch”。\"}]}\n```",
+		"usage": {
+			"input": 933,
+			"output": 652,
+			"reasoning": 561,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 3822,
+		"costUsd": 0.0004193
+	},
+	"finish": "stop"
+}

@@ -1,0 +1,24 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "You are a fluent, native English speaker and a regular of Reddit question post, and this post is written to you: you are among its readers (Warrior Cats fans who know Darktail's Judgment), the one it addresses when it addresses someone.\nSomeone posted this there:\n<<<\nI’m on the early chapters of Darktail’s Judgment, and I get a little bit confused about the plot that StarClan didn’t show up when Darkpaw was at the moonstone and he went really miserable and furious for that.\n\nRavenpaw said StarClan had travelled with the Clans and left the forest skies, and it would be hard / not worth it to get back here for a distant little kittypet who want to join the Clans. But it was mentioned in the book that it was a overcast day, so without the moonlight it’s natural to be unable to reach StarClan back then when the Clans were still in the forest. (Could someone tell me if there was a similar case in the other books that the night sky’s cloudy when some cat’s at the Moonstone? Or do StarClan have the power to clear the clouds if they want to communicate?)\n\nAnd Darkpaw didn’t go for another try on a clear day; he just chose to transform himself into Darktail👿 instead.\n>>>\n\nFor each passage below, say what you take from it at the moment you reach it, reading from the start, before what follows: the attitude or feeling toward whoever it is about, what the writer is doing (praising, complaining, joking, asking, demanding, informing), how strongly, and how it lands on you as the one it is said to (pleased, moved, pressured, talked down to, put off, kept at a distance, or nothing in particular). Read it the way you read posts here, knowing how people here use words. One or two short English sentences each.\n1. \"distant little kittypet\"\n2. \"clear day\"\n3. \"And Darkpaw didn't\"\n\nReply with JSON only: {\"heard\":[{\"id\":1,\"heard\":\"...\"}]}"
+		}
+	],
+	"result": {
+		"text": "{\"heard\":[{\"id\":1,\"heard\":\"Dismissive and belittling toward Darkpaw, as if he's too minor and outsider to matter. It stings a little, and it puts him at arm's length.\"},{\"id\":2,\"heard\":\"A wistful, mildly critical aside that the cloud was the only obstacle and Darkpaw could have retried. It reads as neutral speculation, not a strong verdict.\"},{\"id\":3,\"heard\":\"A flat, faintly exasperated turn that points at Darkpaw's choice as a missed chance and a lapse. It feels disapproving but not harsh, and it leaves him at a distance.\"}]}",
+		"usage": {
+			"input": 632,
+			"output": 806,
+			"reasoning": 594,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 5032,
+		"costUsd": 0.0004662
+	},
+	"finish": "stop"
+}

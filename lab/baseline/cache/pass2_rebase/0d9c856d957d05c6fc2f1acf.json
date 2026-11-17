@@ -1,0 +1,24 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "A learner's English draft went through a first pass that fixed its small errors. The text as it now reads, sentences numbered:\n[S1] I've read this fic since the first chapter and the ending made me cry.\n[S2] The scene when Bluestar didn't look back at the camp is staying with me, because she chooses to go alone even though she's scared.\n\n[S3] * * *\n\n[S4] I think it's more about what she'd find.\n[S5] She's made the journey many times, but this time maybe StarClan will tell her Oakheart isn't waiting for her.\n[S6] That's why she makes herself stop thinking of him, I think.\n\nA tutor found these problems on the draft before the first pass. For each: the words it quoted, the first-pass changes near them (before → after), and the problem as written:\n1. quoted: \"even she is scared\"\n   changes: \"not\" → \"didn't\"; \"choose\" → \"chooses\"; \"she is\" → \"though she's\"\n   problem: 英语读者看到\"scared\"后通常会期待说明害怕的对象，而这里紧接\"go alone\"，很容易理解为害怕独自上路。句子没有给出害怕的具体对象，所以读者无法确定作者所指的恐惧，只能再追问。\n2. quoted: \"I think more about what she find\"\n   changes: \"∅\" → \"it's\"; \"she\" → \"she'd\"\n   problem: 英语里\"think more about\"后面通常接一个被比较的对象，如\"more about X than Y\"。这里只有\"what she find\"，读者会把它理解成\"我更多地想到她会发现什么\"，而不是\"她怕的主要是这个\"，因为对照的一方没有出现。\n3. quoted: \"The journey she did many times\"\n   changes: \"The journey she did\" → \"She's made the journey\"; \"is not\" → \"isn't\"\n   problem: 英语读者通常先读到主语和动作，如\"She's made the journey many times\"，再读到\"but this time\"的转折。句首用\"The journey\"会让人先注意旅途本身，之后的\"but this time\"转折需要读者回头重组，对比的重点显得模糊。\n\nThe learner now sees only the text as it reads. For each problem: keep false when the first-pass changes already did what the problem asks, so a reader would no longer stumble there; keep true when it is still a problem in the text as it reads. Small corrections (grammar, spelling, a word swapped) only fix problems about those very words: a problem about what the text says or leaves out (a missing point, evidence, a reason), what a reader takes away, or how a sentence is built stays, keep true. For a kept problem: quote, the words of the text as it reads where a reader stumbles now, copied character for character; problem, the same problem said about the text as it reads, in Simplified Chinese (as used in mainland China), at the same length: keep its reasoning and what a reader expects, but never mention an error the first pass fixed (a missing or wrong word, grammar, spelling) and never quote words that are no longer in the text. When nothing in it needs to change, repeat it as it was.\nReply with JSON only: {\"spots\":[{\"id\":1,\"keep\":true,\"quote\":\"\",\"problem\":\"\"}]}"
+		}
+	],
+	"result": {
+		"text": "{\"spots\":[{\"id\":1,\"keep\":true,\"quote\":\"even though she's scared\",\"problem\":\"英语读者看到\"scared\"后通常会期待说明害怕的对象，而这里紧接\"go alone\"，很容易理解为害怕独自上路。句子没有给出害怕的具体对象，所以读者无法确定作者所指的恐惧，只能再追问。\"},{\"id\":2,\"keep\":true,\"quote\":\"I think it's more about what she'd find.\",\"problem\":\"英语里\"more about\"后面通常接一个被比较的对象，如\"more about X than Y\"。这里只有\"what she'd find\"，读者会把它理解成\"我更多地想到她会发现什么\"，而不是\"她怕的主要是这个\"，因为对照的一方没有出现。\"},{\"id\":3,\"keep\":false,\"quote\":\"\",\"problem\":\"\"}]}",
+		"usage": {
+			"input": 1029,
+			"output": 1418,
+			"reasoning": 1136,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 5948,
+		"costUsd": 0.0008119
+	},
+	"finish": "stop"
+}

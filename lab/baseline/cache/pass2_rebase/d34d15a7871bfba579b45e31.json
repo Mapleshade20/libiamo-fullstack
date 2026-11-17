@@ -1,0 +1,24 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "A learner's English draft went through a first pass that fixed its small errors. The text as it now reads, sentences numbered:\n[S1] I’m on the early chapters of Darktail’s Judgment, and I get a little bit confused about why StarClan didn’t show up when Darkpaw was at the moonstone and he went really miserable and furious about that.\n\n[S2] Ravenpaw said StarClan had travelled with the Clans and left the forest skies, and it would be hard / not worth it to get back here for a distant little kittypet who wanted to join the Clans.\n[S3] But it was mentioned in the book that it was an overcast day, so without the moonlight it makes sense they couldn’t reach StarClan back then when the Clans were still in the forest.\n[S4] (Could someone tell me if there was a similar case in the other books where the night sky was cloudy when some cat was at the Moonstone?\n[S5] Or does StarClan have the power to clear the clouds if they want to communicate?)\n\n[S6] And Darkpaw didn’t try again on a clear day; he just chose to transform himself into Darktail👿 instead.\n\nA tutor found these problems on the draft before the first pass. For each: the words it quoted, the first-pass changes near them (before → after), and the problem as written:\n1. quoted: \"confused about the plot that StarClan didn't show up\"\n   changes: \"the plot that\" → \"why\"; \"for\" → \"about\"\n   problem: The confusion sits in a noun clause, so the reader must hold the whole event before learning what puzzles the writer; 'the plot that' also suggests confusion about the story rather than StarClan's absence.\n2. quoted: \"it's natural to be unable to reach StarClan\"\n   changes: \"a\" → \"an\"; \"it’s natural to be unable to\" → \"it makes sense they couldn’t\"\n   problem: 'Natural' in English presents a rule of how things are, so the sentence reads as a general fact about StarClan, not the writer's judgement that the overcast night makes the absence understandable.\n\nThe learner now sees only the text as it reads. For each problem: keep false when the first-pass changes already did what the problem asks, so a reader would no longer stumble there; keep true when it is still a problem in the text as it reads. Small corrections (grammar, spelling, a word swapped) only fix problems about those very words: a problem about what the text says or leaves out (a missing point, evidence, a reason), what a reader takes away, or how a sentence is built stays, keep true. For a kept problem: quote, the words of the text as it reads where a reader stumbles now, copied character for character; problem, the same problem said about the text as it reads, in English, at the same length: keep its reasoning and what a reader expects, but never mention an error the first pass fixed (a missing or wrong word, grammar, spelling) and never quote words that are no longer in the text. When nothing in it needs to change, repeat it as it was.\nReply with JSON only: {\"spots\":[{\"id\":1,\"keep\":true,\"quote\":\"\",\"problem\":\"\"}]}"
+		}
+	],
+	"result": {
+		"text": "```json\n{\"spots\":[{\"id\":1,\"keep\":true,\"quote\":\"confused about why StarClan didn’t show up when Darkpaw was at the moonstone\",\"problem\":\"The confusion sits in a noun clause, so the reader must hold the whole event before learning what puzzles the writer; the 'why' clause still places the full event ahead of the writer's puzzle.\"},{\"id\":2,\"keep\":false,\"quote\":\"\",\"problem\":\"\"}]}\n```",
+		"usage": {
+			"input": 996,
+			"output": 1204,
+			"reasoning": 1054,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 5627,
+		"costUsd": 0.0007016
+	},
+	"finish": "stop"
+}

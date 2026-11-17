@@ -167,6 +167,8 @@ type GradeOut =
 /** exchange: a finished scenario's conversation (src/scenario/exchange.ts); then `text` is its learner turns joined by separator lines. */
 /** translation: a translation scenario (src/translate/passes.ts); `text` is the learner's translation into `target`. */
 export type RevisionInput = {
+	/** The language the draft is in: the piece's (server/revision/store.ts `startRevision` fills it in). */
+	target?: Lang;
 	exchange?: Omit<Case, "id" | "notes">;
 	translation?: Translation & { target: Lang };
 	title?: string;
@@ -297,6 +299,8 @@ export class RevisionSession {
 			this.input.text,
 			`${background ?? ""}${imported}`.trim() || undefined,
 			this.input.learner,
+			// A revision saved before the piece's language was part of it knows it from its scene.
+			this.input.target ?? this.scene?.target ?? "en",
 			this.input.feedback,
 			this.ai.for("scene"),
 		);
@@ -341,7 +345,7 @@ export class RevisionSession {
 			platform: `${c.scene.platform} (${c.scene.where})`,
 			audience: c.scene.cast.map((p) => `${p.name}, ${p.who}`).join("; "),
 			purpose: `${c.scene.you}. ${c.scene.goals.join("; ")}`,
-			target: target as "en",
+			target,
 		};
 		this.scene = scene;
 		this.d = {
@@ -375,7 +379,7 @@ export class RevisionSession {
 			platform: t.where ?? t.context,
 			audience: t.readers ?? "people who read it there",
 			purpose: `${t.context.replace(/[.\s]+$/, "")}. A translation: say in ${LANG_NAMES[t.target]} what the source says`,
-			target: t.target as "en",
+			target: t.target,
 		};
 		this.scene = scene;
 		const glossary = t.glossary.length ? `Given names and terms: ${t.glossary.map((g) => g.term).join(", ")}.` : "";

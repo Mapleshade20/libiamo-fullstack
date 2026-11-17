@@ -1,0 +1,24 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "A learner of Simplified Chinese (as used in mainland China) is rewriting part of a post. The sentence they are working towards, for you only (never quote it or give it away): \"但是我有一个问题：我在一家饭馆点了西湖醋鱼，服务员说这个菜很有名，可是对我来说太酸了，我不太喜欢吃。是不是我点错了？下次去杭州，还有什么杭州菜你们推荐我试一试吗？谢谢！\". Gloss each hint word in the sense it has in that sentence, not its most common sense (\"alone\" in \"the clouds alone explain it\" means \"only\", not \"by oneself\").\n\nTheir hint words, exactly 6: \"口味\", \"合适\", \"点错\", \"下次\", \"推荐\", \"喜欢\". \"a / b\" is a choice between two words.\n\nFor each of these hint words and no others, in this order: piece: the hint word as given. gloss: in English, what it means here and how it is used, in one or two short sentences (the kind of word, what it goes with, register if it matters; for a choice, how the two differ). example: one short, natural Simplified Chinese (as used in mainland China) sentence that uses it in the same sense, about everyday life and on a topic unrelated to the post (different people, events and subject), so it shows the word without giving away the sentence they are building.\nReply with JSON only: {\"notes\":[{\"piece\":\"\",\"gloss\":\"\",\"example\":\"\"}]}"
+		}
+	],
+	"result": {
+		"text": "{\"notes\":[{\"piece\":\"口味\",\"gloss\":\"A noun meaning someone's taste preference in flavor, such as liking light or strong food. It goes with adjectives like 清淡, 重, or 偏甜, and with 合...口味 (to suit one's taste). It is neutral in register.\",\"example\":\"他的口味比较清淡，平时很少吃辣。\"},{\"piece\":\"合适\",\"gloss\":\"An adjective meaning suitable, fitting, or appropriate for a purpose, size, or situation. It is often used as 合适 + noun, or 不合适 for something that doesn't fit or isn't appropriate. It is neutral in register.\",\"example\":\"这双鞋大小正合适，我就买下来了。\"},{\"piece\":\"点错\",\"gloss\":\"A verb-complement compound meaning to order the wrong thing by mistake, with 错 showing the mistake. It is usually followed by 了 (点错了) and used for ordering food, drinks, or items online.\",\"example\":\"他在网上买东西时点错了尺码，只好退货。\"},{\"piece\":\"下次\",\"gloss\":\"A time expression meaning next time, referring to a future occasion of the same kind. It is used alone or before a verb phrase, such as 下次再来 or 下次注意, and is neutral in register.\",\"example\":\"今天的球赛太精彩了，下次我们还一起来看。\"},{\"piece\":\"推荐\",\"gloss\":\"A verb meaning to recommend something or someone to another person. The usual pattern is 推荐 + thing + 给 + person, or 推荐 + noun, and it is neutral in register.\",\"example\":\"这本小说是我姐姐推荐给我的，我看得停不下来。\"},{\"piece\":\"喜欢\",\"gloss\":\"A verb meaning to like, followed by a noun or a verb phrase. 不太喜欢 is a softer, more polite way to say you don't really like something, and it is neutral in register.\",\"example\":\"我妹妹很喜欢养猫，家里现在有两只。\"}]}",
+		"usage": {
+			"input": 470,
+			"output": 1456,
+			"reasoning": 799,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 7935,
+		"costUsd": 0.000775
+	},
+	"finish": "stop"
+}

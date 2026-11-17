@@ -1,0 +1,24 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "A writer revised their English post sentence by sentence. Compare the version before the revision with the final one, as an editor protecting what the writer meant.\n\nBefore:\n<<<\nHi David,\n\nThe heating in my flat is broken since Monday, and it's very cold at night. You must send someone to repair it this week. When it can be fixed?\n\nBest,\nMaple\n\n* * *\n\nHi David,\n\nSorry, I didn't mean to be rude. I understand the engineers are busy. Is it possible to find out roughly which day they can come? I am at home every morning, so any morning is ok for me.\n\nThanks,\nMaple\n>>>\n\nFinal:\n<<<\nHi David,\n\nThe heating in my flat is broken since Monday, and it's very cold at night. You must send someone to repair it this week. Could you let me know when it can be fixed? I'd appreciate a date.\n\nBest,\nMaple\n\n* * *\n\nHi David,\n\nSorry, I didn't mean to be rude. I understand the engineers are busy. Is it possible to find out roughly which day they can come? I am at home every morning, so any morning is ok for me.\n\nThanks,\nMaple\n>>>\n\nDuring the revision the writer confirmed what they meant at these places; changes that follow these are intended:\n- 「You must send someone to repair it this week.」→ kept as written\n- 「When it can be fixed?」→ Everything this passage says now: every point, question, hedge and feeling in it stays; only how it is put changes.\n\nList only real problems in the final version: a point, detail, question or condition from before that is gone (lost); a claim whose meaning changed, e.g. a hedge or a hypothetical that became a flat statement (changed); text that appears twice (duplicated); a sentence that is broken where two pieces were joined (broken). Rewording, reordering and better phrasing are not problems. quote: the exact words from the final version (or, for lost, from before); note: one short Simplified Chinese (as used in mainland China) sentence to the writer, informal. [] if there is nothing.\nReply with JSON only: {\"issues\":[{\"kind\":\"lost|changed|duplicated|broken\",\"quote\":\"\",\"note\":\"\"}]}"
+		}
+	],
+	"result": {
+		"text": "{\"issues\":[]}",
+		"usage": {
+			"input": 706,
+			"output": 205,
+			"reasoning": 195,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 2518,
+		"costUsd": 0.0001731
+	},
+	"finish": "stop"
+}

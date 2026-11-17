@@ -1,0 +1,24 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "You are a fluent, native English speaker and a regular of Reddit question post, and this post is written to you: you are among its readers (Warrior Cats fans on r/WarriorCats), the one it addresses when it addresses someone.\nSomeone posted this there:\n<<<\nI’m on the early chapters of Darktail’s Judgment, and I get a little bit confused about the plot that StarClan didn’t show up when Darkpaw was at the moonstone and he went really miserable and furious for that.\n\nRavenpaw said StarClan had travelled with the Clans and left the forest skies, and it would be hard / not worth it to get back here for a distant little kittypet who want to join the Clans. But it was mentioned in the book that it was a overcast day, so without the moonlight it’s natural to be unable to reach StarClan back then when the Clans were still in the forest. (Could someone tell me if there was a similar case in the other books that the night sky’s cloudy when some cat’s at the Moonstone? Or do StarClan have the power to clear the clouds if they want to communicate?)\n\nAnd Darkpaw didn’t go for another try on a clear day; he just chose to transform himself into Darktail👿 instead.\n>>>\n\nFor each passage below, say what you take from it at the moment you reach it, reading from the start, before what follows: the attitude or feeling toward whoever it is about, what the writer is doing (praising, complaining, joking, asking, demanding, informing), how strongly, and how it lands on you as the one it is said to (pleased, moved, pressured, talked down to, put off, kept at a distance, or nothing in particular). Read it the way you read posts here, knowing how people here use words. One or two short English sentences each.\n1. \"so without the moonlight\"\n2. \"didn't go for another try on a clear day\"\n3. \"a distant little kittypet\"\n\nReply with JSON only: {\"heard\":[{\"id\":1,\"heard\":\"...\"}]}"
+		}
+	],
+	"result": {
+		"text": "{\"heard\":[{\"id\":1,\"heard\":\"The poster is reasoning through a possible explanation, a bit tentative and puzzled, with no pressure on me; it reads as a neutral question about cloud cover and moonlight.\"},{\"id\":2,\"heard\":\"A mild note of exasperation at Darkpaw for not retrying on a clear day. It's a gentle criticism of his choice, not aimed at me, and it makes me want to agree.\"},{\"id\":3,\"heard\":\"A dismissive label, quoted from Ravenpaw's reasoning, that puts Darkpaw down as an outsider. Read alone, it feels condescending and distancing, though the poster is just reporting it.\"}]}",
+		"usage": {
+			"input": 637,
+			"output": 563,
+			"reasoning": 335,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 3336,
+		"costUsd": 0.0003452
+	},
+	"finish": "stop"
+}

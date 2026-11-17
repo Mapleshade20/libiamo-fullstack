@@ -1,0 +1,28 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "medium",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "system",
+			"content": "You are a fluent, native Simplified Chinese (as used in mainland China)-speaking member of this community: Xiaohongshu (travel post)."
+		},
+		{
+			"role": "user",
+			"content": "Readers: Chinese travel-lovers and locals who follow food and travel notes. What the writer wants to do: Share a Hangzhou weekend and ask which dishes to try.\nThe writer's note about it, in their words: A post on Xiaohongshu after my weekend in Hangzhou.\nA learner's draft:\n<<<\n大家好！我是美国人，在上海学中文已经一年了。上个周末我和朋友去杭州玩，我们在西湖旁边走路了三个小时，风景非常好看。\n\n但是我有一个问题：我在一个饭馆点了西湖醋鱼，服务员说这个菜很有名，可是我觉得它太酸了，我不是很喜欢吃。是不是我点得不对？还有什么杭州菜你们推荐我试一试吗？谢谢！\n>>>\nWork in two steps.\nStep 1. Under \"### POINTS\", list every point the draft makes, in order, as short plain Simplified Chinese (as used in mainland China) notes: what is meant, never how it is said. Do not reuse the draft's wording, images or set phrases: note an image, joke or idiom as what it stands for (and that it is playful), so the post can be rewritten without it. Include feelings, jokes and questions. Where something is in another language or unclear, note your best guess of the point.\nStep 2. Under \"### FRESH\", close the draft and write the post from your notes alone, as you would write it yourself for these readers: your own sentence shapes, emphasis, idioms and rhythm. Keep every point, the writer's register and tone markers (emoji, \"lol\", \"~\"), a similar length, and their order unless another order clearly serves the reader better.\nReply with the two sections only."
+		}
+	],
+	"result": {
+		"text": "### POINTS\n- 打招呼，自我介绍：是美国人，在上海学中文一年了\n- 上个周末和朋友去杭州玩\n- 在西湖边走了大约三个小时，觉得风景很好\n- 遇到一个问题\n- 在一家饭馆点了西湖醋鱼\n- 服务员说这道菜很有名\n- 作者吃了觉得太酸，不太喜欢\n- 担心是不是自己点错了，想请大家判断\n- 想请大家推荐其他值得试的杭州菜\n- 表示感谢\n\n### FRESH\n大家好呀！我从美国来，在上海学中文快一年啦。上周末和朋友去杭州逛了一圈，在西湖边上走了将近三个小时，湖光山色真的让人不想回去。\n\n不过有个小疑问想请教大家：我在一家餐厅点了西湖醋鱼，服务员说这是杭州的招牌菜，特别有名。可是我吃下去觉得酸得厉害，自己不太喜欢。是我点错了吗？还有哪些杭州菜值得我下次试一试？求推荐，谢谢！",
+		"usage": {
+			"input": 617,
+			"output": 1334,
+			"reasoning": 948,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 7543,
+		"costUsd": 0.0007287
+	},
+	"finish": "stop"
+}

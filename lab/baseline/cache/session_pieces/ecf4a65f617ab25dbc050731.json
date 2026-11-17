@@ -1,0 +1,24 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "A learner of Spanish is rewriting part of a post. The sentence they are working towards, for you only (never quote it or give it away): \"Le agradecería una respuesta antes de fin de mes, porque tengo que comprar el billete de avión.\". Gloss each hint word in the sense it has in that sentence, not its most common sense (\"alone\" in \"the clouds alone explain it\" means \"only\", not \"by oneself\").\n\nTheir hint words, exactly 4: \"respuesta\", \"billete\", \"comprar\", \"mes\". \"a / b\" is a choice between two words.\n\nFor each of these hint words and no others, in this order: piece: the hint word as given. gloss: in Spanish, what it means here and how it is used, in one or two short sentences (the kind of word, what it goes with, register if it matters; for a choice, how the two differ). example: one short, natural Spanish sentence that uses it in the same sense, about everyday life and on a topic unrelated to the post (different people, events and subject), so it shows the word without giving away the sentence they are building.\nReply with JSON only: {\"notes\":[{\"piece\":\"\",\"gloss\":\"\",\"example\":\"\"}]}"
+		}
+	],
+	"result": {
+		"text": "{\"notes\":[{\"piece\":\"respuesta\",\"gloss\":\"Sustantivo femenino que significa 'contestación' o 'reacción escrita u oral a una pregunta o petición'. Suele ir con 'dar una respuesta' o 'recibir una respuesta'; es de registro neutro y se usa mucho en correspondencia formal.\",\"example\":\"Mi hermana me envió un mensaje ayer, pero todavía no le he dado respuesta.\"},{\"piece\":\"billete\",\"gloss\":\"Sustantivo masculino que aquí significa 'boleto o pasaje de viaje' (el documento que permite subir a un avión o tren). En España es la palabra habitual; en algunos países de Latinoamérica se dice 'boleto' o 'pasaje'.\",\"example\":\"Ya tengo el billete de tren para ir a Sevilla el sábado.\"},{\"piece\":\"comprar\",\"gloss\":\"Verbo transitivo que significa 'adquirir algo pagando su precio'. Se usa con un objeto directo (comprar un billete, comprar pan) y es de registro neutro.\",\"example\":\"Mi padre compró un reloj nuevo en la tienda del centro.\"},{\"piece\":\"mes\",\"gloss\":\"Sustantivo masculino que significa 'periodo de unos treinta días, una de las doce partes del año'. Con 'fin de' indica la última parte del periodo; se usa con artículo y es de registro neutro.\",\"example\":\"En enero empiezo un curso de cocina que dura dos meses.\"}]}",
+		"usage": {
+			"input": 373,
+			"output": 508,
+			"reasoning": 0,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 3368,
+		"costUsd": 0.0002913
+	},
+	"finish": "stop"
+}

@@ -1,0 +1,28 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "system",
+			"content": "You read Spanish only. If this post is written to one particular person (an email, a letter, a direct message), you are that person (Sra. Morales, de la escuela de español en Granada), reading what was written to you; otherwise you are a regular on Correo electrónico."
+		},
+		{
+			"role": "user",
+			"content": "Estimada Sra. Morales:\n\nMi nombre es Daniel y yo soy de Manchester, en Inglaterra. Le escribo porque quiero inscribirme en el curso de septiembre. Vengo por mejorar mi español: mi novia es de Granada, conocí a su familia el año pasado pero no entendí casi nada, y estoy muy excitado de aprender para poder hablar con ellos.\n\n¿Es posible que usted me envíe información sobre los precios? También tengo algunas preguntas. Primero, prefiero una habitación con familia / un piso compartido, no sé cuál es mejor para aprender. ¿Es el piso cerca de la escuela? Necesito una habitación tranquila para estudiar. Segundo, ¿puedo traer mi bicicleta? Me gusta montar en bici y quiero explorar las montañas. Tercero, soy vegetariano (I'm not picky but I don't eat meat) y espero que la familia pueda cocinar algo para mí. Mi novia viene conmigo el primer fin de semana.\n\n¿Me puedes decir cuándo empiezan los cursos? Necesito una respuesta antes de fin de mes porque tengo que comprar el vuelo. Estoy seguro de que voy a pasarlo muy bien en su escuela. Mirando adelante a oír de usted.\n\nSaludos,\nDaniel Clarke\n\nYou just read this post. Write the first thing you would write back (or reply in the thread): one or two short sentences in Spanish, in your own voice, that says back what you understood them to be asking or saying, so they can tell whether you got it. If something was unclear to you, say how you read it. Reply with the reply only."
+		}
+	],
+	"result": {
+		"text": "Hola Daniel, entiendo que quiere inscribirse en el curso de septiembre para mejorar su español, y pregunta por los precios, si el alojamiento con familia o piso compartido está cerca de la escuela y es tranquilo, si puede traer su bicicleta, y cuándo empiezan los cursos, porque necesita respuesta antes de fin de mes. Creo que también menciona que es vegetariano y que su novia le acompañará el primer fin de semana; si me equivoco en algo, dígamelo.",
+		"usage": {
+			"input": 654,
+			"output": 177,
+			"reasoning": 0,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 1589,
+		"costUsd": 0.0001539
+	},
+	"finish": "stop"
+}

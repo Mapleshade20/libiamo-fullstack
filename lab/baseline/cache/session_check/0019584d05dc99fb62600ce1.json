@@ -1,0 +1,24 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "A writer revised their English post sentence by sentence. Compare the version before the revision with the final one, as an editor protecting what the writer meant.\n\nBefore:\n<<<\nI read this fic since the first chapter and the ending made me cry. The scene when Bluestar didn't look back at the camp is staying with me, because she choose to go alone even though she's scared.\n\n* * *\n\nI think it's more about what she find. The journey she did many times, but this time maybe StarClan will tell her Oakheart isn't waiting for her. That's why she makes herself stop thinking of him, I think.\n>>>\n\nFinal:\n<<<\nI read this fic since the first chapter and the ending made me cry. The scene when Bluestar didn't look back at the camp is staying with me, because she chose to go alone even though she was scared of what she'd learn at the Moonstone.\n\n* * *\n\nI think it's really about what she'll find at the Moonstone. The journey she did many times, but this time maybe StarClan will tell her Oakheart isn't waiting for her. That's why she makes herself stop thinking of him, I think.\n>>>\n\nDuring the revision the writer confirmed what they meant at these places; changes that follow these are intended:\n- 「The scene when Bluestar didn't look back at the camp is staying with me, because she choose to go alone even though she's scared.」→ 她害怕在月石上得知奥克心已不再等她\n- 「I think it's more about what she find.」→ Everything this passage says now: every point, question, hedge and feeling in it stays; only how it is put changes.\n\nList only real problems in the final version: a point, detail, question or condition from before that is gone (lost); a claim whose meaning changed, e.g. a hedge or a hypothetical that became a flat statement (changed); text that appears twice (duplicated); a sentence that is broken where two pieces were joined (broken). Rewording, reordering and better phrasing are not problems. quote: the exact words from the final version (or, for lost, from before); note: one short Simplified Chinese (as used in mainland China) sentence to the writer, informal. [] if there is nothing.\nReply with JSON only: {\"issues\":[{\"kind\":\"lost|changed|duplicated|broken\",\"quote\":\"\",\"note\":\"\"}]}"
+		}
+	],
+	"result": {
+		"text": "{\"issues\":[]}",
+		"usage": {
+			"input": 734,
+			"output": 646,
+			"reasoning": 636,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 4776,
+		"costUsd": 0.0003964
+	},
+	"finish": "stop"
+}

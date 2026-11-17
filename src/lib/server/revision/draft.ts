@@ -1,4 +1,4 @@
-/** The languages a learner can name as their own (the app's list); targets are en, es, fr and ja. */
+/** The languages a learner can name as their own (the app's list); what they learn is one of LEARNABLE (lib/constants.ts). */
 export const LANGS = ["en", "ru", "es", "de", "tr", "fa", "fr", "ja", "pt", "zh-CN", "vi", "it", "ar", "pl", "el", "nl", "id", "ko"] as const;
 export type Lang = (typeof LANGS)[number];
 /**
@@ -7,7 +7,6 @@ export type Lang = (typeof LANGS)[number];
  * Stored prefs and handoffs from before the rename still say "zh".
  */
 export const normLang = <T>(l: T): T | "zh-CN" => (l === "zh" ? "zh-CN" : l);
-export type Target = "en" | "es" | "fr" | "ja";
 
 export const LANG_NAMES: Record<Lang, string> = {
 	en: "English",

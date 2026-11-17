@@ -1,0 +1,24 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "medium",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "What the writer told the tutor about their post while revising (facts about their work and their meaning; take them as true):\n- About \"excitado de\": \"Excitado\" se entiende en español sobre todo como excitación sexual, así que la frase puede sonar a insinuación. \"Emocionado por\" expresa la ilusión que quieres transmitir.\nA learner of Spanish is rewriting part of a post for Correo electrónico:\n<<<\nEstimada Sra. Morales:\n\nMi nombre es Daniel y yo soy de Manchester, en Inglaterra. Le escribo porque quiero inscribirme en el curso de septiembre. Vengo por mejorar mi español: mi novia es de Granada, conocí a su familia el año pasado pero no entendí casi nada, y estoy muy emocionado por aprender para poder hablar con ellos.\n\n¿Es posible que usted me envíe información sobre los precios? También tengo algunas preguntas. Primero, prefiero una habitación con familia / un piso compartido, no sé cuál es mejor para aprender. ¿Es el piso cerca de la escuela? Necesito una habitación tranquila para estudiar. Segundo, ¿puedo traer mi bicicleta? Me gusta montar en bici y quiero explorar las montañas. Tercero, soy vegetariano estricto (no como carne ni pescado), pero no soy nada quisquilloso con la comida y espero que la familia pueda cocinar algo para mí. Mi novia viene conmigo el primer fin de semana.\n\n¿Me puedes decir cuándo empiezan los cursos? Necesito una respuesta antes de fin de mes porque tengo que comprar el vuelo. Estoy seguro de que voy a pasarlo muy bien en su escuela. Mirando adelante a oír de usted.\n\nSaludos,\nDaniel Clarke\n>>>\nThe part: \"Necesito una respuesta antes de fin de mes porque tengo que comprar el vuelo.\"\nWhat is wrong with it: «Necesito» junto a un plazo fijo se lee como una exigencia, como si el alumno marcara el ritmo de la escuela. La Sra. Morales puede sentirse presionada, aunque el autor solo quiera saber cuándo tiene que decidir.\nWhat they mean (confirmed by them): Quiere saberlo antes de fin de mes porque debe comprar el billete de avión.\nA version that works (never show it or any stretch of it): \"Le agradecería una respuesta antes de fin de mes, porque tengo que comprar el billete de avión.\"\nWords they already have as hints: respuesta, billete, comprar, mes\nThey are stuck. Write two hints that help them build it themselves, never giving them the wording:\n- plan: in Spanish, one or two short sentences, as their tutor: how a fluent writer builds this part: what comes first, what follows, how the parts connect (contrast, cause, addition) and where the emphasis goes. Name no Spanish word except the hint words above (none from the working version), no letter counts, no fill-in blanks. It is about the words of this part, never the content they talk about (\"first the interactions between them, then…\" plans a story, not the sentence). When the part is a word or two (left in English, or a missing word), say what kind of word goes there and how it sits in the sentence.\n- example: one short Spanish sentence a fluent writer would actually write (grammatical and natural on its own), about an everyday topic unrelated to the post (different people, things and events), built the same way as the working version: the same pattern and the same connecting words, none of its other content words. Put [square brackets] around the few words it shares with the working version as they are (the frame they can borrow, at most four), never around the words that change.\nThe writer may write to you in any language; whatever they write in, everything you write for them is in Spanish.\nReply with JSON only: {\"plan\":\"\",\"example\":\"\"}"
+		}
+	],
+	"result": {
+		"text": "{\"plan\":\"Primero, una petición educada sobre cuándo quieres recibir la respuesta, sin que suene a orden; después, separada por una coma, la razón de tu prisa, unida con un nexo que indica motivo. Lo importante es que la razón vaya al final y que el tono de la petición sea de cortesía.\",\"example\":\"Confirme la reserva [antes de] el jueves, [porque] mi hermana llega ese día.\"}",
+		"usage": {
+			"input": 1289,
+			"output": 2070,
+			"reasoning": 1922,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 11147,
+		"costUsd": 0.0011639
+	},
+	"finish": "stop"
+}

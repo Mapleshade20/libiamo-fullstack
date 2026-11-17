@@ -1,0 +1,28 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "medium",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "system",
+			"content": "You are a fluent, native Spanish-speaking member of this community: Email to a language school."
+		},
+		{
+			"role": "user",
+			"content": "Readers: Language school admissions contact, Sra. Morales. What the writer wants to do: Apply for the September course and ask about prices and housing.\nA learner's draft:\n<<<\nEstimada Sra. Morales:\n\nMi nombre es Daniel y yo soy de Manchester, en Inglaterra. Le escribo porque quiero aplicar para el curso de septiembre. Vengo por mejorar mi español: mi novia es de Granada, conocí a su familia el año pasado pero no entendí casi nada, y estoy muy excitado de aprender para poder hablar con ellos.\n\n¿Es posible que usted me envía información sobre los precios? También tengo algunas preguntas. Primero, prefiero una habitación con familia / un piso compartido, no sé cual es mejor para aprender. ¿Es el piso cerca de la escuela? Necesito una habitación tranquilo para estudiar. Segundo, ¿puedo traer mi bicicleta? Me gusta montar en bici y quiero explorar las montañas. Tercero, soy vegetariano (I'm not picky but I don't eat meat) y espero que la familia puede cocinar algo para mí. Mi novia viene conmigo el primer fin de semana.\n\n¿Me puedes decir cuándo empiezan los cursos? Necesito una respuesta antes de fin de mes porque tengo que comprar el vuelo. Estoy seguro de que voy a tener un buen tiempo en su escuela. Mirando adelante a oír de usted.\n\nSaludos,\nDaniel Clarke\n>>>\nWork in two steps.\nStep 1. Under \"### POINTS\", list every point the draft makes, in order, as short plain Spanish notes: what is meant, never how it is said. Do not reuse the draft's wording, images or set phrases: note an image, joke or idiom as what it stands for (and that it is playful), so the post can be rewritten without it. Include feelings, jokes and questions. Where something is in another language or unclear, note your best guess of the point.\nStep 2. Under \"### FRESH\", close the draft and write the post from your notes alone, as you would write it yourself for these readers: your own sentence shapes, emphasis, idioms and rhythm. Keep every point, the writer's register and tone markers (emoji, \"lol\", \"~\"), a similar length, and their order unless another order clearly serves the reader better.\nReply with the two sections only."
+		}
+	],
+	"result": {
+		"text": "### POINTS\n\n1. Se presenta: Daniel, de Manchester (Inglaterra).\n2. Motivo del correo: quiere inscribirse en el curso de septiembre.\n3. Razón: quiere mejorar su español para hablar con la familia de su novia, en Granada.\n4. Experiencia pasada: conoció a la familia el año pasado y no entendió casi nada.\n5. Sentimiento: está muy entusiasmado por aprender para poder comunicarse con ellos. (La palabra usada es un falso amigo: quiere decir \"emocionado\" o \"ilusionado\").\n6. Petición: pide que le envíen información sobre los precios.\n7. Duda sobre el alojamiento: no sabe si es mejor una familia de acogida o un piso compartido para aprender.\n8. Pregunta: si el piso queda cerca de la escuela.\n9. Necesidad: busca una habitación tranquila para estudiar.\n10. Pregunta: si puede llevar su bicicleta.\n11. Motivo: le gusta montar en bici y quiere explorar las montañas.\n12. Dieta: es vegetariano, pero aclara en inglés, a modo de aparte ligero, que no es exigente con la comida. Espera que la familia pueda cocinar algo para él.\n13. Dato: su novia irá con él el primer fin de semana.\n14. Pregunta: cuándo empiezan los cursos. (Cambia de usted a tú de forma inconsistente en esta pregunta).\n15. Urgencia: necesita una respuesta antes de fin de mes porque tiene que comprar el vuelo.\n16. Confianza: está seguro de que va a pasarlo muy bien en la escuela. (La expresión original es una forma coloquial de decirlo, no una frase literal).\n17. Cierre: espera tener noticias de la Sra. Morales. (Calco del inglés, con el sentido de \"quedo a la espera de su respuesta\").\n18. Firma: Daniel Clarke.\n\n### FRESH\n\nEstimada Sra. Morales:\n\nSoy Daniel Clarke, de Manchester (Inglaterra), y le escribo para inscribirme en el curso de septiembre. Quiero mejorar mi español sobre todo por mi novia, que es de Granada. El año pasado conocí a su familia y, la verdad, apenas pude seguir la conversación. Me haría muchísima ilusión poder hablar con ellos.\n\n¿Podría enviarme información sobre los precios, por favor? Además, tengo algunas dudas sobre el alojamiento. No sé si es mejor vivir con una familia de acogida o en un piso compartido para aprender más rápido. ¿Queda el alojamiento cerca de la escuela? Necesito un espacio tranquilo para estudiar, así que eso es importante para mí.\n\nOtra pregunta: ¿se puede llevar la bicicleta? Me encanta salir en bici y tengo muchas ganas de recorrer las montañas.\n\nPor último, soy vegetariano. No soy muy exigente con la comida, pero no como carne, y me gustaría saber si la familia podría prepararme algo sin carne. Mi novia vendrá conmigo el primer fin de semana.\n\n¿Me podría decir cuándo empiezan los cursos? Necesito una respuesta antes de fin de mes, porque tengo que comprar el billete de avión. Estoy seguro de que voy a disfrutar muchísimo de la escuela. Quedo a la espera de sus noticias.\n\nUn saludo,\nDaniel Clarke",
+		"usage": {
+			"input": 840,
+			"output": 3440,
+			"reasoning": 2236,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 15090,
+		"costUsd": 0.001804
+	},
+	"finish": "stop"
+}
