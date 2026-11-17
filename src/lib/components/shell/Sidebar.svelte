@@ -24,7 +24,7 @@ import { endonym, tx } from "#lib/i18n/tx.ts";
 import { dueNow } from "#lib/notebook/notebook.svelte.ts";
 import { openPiece } from "#lib/writing/open.ts";
 import { siteOf } from "#lib/writing/sites.ts";
-import { myWriting } from "#lib/writing/writing.svelte.ts";
+import { shelfNow } from "#lib/writing/writing.svelte.ts";
 import { afterNavigate, goto } from "$app/navigation";
 import { page } from "$app/state";
 import EmptyState from "./EmptyState.svelte";
@@ -41,14 +41,15 @@ const nav = $derived<{ id: string; href: string; sticker: StickerName | "clink";
 	{ id: "home", href: "/", sticker: "pen", label: tx("navNew"), count: 0, tilt: -2 },
 	{ id: "library", href: "/library", sticker: "clink", label: tx("navLibrary"), count: 0, tilt: 2 },
 	{ id: "notebook", href: "/notebook", sticker: "cards", label: tx("navNotebook"), count: dueCount, tilt: 1.5 },
-	{ id: "writing", href: "/writing", sticker: "box", label: tx("navWriting"), count: myWriting().filter((w) => w.open).length, tilt: -1 },
+	{ id: "writing", href: "/writing", sticker: "box", label: tx("navWriting"), count: shelfNow().open.length, tilt: -1 },
 ]);
 // A scenario belongs to the prompts; a piece to my writing.
 const current = $derived(
 	nav.find((n) => n.href === page.url.pathname)?.id ??
 		(page.url.pathname.startsWith("/scenario/") ? "library" : page.url.pathname.startsWith("/w/") ? "writing" : ""),
 );
-const recent = $derived(myWriting().slice(0, 6));
+// What they are writing and have written (the shelf leaves abandoned pieces to My writing).
+const recent = $derived(shelfNow().recent);
 // The account's own pages: there its sticker stays "in hand", as a row's does on its page.
 const mine = $derived(["/profile", "/settings", "/feedback"].includes(page.url.pathname));
 const plays: Record<string, ReturnType<typeof createPlay>> = {

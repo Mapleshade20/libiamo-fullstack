@@ -20,6 +20,7 @@ import Glass from "#lib/components/streak/glass/Glass.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
 import { APP_LANGS, type AppLang, endonym, hasScenarios, isAppLang, LEARNABLE, langName } from "#lib/constants.ts";
 import { loadLang, t } from "#lib/i18n/index.svelte.ts";
+import { today } from "#lib/time/clock.svelte.ts";
 import { goto } from "$app/navigation";
 
 /*
@@ -70,7 +71,6 @@ async function finish(tour: boolean) {
 	app.prefs.active = app.prefs.learning[0];
 	app.prefs.feedback = feedback;
 	app.prefs.weeklyGoal = Number(goal);
-	app.save();
 	await loadLang(app.prefs.active);
 	applyLang();
 	await finishWelcome(tour);
@@ -180,7 +180,7 @@ onMount(() => {
 					<h1><MarkedLine text={tx("welWeek")} type="circle" /></h1>
 					<p class="lede">{tx("welWeekLede")}</p>
 					<div class="week">
-						<Glass drink={drinkOf()} look="full" size={96} stage idle />
+						<Glass drink={drinkOf(today())} look="full" size={96} stage idle />
 						<SegmentedControl
 							label={tx("setWeekGoal")}
 							bind:value={goal}

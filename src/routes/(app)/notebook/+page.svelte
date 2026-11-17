@@ -5,14 +5,45 @@ import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
 import EmptyState from "#lib/components/shell/EmptyState.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
 import { tx } from "#lib/i18n/tx.ts";
-import { dueNow, notesNow } from "#lib/notebook/notebook.svelte.ts";
-import type { Note } from "#lib/notebook/types.ts";
+import { dueNow, lang, notebookNow } from "#lib/notebook/notebook.svelte.ts";
+import type { NoteFrom, NoteRow } from "#lib/notebook/types.ts";
 
 /* The notebook: every phrase the learner keeps, whether it came out of their own writing (what they reworked in a
-   session) or was collected from something they read. Review runs over all of it; each entry opens its own page. */
-const notes = $derived<Note[]>(await notesNow());
-let filter = $state("all");
-const shown = $derived(notes.filter((n) => filter === "all" || n.from === filter));
+   session) or was collected from something they read. Review runs over all of it; each entry opens its own page.
+   The list comes a page at a time (server/notebook/notes.ts `notebookPage`), filtered on the server; the next page is
+   asked for as the end of the list comes near. Most learners have one page. */
+let filter = $state<NoteFrom>("all");
+const first = $derived(await notebookNow(filter));
+const key = $derived(`${lang()}|${filter}`);
+// The pages after the first, for the list as it is now filtered.
+let more = $state<{ key: string; rows: NoteRow[]; next?: string }>({ key: "", rows: [] });
+const later = $derived(more.key === key ? more : { key, rows: [] as NoteRow[], next: first.next });
+const shown = $derived.by(() => {
+	// The first page asked again (an entry changed) may now hold rows a later page brought.
+	const seen = new Set(first.rows.map((n) => n.id));
+	return [...first.rows, ...later.rows.filter((n) => !seen.has(n.id))];
+});
+let asking = false;
+async function askMore() {
+	const after = later.next;
+	if (asking || !after) return;
+	asking = true;
+	const at = key;
+	try {
+		const page = await notebookNow(filter, after);
+		if (at === key) more = { key: at, rows: [...later.rows, ...page.rows], next: page.next };
+	} catch (e) {
+		console.error("the notebook's next page was not loaded", e);
+	} finally {
+		asking = false;
+	}
+}
+/** Asks for the next page while the end of the list is still a little way off. */
+function nearing(node: HTMLElement) {
+	const seen = new IntersectionObserver((es) => es.some((e) => e.isIntersecting) && askMore(), { rootMargin: "600px" });
+	seen.observe(node);
+	return { destroy: () => seen.disconnect() };
+}
 const due = $derived((await dueNow()).count);
 $effect(() => {
 	document.title = `${tx("navNotebook")} · ${tx("homeTitle")}`;
@@ -62,6 +93,9 @@ $effect(() => {
 							</a>
 						{/each}
 					</div>
+					{#if later.next}
+						<div class="more" use:nearing aria-hidden="true"></div>
+					{/if}
 				{:else}
 					<EmptyState
 						art="cards"
@@ -104,6 +138,9 @@ $effect(() => {
 }
 .list {
 	display: grid;
+}
+.more {
+	height: 1px;
 }
 .layer {
 	grid-area: 1 / 1;

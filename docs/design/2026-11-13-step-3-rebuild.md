@@ -514,6 +514,13 @@ decided on:
 **Phase 6, first run: under way** (2026-11-16). Asked for by the user: no trace of the demo left, every page rendered
 on the server on real data.
 
+- **After the 2026-11-16 review** (`docs/writeup/2026-11-16-review-fixes.md`,
+  `docs/writeup/2026-11-16-data-reads-by-history-size.md`): the browser loads the Gravatar picture; every date goes
+  through one clock and the time zone follows the device; settings say "Saved" only when kept; a capture is imported
+  into a scenario; what every page reads no longer grows with history (a shelf per language, lists a page at a time);
+  tapes are kept as model calls are; unfinished pieces are abandoned and can be taken up again; drafts stay on the
+  device.
+
 - **The demo is gone.** `lib/demo` is deleted. `app.svelte.ts` is split into `account/app.svelte.ts` (settings and look),
   `account/language.ts`, `account/look.svelte.ts`, `i18n/tx.ts`, `shell/toast.svelte.ts`; `data.ts` into
   `writing/sites.ts`, `writing/writing.svelte.ts` (lists, follow-ups), `writing/open.ts`, `writing/source-status.ts` and
@@ -526,8 +533,9 @@ on the server on real data.
   clock (the places' dates were in 1970 and UTC without it); `hooks.server.ts` writes `<html>` (language, direction,
   theme, backdrop, sidebar). The home page's greeting is drawn on the server in the learner's time zone.
 - **Off the device.** Theme, backdrop, pattern and pass 1's depth are `user` columns (`saveLook`); the sidebar's fold
-  and the signed-out pages' language are cookies; the picture is Gravatar's, looked up by the server
-  (`server/account/gravatar.ts`); a scenario's plan is `scenario_plan`, taken by the piece; something pasted to collect
+  and the signed-out pages' language are cookies; the picture is Gravatar's, loaded by the browser
+  (`lib/account/picture.svelte.ts`, since 2026-11-16); a scenario's plan and the translation sheet's draft stay on the
+  device until the piece is made (`lib/client/drafts.ts`, since 2026-11-16); something pasted to collect
   from is a `reading` at once (`/collect/<reading>`, reload-safe). The tour's sandbox is memory only.
 - **Checked** (2026-11-16): every page answers 200 from the server signed in, signed out and as admin, and hydrates
   without errors (dev server and the production build); theme, backdrop and fold render from the server after a change;
@@ -595,8 +603,9 @@ commits:
   pieces against a cache-only server: every step as recorded.
 
 `lib/demo/admin.ts`, `admin-session.ts`, `announcements.ts` and `scenarios.ts` are gone (the translation sheet keeps
-its two development samples itself). Not done: choosing where the learner comes in from an imported capture (the
-import still only checks the paste), and the admin's announcements are written in each language by hand.
+its two development samples itself). Choosing where the learner comes in from an imported capture was
+done later (2026-11-16, `lib/admin/capture.ts`: it fills the opening, the people and what really followed). Not done:
+the admin's announcements are written in each language by hand.
 
 **Phase 4, scenarios: done** (2026-11-14; the user has not looked at it yet). In steps, each committed with the app running:
 
@@ -637,7 +646,7 @@ import still only checks the paste), and the admin's announcements are written i
   once the exchange is over; the after page marks the thread read. Pieces past their revision are not listed.
 - **4d. Translations** (done 2026-11-14). The sheet's draft is the piece's text (`writing`), saved as the learner types
   (the first words create the piece with the plan as its background, which then waits on the shelf and opens the
-  sheet again); "done" starts the revision on the same piece, and `/api/s` takes the source, the original and the
+  sheet again; since 2026-11-16 the draft stays on the device and "done" creates the piece); "done" starts the revision on the same piece, and `/api/s` takes the source, the original and the
   scenario from the piece (`server/translation/sheet.ts`), so the original never reaches the page (recorded sessions
   still hand a translation over whole). The source runner (`server/translation/runner.ts`, started in
   `hooks.server.ts`) makes `pending` sources one at a time on the service key (`serviceCaller`, Claude Haiku): terms

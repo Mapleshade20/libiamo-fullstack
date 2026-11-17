@@ -2,6 +2,8 @@
 import type { Component } from "svelte";
 import { account } from "#lib/account/account.svelte.ts";
 import { app } from "#lib/account/app.svelte.ts";
+import { loadedPicture } from "#lib/account/picture.svelte.ts";
+import { dropLocalDraft, localDraft } from "#lib/client/drafts.ts";
 import { refreshQuery } from "#lib/client/refresh.ts";
 import type { ExchangeApi } from "#lib/components/exchange/actions.ts";
 import ConversationReadReceipt from "#lib/components/exchange/ConversationReadReceipt.svelte";
@@ -46,7 +48,10 @@ const exchangeId = () => view?.persisted?.id ?? null;
 
 const api: ExchangeApi = {
 	async start() {
-		await enterPlace(where);
+		// The plan typed on the scenario's page, kept on this device until now, goes in with the piece.
+		const key = `${where.scenarioId}|${where.lang}`;
+		await enterPlace({ ...where, plan: localDraft("plan", key) });
+		dropLocalDraft("plan", key);
 	},
 	async send(fields) {
 		const ex = exchangeId();
@@ -72,6 +77,8 @@ const api: ExchangeApi = {
 	},
 };
 const Surface = $derived(view ? SURFACES[view.place] : null);
+// The learner's picture where the place shows it, once the browser has it (else the place draws their initial).
+const picture = loadedPicture(() => account.me.picture);
 // An exchange already over is read on the after page.
 $effect(() => {
 	if (view?.persisted && view.persisted.status !== "in_progress") goto(`/scenario/${id}/after`, { replace: true });
@@ -86,8 +93,8 @@ $effect(() => {
 	{#key view.scenarioId}
 		<Surface
 			scenarioId={view.scenarioId}
-			userName={account.me.name}
-			avatarUrl={account.me.picture ?? ""}
+			userName={app.prefs.name}
+			avatarUrl={picture.current ?? ""}
 			language={view.language}
 			persisted={view.persisted}
 			openingState={view.openingState}

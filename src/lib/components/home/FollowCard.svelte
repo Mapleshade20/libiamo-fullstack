@@ -5,7 +5,8 @@ import { toast } from "#lib/components/shell/toast.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
 import { tx } from "#lib/i18n/tx.ts";
 import { siteOf } from "#lib/writing/sites.ts";
-import { type FollowUp, setPosted } from "#lib/writing/writing.svelte.ts";
+import type { FollowUp } from "#lib/writing/types.ts";
+import { setPosted } from "#lib/writing/writing.svelte.ts";
 
 /*
  * The shelf's follow-up: one piece, one question. Whether it was posted (answered in place; the card then gives way),

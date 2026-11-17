@@ -1,5 +1,5 @@
 import EmojiConvertor from "emoji-js";
-import type { DisplayClock } from "#lib/time/display-clock.ts";
+import type { Clock } from "#lib/time/format.ts";
 
 export function normalizeText(value: unknown, fallback: string) {
 	if (typeof value !== "string") return fallback;
@@ -19,7 +19,7 @@ export function createTimeFormatter(timeZone = "UTC") {
 	return (date: Date) => formatTime(date, timeZone);
 }
 
-export function getTodayDateString(language: string, clock: DisplayClock) {
+export function getTodayDateString(language: string, clock: Clock) {
 	return new Intl.DateTimeFormat(language === "en" ? "en-US" : language, {
 		year: "numeric",
 		month: "long",

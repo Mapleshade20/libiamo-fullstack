@@ -3,6 +3,7 @@
  * different drink, a different vessel to pour it from and a different last touch. Coordinates are the glass's own:
  * the middle of its foot on the table is (0, 0) and up is negative y; one unit is a pixel at the 64-unit icon.
  */
+import { weekdayOf } from "#lib/time/format.ts";
 
 export type GarnishKind = "cherry-pick" | "wheel" | "half-wheel" | "fruit-cube" | "strawberry" | "ice" | "umbrella" | "straw" | "mint" | "crown";
 /** How it arrives: dropped in (it falls, splashes and floats), set on the rim, or stood in the glass. */
@@ -325,7 +326,8 @@ export const DRINKS: Drink[] = [
 ];
 
 /** Monday is 0. */
-export const drinkOf = (date = new Date()) => DRINKS[(date.getDay() + 6) % 7];
+/** The drink of a local day (`YYYY-MM-DD`): one per weekday, Monday first. */
+export const drinkOf = (day: string) => DRINKS[weekdayOf(day)];
 
 /** Half the inside's width at y (0 below the bottom and above the rim's top it is held at the rim's). */
 export function insideHalf(d: Drink, y: number) {

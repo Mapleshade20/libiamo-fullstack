@@ -3,6 +3,7 @@ import Plus from "@lucide/svelte/icons/plus";
 import { issueList } from "#lib/admin/issues.remote.ts";
 import { fmtDay } from "#lib/admin/records.ts";
 import Button from "#lib/components/ui/button/button.svelte";
+import { dateOfDay } from "#lib/time/clock.svelte.ts";
 
 /*
  * Issues: an occasional themed handful of scenarios with a date, shown first on the shelf for about a month, then
@@ -25,8 +26,7 @@ const LABEL = { scheduled: "Scheduled", current: "On the shelf", past: "In the p
 			<li>
 				<a class="issue" href="/admin/issues/{i.id}" class:past={state === "past"} style:--tone={i.tone} style:--deep={i.deep}>
 					<span class="band" aria-hidden="true"
-						><span class="d">{new Date(`${i.date}T12:00`).toLocaleDateString("en-GB", { month: "short" })}</span
-						><span class="y">{new Date(`${i.date}T12:00`).getFullYear()}</span></span
+						><span class="d">{dateOfDay(i.date, { month: "short" }, "en-GB")}</span><span class="y">{i.date.slice(0, 4)}</span></span
 					>
 					<span class="body">
 						<span class="t">{i.title.en ?? Object.values(i.title)[0]}</span>

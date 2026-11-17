@@ -252,7 +252,7 @@ CREATE TABLE "piece" (
 	CONSTRAINT "piece_language_check" CHECK ("piece"."language" in ('en', 'es', 'fr', 'de', 'it', 'pt', 'ja', 'ko', 'zh-CN', 'ru', 'ar', 'nl', 'tr', 'pl')),
 	CONSTRAINT "piece_kind_check" CHECK ("piece"."kind" in ('own', 'scenario', 'translation')),
 	CONSTRAINT "piece_detail_check" CHECK ("piece"."detail" in ('needed', 'more')),
-	CONSTRAINT "piece_state_check" CHECK ("piece"."state" in ('writing', 'revising', 'finished', 'set_aside')),
+	CONSTRAINT "piece_state_check" CHECK ("piece"."state" in ('writing', 'revising', 'finished', 'abandoned')),
 	CONSTRAINT "piece_posted_check" CHECK ("piece"."posted" is null or "piece"."posted" in ('yes', 'not_yet', 'no')),
 	CONSTRAINT "piece_finished_check" CHECK (("piece"."state" = 'finished') = ("piece"."finished_at" is not null))
 );
@@ -331,16 +331,6 @@ CREATE TABLE "scenario" (
 	CONSTRAINT "scenario_kind_place_check" CHECK (("scenario"."kind" = 'translation') = ("scenario"."place" = 'translation')),
 	CONSTRAINT "scenario_minutes_check" CHECK ("scenario"."minutes" > 0),
 	CONSTRAINT "scenario_max_turns_check" CHECK ("scenario"."max_turns" is null or "scenario"."max_turns" > 0)
-);
---> statement-breakpoint
-CREATE TABLE "scenario_plan" (
-	"user_id" text NOT NULL,
-	"scenario_id" text NOT NULL,
-	"language" text NOT NULL,
-	"text" text NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "scenario_plan_user_id_scenario_id_language_pk" PRIMARY KEY("user_id","scenario_id","language"),
-	CONSTRAINT "scenario_plan_language_check" CHECK ("scenario_plan"."language" in ('en', 'es', 'fr', 'de', 'it', 'pt', 'ja', 'ko', 'zh-CN', 'ru', 'ar', 'nl', 'tr', 'pl'))
 );
 --> statement-breakpoint
 CREATE TABLE "scenario_source" (
@@ -508,8 +498,6 @@ ALTER TABLE "review_log" ADD CONSTRAINT "review_log_note_id_note_id_fk" FOREIGN 
 ALTER TABLE "review_log" ADD CONSTRAINT "review_log_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "scenario" ADD CONSTRAINT "scenario_work_id_work_id_fk" FOREIGN KEY ("work_id") REFERENCES "public"."work"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "scenario" ADD CONSTRAINT "scenario_created_by_user_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."user"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "scenario_plan" ADD CONSTRAINT "scenario_plan_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "scenario_plan" ADD CONSTRAINT "scenario_plan_scenario_id_scenario_id_fk" FOREIGN KEY ("scenario_id") REFERENCES "public"."scenario"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "scenario_source" ADD CONSTRAINT "scenario_source_scenario_id_scenario_id_fk" FOREIGN KEY ("scenario_id") REFERENCES "public"."scenario"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "session" ADD CONSTRAINT "session_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "session_case" ADD CONSTRAINT "session_case_piece_id_piece_id_fk" FOREIGN KEY ("piece_id") REFERENCES "public"."piece"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -535,13 +523,17 @@ CREATE INDEX "llm_call_created_idx" ON "llm_call" USING btree ("created_at");-->
 CREATE INDEX "llm_call_user_created_idx" ON "llm_call" USING btree ("user_id","created_at");--> statement-breakpoint
 CREATE INDEX "llm_call_prompt_idx" ON "llm_call" USING btree ("prompt_hash");--> statement-breakpoint
 CREATE INDEX "llm_prompt_user_idx" ON "llm_prompt" USING btree ("user_id");--> statement-breakpoint
-CREATE INDEX "note_due_idx" ON "note" USING btree ("user_id","due") WHERE "note"."deleted_at" is null;--> statement-breakpoint
+CREATE INDEX "note_due_idx" ON "note" USING btree ("user_id","language","due") WHERE "note"."deleted_at" is null;--> statement-breakpoint
+CREATE INDEX "note_list_idx" ON "note" USING btree ("user_id","language","id") WHERE "note"."deleted_at" is null;--> statement-breakpoint
+CREATE INDEX "note_user_idx" ON "note" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "note_piece_idx" ON "note" USING btree ("piece_id");--> statement-breakpoint
-CREATE INDEX "piece_user_idx" ON "piece" USING btree ("user_id","language","updated_at");--> statement-breakpoint
+CREATE INDEX "piece_user_idx" ON "piece" USING btree ("user_id","language","id");--> statement-breakpoint
+CREATE INDEX "piece_scenario_idx" ON "piece" USING btree ("scenario_id") WHERE "piece"."scenario_id" is not null;--> statement-breakpoint
 CREATE INDEX "piece_notes_retry_idx" ON "piece" USING btree ("notes_requested_at") WHERE "piece"."notes_requested_at" is not null;--> statement-breakpoint
 CREATE UNIQUE INDEX "piece_open_scenario_unique" ON "piece" USING btree ("user_id","scenario_id") WHERE "piece"."scenario_id" is not null and "piece"."state" in ('writing', 'revising');--> statement-breakpoint
 CREATE INDEX "reading_user_idx" ON "reading" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "review_log_note_idx" ON "review_log" USING btree ("note_id");--> statement-breakpoint
+CREATE INDEX "review_log_user_idx" ON "review_log" USING btree ("user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "scenario_source_unique" ON "scenario_source" USING btree ("scenario_id","language","native");--> statement-breakpoint
 CREATE INDEX "session_user_id_idx" ON "session" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "session_case_piece_idx" ON "session_case" USING btree ("piece_id");--> statement-breakpoint

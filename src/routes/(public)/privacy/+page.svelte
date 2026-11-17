@@ -22,8 +22,9 @@
 		</li>
 		<li>Your AI provider: the provider and model you chose, and your API key, stored encrypted.</li>
 		<li>
-			What you write and do: your drafts and finished pieces with each step of their revision, scenario conversations and the plans you type before
-			them, translations, passages you paste to collect phrases from, your notebook, your review history and the days you practised.
+			What you write and do: your drafts and finished pieces, the steps of their revision (for a while: section 4), scenario conversations and the
+			plans you type before them, translations, passages you paste to collect phrases from, your notebook, your review history and the days you
+			practised.
 		</li>
 		<li>What you send us: scenario suggestions, and feedback with the page it was sent from and your browser's name.</li>
 		<li>Records of AI requests (section 4).</li>
@@ -52,11 +53,13 @@
 		For each request Libiamo records the model, the timing, the tokens used and the cost. If “Help improve Libiamo” is on in your settings (it is on
 		for a new account), it also keeps the request and the reply, so that the project's maintainers can read sessions and fix what went wrong. These
 		records are removed thirty days after the request, except those of a session a maintainer has marked as a case to fix, which are kept until the
-		case is closed. A maintainer may copy a case to their own computer to reproduce it.
+		case is closed. The steps of a revision (what was sent and answered at each one) are kept the same way: thirty days after the piece is finished,
+		or until its case is closed. A maintainer may copy a case to their own computer to reproduce it.
 	</p>
 	<p>
-		Turning “Help improve Libiamo” off keeps only the numbers of new requests, and your sessions are no longer shown to the maintainers. Material
-		Libiamo prepares on its own key, such as the source texts of translation scenarios, contains nothing of yours.
+		Turning “Help improve Libiamo” off keeps only the numbers of new requests, your sessions are no longer shown to the maintainers, and the steps of
+		a revision are removed once its piece is finished. Material Libiamo prepares on its own key, such as the source texts of translation scenarios,
+		contains nothing of yours.
 	</p>
 </section>
 
@@ -75,8 +78,8 @@
 		<li>The AI provider you chose, for the requests you make (section 4).</li>
 		<li>Google or GitHub, when you sign in with them.</li>
 		<li>
-			Gravatar: Libiamo's server sends a SHA-256 hash of your email address to find out whether you have a Gravatar picture, and your browser loads it
-			from Gravatar.
+			Gravatar: your browser asks Gravatar for the picture of a SHA-256 hash of your email address, to show it if you have one. Libiamo's server does
+			not contact Gravatar.
 		</li>
 		<li>Cloudflare Turnstile, which checks that a person is signing up, signing in or resetting a password.</li>
 		<li>The mail, hosting and database providers that run Libiamo.</li>
@@ -99,7 +102,8 @@
 	<h2 id="pv-cookies">8. Cookies and browser storage</h2>
 	<p>
 		Libiamo sets a cookie that keeps you signed in, one that remembers the language you picked before signing in, and one that remembers whether the
-		sidebar is folded. Your browser also keeps what you are writing in the home page's box until you send it, how the week's glass last moved, and,
+		sidebar is folded. Your browser also keeps what you are writing and have not sent (in the home page's box, on a translation's sheet, the plan
+		before a scenario, a mail in a scenario) until you send it, for thirty days at most and until you sign out, how the week's glass last moved, and,
 		for the open tab, the address you typed on the sign-in pages. Cloudflare Turnstile may set its own cookies on those pages. There are no
 		advertising or tracking cookies.
 	</p>

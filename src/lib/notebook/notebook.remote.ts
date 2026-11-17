@@ -1,11 +1,22 @@
 import { z } from "zod";
 import { LEARNABLE, VERDICTS } from "#lib/constants.ts";
 import { learner } from "#lib/server/guard.ts";
-import { addReading, deleteNotes, dueOf, editNote, noteOf, notesOf, queueOf, rateNote, readingOf } from "#lib/server/notebook/notes.ts";
+import {
+	addReading,
+	deleteNotes,
+	dueOf,
+	editNote,
+	notebookGlance,
+	notebookPage,
+	noteOf,
+	queueOf,
+	rateNote,
+	readingOf,
+} from "#lib/server/notebook/notes.ts";
 import { week } from "#lib/week/week.remote.ts";
 import { command, query, requested } from "$app/server";
 import { RATINGS } from "../review/types.ts";
-import type { DueSummary, Note, ReviewCard } from "./types.ts";
+import type { DueSummary, Note, NotebookGlance, NotebookPage, ReviewCard } from "./types.ts";
 
 /* The notebook and review, in a language the learner works in (the page says which: the one it speaks). */
 
@@ -13,7 +24,14 @@ const UUID = /^[0-9a-f-]{36}$/;
 const noteId = z.string().regex(UUID);
 const language = z.enum(LEARNABLE);
 
-export const notebook = query(language, async (lang): Promise<Note[]> => notesOf(learner(), lang));
+/** A page of the list (lib/server/notebook/notes.ts `notebookPage`): the first without `after`. */
+export const notebook = query(
+	z.object({ lang: language, from: z.enum(["all", "own", "collected"]), after: noteId.optional() }),
+	async ({ lang, from, after }): Promise<NotebookPage> => notebookPage(learner(), lang, from, after),
+);
+
+/** How many entries there are and the latest phrases (the profile, a scenario's page). */
+export const glance = query(language, async (lang): Promise<NotebookGlance> => notebookGlance(learner(), lang));
 
 /** Any id a link may carry; one that is not an entry of theirs is simply none. */
 export const noteById = query(z.string(), async (id): Promise<Note | null> => (UUID.test(id) ? noteOf(learner(), id) : null));

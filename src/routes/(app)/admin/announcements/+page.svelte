@@ -12,6 +12,7 @@ import { tip } from "#lib/components/common/tip.ts";
 import { toast } from "#lib/components/shell/toast.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
 import { APP_LANGS } from "#lib/constants.ts";
+import { clock, today } from "#lib/time/clock.svelte.ts";
 
 /*
  * Announcements: written per interface language (a learner sees theirs, else English), shown on the home page as a
@@ -58,8 +59,7 @@ async function remove() {
 	editing = null;
 	await deleteOneAnnouncement(id).catch(() => toast("Could not delete it"));
 }
-const today = new Date().toISOString().slice(0, 10);
-const live = (a: Ann) => !!a.publishedAt && (!a.until || a.until >= today);
+const live = (a: Ann) => !!a.publishedAt && (!a.until || a.until >= today());
 </script>
 
 <div class="adm-page">
@@ -105,7 +105,7 @@ const live = (a: Ann) => !!a.publishedAt && (!a.until || a.until >= today);
 						<div class="head">
 							<span class="ic"><Megaphone class="size-5" aria-hidden="true" /></span>
 							<span class="copy"
-								><span class="meta">{fmtDay(e.publishedAt ?? new Date().toISOString())}</span
+								><span class="meta">{fmtDay(e.publishedAt ?? new Date(clock.now).toISOString())}</span
 								><span class="t" {lang}>{e.title[lang] || "Title"}</span></span
 							>
 						</div>

@@ -6,7 +6,7 @@ export type Via = "email" | "google" | "github";
 export type Me = {
 	email: string;
 	name: string;
-	/** Gravatar's picture for the address, if it has one. */
+	/** Where Gravatar keeps the address's picture; whether there is one, the browser finds out (lib/account/picture.svelte.ts). */
 	picture: string | null;
 	verified: boolean;
 	/** How the account was made. */

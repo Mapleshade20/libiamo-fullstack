@@ -1,8 +1,8 @@
 import { error } from "@sveltejs/kit";
-import { and, asc, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Register, Verdict } from "#lib/constants.ts";
-import type { DueSummary, Example, Note, ReviewCard } from "#lib/notebook/types.ts";
+import type { DueSummary, Example, Note, NotebookGlance, NotebookPage, NoteFrom, NoteRow, ReviewCard } from "#lib/notebook/types.ts";
 import { noteFaces } from "#lib/review/faces.ts";
 import type { RatingName } from "#lib/review/types.ts";
 import { db } from "#lib/server/db/index.ts";
@@ -160,7 +160,8 @@ const faceOf = (r: Row) => {
 	return all[((r.fsrs as StoredCard).reps ?? 0) % all.length];
 };
 
-function view(r: Row, now: Date, tz: string): Note {
+/** An entry as its row in the list shows it: the phrase, its meaning, where it came from, and when it is asked next. */
+function rowView(r: Pick<Row, "id" | "phrase" | "kind" | "meaning" | "fsrs" | "pieceId" | "title">, now: Date, tz: string): NoteRow {
 	const card = r.fsrs as StoredCard;
 	const next = dayDelta(localDay(now, tz), localDay(new Date(card.dueAt), tz));
 	const due = availableAt(card) <= now.getTime() || next <= 0;
@@ -174,6 +175,13 @@ function view(r: Row, now: Date, tz: string): Note {
 		due,
 		...(due ? {} : { next }),
 		gloss: r.meaning,
+	};
+}
+
+function view(r: Row, now: Date, tz: string): Note {
+	const own = r.kind === "own";
+	return {
+		...rowView(r, now, tz),
 		...(r.register ? { register: r.register as Register } : {}),
 		...((own ? r.usage : r.why) ? { usage: (own ? r.usage : r.why) ?? undefined } : {}),
 		examples: Examples.parse(r.examples) as Example[],
@@ -184,15 +192,43 @@ function view(r: Row, now: Date, tz: string): Note {
 
 const rowsOf = (rows: { n: typeof note.$inferSelect; title: string | null }[]): Row[] => rows.map((x) => ({ ...x.n, title: x.title }));
 
-/** The learner's entries in a language, newest first. */
-export async function notesOf(u: Learner, language: string, now = new Date()): Promise<Note[]> {
+/** How many entries a page of the notebook holds: more than a learner who writes now and then ever has. */
+export const NOTEBOOK_PAGE = 100;
+
+/**
+ * A page of the learner's entries in a language, newest first (ids are uuidv7, so their order is the order they were
+ * filed): the rows only, with `next` naming where the following page starts. An entry's usage, examples and review face
+ * are its own page's (`noteOf`).
+ */
+export async function notebookPage(u: Learner, language: string, from: NoteFrom, after?: string, now = new Date()): Promise<NotebookPage> {
 	const rows = await db
-		.select(columns)
+		.select({ id: note.id, phrase: note.phrase, kind: note.kind, meaning: note.meaning, fsrs: note.fsrs, pieceId: note.pieceId, title: piece.title })
 		.from(note)
 		.leftJoin(piece, eq(piece.id, note.pieceId))
-		.where(and(eq(note.userId, u.id), eq(note.language, language), isNull(note.deletedAt)))
-		.orderBy(desc(note.createdAt));
-	return rowsOf(rows).map((r) => view(r, now, zoneOf(u)));
+		.where(
+			and(
+				eq(note.userId, u.id),
+				eq(note.language, language),
+				isNull(note.deletedAt),
+				from === "all" ? undefined : eq(note.kind, from),
+				after ? lt(note.id, after) : undefined,
+			),
+		)
+		.orderBy(desc(note.id))
+		.limit(NOTEBOOK_PAGE + 1);
+	const page = rows.slice(0, NOTEBOOK_PAGE);
+	const tz = zoneOf(u);
+	return { rows: page.map((r) => rowView(r, now, tz)), ...(rows.length > NOTEBOOK_PAGE ? { next: page[page.length - 1].id } : {}) };
+}
+
+/** What other pages show of the notebook: how many entries there are, and the latest phrases. */
+export async function notebookGlance(u: Learner, language: string, latest = 4): Promise<NotebookGlance> {
+	const mineIn = and(eq(note.userId, u.id), eq(note.language, language), isNull(note.deletedAt));
+	const [[{ count }], rows] = await Promise.all([
+		db.select({ count: sql<number>`count(*)::int` }).from(note).where(mineIn),
+		db.select({ phrase: note.phrase }).from(note).where(mineIn).orderBy(desc(note.id)).limit(latest),
+	]);
+	return { count, latest: rows.map((r) => r.phrase) };
 }
 
 export async function noteOf(u: Learner, id: string, now = new Date()): Promise<Note | null> {

@@ -15,17 +15,20 @@ import { DRINKS } from "#lib/components/streak/glass/drinks.ts";
 import Glass from "#lib/components/streak/glass/Glass.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
 import { tx } from "#lib/i18n/tx.ts";
-import { notesNow } from "#lib/notebook/notebook.svelte.ts";
+import { glanceNow } from "#lib/notebook/notebook.svelte.ts";
+import { dateOfDay } from "#lib/time/clock.svelte.ts";
+import { weekdayNames } from "#lib/time/format.ts";
+import { addDays } from "#lib/time/local-day.ts";
 import { historyNow } from "#lib/week/week.svelte.ts";
-import { myWriting } from "#lib/writing/writing.svelte.ts";
+import { shelfNow } from "#lib/writing/writing.svelte.ts";
 
 /*
  * The profile: who the learner is here. Their picture and name (the name edited in a small dialog behind the pencil,
  * as in the main app), a few numbers, and every week they have practised: the whole history the week popover only
  * glimpses. Settings (how the app works for them) are a page of their own.
  */
-// Each week with the aim it was held to; a week's days are local dates (`YYYY-MM-DD`), drawn as this device's.
-const weeks = $derived((await historyNow(26)).map((w) => ({ ...w, start: new Date(`${w.start}T00:00:00`) })));
+// Each week with the aim it was held to; a week's days are the learner's local days (`YYYY-MM-DD`), shown as they are.
+const weeks = $derived(await historyNow(26));
 const goal = $derived(weeks[weeks.length - 1].goal);
 const met = (w: { days: string[]; goal: number }) => w.days.filter((d) => d === "full").length >= w.goal;
 // Weeks in a row that met the aim, counting back from last week (this one may still be under way).
@@ -37,21 +40,18 @@ const run = $derived.by(() => {
 	return n;
 });
 const total = $derived(weeks.reduce((n, w) => n + w.days.filter((d) => d === "full").length, 0));
-const pieces = $derived(myWriting().filter((w) => w.finishedAt).length);
-const phrases = $derived((await notesNow()).length);
+const pieces = $derived(shelfNow().finished);
+const phrases = $derived((await glanceNow()).count);
 const months = $derived(
+	// A month is named over its first week; the first column only when its month goes on (else two names collide).
 	weeks.map((w, i) =>
-		i === 0 || w.start.getMonth() !== weeks[i - 1].start.getMonth() ? new Intl.DateTimeFormat(app.lang, { month: "short" }).format(w.start) : "",
+		(i === 0 ? weeks[1]?.start.slice(0, 7) === w.start.slice(0, 7) : w.start.slice(0, 7) !== weeks[i - 1].start.slice(0, 7))
+			? dateOfDay(w.start, { month: "short" })
+			: "",
 	),
 );
-const dayNames = $derived(
-	Array.from({ length: 7 }, (_, i) => new Intl.DateTimeFormat(app.lang, { weekday: "short" }).format(new Date(2026, 9, 26 + i))),
-);
-const dayOf = (w: Date, i: number) => {
-	const d = new Date(w);
-	d.setDate(w.getDate() + i);
-	return new Intl.DateTimeFormat(app.lang, { month: "short", day: "numeric" }).format(d);
-};
+const dayNames = $derived(weekdayNames(app.lang, "short"));
+const dayOf = (start: string, i: number) => dateOfDay(addDays(start, i), { month: "short", day: "numeric" });
 const KIND: Record<string, string> = { full: "profDayFull", learned: "profDayLearned", reviewed: "profDayReviewed", none: "profDayNone" };
 const look = (k: string) => (k === "learned" || k === "reviewed" ? "half" : k);
 
@@ -70,12 +70,11 @@ function saveName(e: SubmitEvent) {
 	const n = draft.trim();
 	if (!n) return shake(nameInput);
 	app.prefs.name = n;
-	app.save();
 	editing = false;
-	toast(tx("setSaved"));
+	app.save().then((ok) => ok && toast(tx("setSaved")));
 }
 
-// The picture is Gravatar's for the account's address, as the server finds it (server/account/gravatar.ts): changing it
+// The picture is Gravatar's for the account's address, as the browser finds it (lib/account/picture.svelte.ts): changing it
 // happens there, so the camera says where and with which address, and asks before leaving.
 let gravatar = $state(false);
 

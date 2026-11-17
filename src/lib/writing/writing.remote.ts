@@ -1,20 +1,36 @@
 import { and, eq, isNotNull } from "drizzle-orm";
 import { z } from "zod";
+import { LEARNABLE } from "#lib/constants.ts";
 import { db } from "#lib/server/db/index.ts";
 import { piece } from "#lib/server/db/schema.ts";
 import { learner } from "#lib/server/guard.ts";
 import { credit } from "#lib/server/week/days.ts";
-import { pieceOf, piecesOf, postedValue } from "#lib/server/writing/pieces.ts";
+import { pieceOf, piecesPage, postedValue, shelvesOf } from "#lib/server/writing/pieces.ts";
+import { takeUp } from "#lib/server/writing/take-up.ts";
 import { week } from "#lib/week/week.remote.ts";
 import { command, query } from "$app/server";
-import type { PieceView } from "./types.ts";
+import type { PiecesPage, PieceView, Shelf } from "./types.ts";
 
 /* The learner's pieces: the lists, one piece's page, and what they say about a piece afterwards. */
 
 const PIECE = /^[0-9a-f-]{36}$/;
 const pieceId = z.string().regex(PIECE);
 
-export const pieces = query(async () => piecesOf(learner().id));
+/** What every page shows of the learner's pieces, per language (types.ts `Shelf`; the root layout's load gives it). */
+export const shelves = query(async (): Promise<Record<string, Shelf>> => shelvesOf(learner().id));
+
+/** A page of My writing in a language, newest first (the first without `after`). */
+export const piecesInPage = query(
+	z.object({ lang: z.enum(LEARNABLE), after: pieceId.optional() }),
+	async ({ lang, after }): Promise<PiecesPage> => piecesPage(learner().id, lang, after),
+);
+
+/** An abandoned piece taken up again (server/writing/take-up.ts): where the page goes now. */
+export const takeUpPiece = command(pieceId, async (id) => {
+	const r = await takeUp(learner(), id);
+	await shelves().refresh();
+	return r;
+});
 
 /** Any id a link may carry; one that is not a piece of theirs is simply none. */
 export const pieceById = query(z.string(), async (id): Promise<PieceView | null> => (PIECE.test(id) ? pieceOf(learner().id, id) : null));

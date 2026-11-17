@@ -1,4 +1,5 @@
 import { langName } from "#lib/constants.ts";
+import { dateAt, dateOfDay } from "#lib/time/clock.svelte.ts";
 
 /*
  * Session records as the admin pages show them (docs/design/2026-11-11-session-records.md): a piece's revision as a
@@ -92,10 +93,10 @@ export type CaseRow = {
 	commit?: string;
 };
 
-/** A bare date is a day, not UTC midnight (which shows as the day before west of Greenwich). */
-const day = (iso: string) => new Date(iso.length === 10 ? `${iso}T12:00` : iso);
-export const fmtDay = (iso: string) => day(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-export const fmtWhen = (iso: string) => new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+/** A bare date (`YYYY-MM-DD`) is a day as it is; any other is an instant, shown in the admin's time zone. */
+export const fmtDay = (iso: string) =>
+	iso.length === 10 ? dateOfDay(iso, { day: "numeric", month: "short" }, "en-GB") : dateAt(iso, { day: "numeric", month: "short" }, "en-GB");
+export const fmtWhen = (iso: string) => dateAt(iso, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }, "en-GB");
 export const fmtCost = (usd: number) => `$${usd < 0.01 ? usd.toFixed(4) : usd.toFixed(3)}`;
 export const fmtClock = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
 

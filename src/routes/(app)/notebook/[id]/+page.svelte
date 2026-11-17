@@ -54,7 +54,7 @@ async function save(e: SubmitEvent) {
 	busy = true;
 	try {
 		if (sandboxed()) editTourNote(n.id, edit);
-		else await changeNote({ id: n.id, ...edit }).updates(noteById(n.id), notebook(lang()));
+		else await changeNote({ id: n.id, ...edit }).updates(noteById(n.id), notebook({ lang: lang(), from: "all" }));
 		editing = false;
 		toast(tx("noteSaved"));
 	} catch {
@@ -68,7 +68,7 @@ async function remove() {
 	busy = true;
 	try {
 		if (sandboxed()) editTourNote(n.id, { deleted: true });
-		else await removeNotes([n.id]).updates(notebook(lang()), due(lang()));
+		else await removeNotes([n.id]).updates(notebook({ lang: lang(), from: "all" }), due(lang()));
 		deleting = false;
 		toast(tx("noteDeleted"));
 		goto("/notebook");

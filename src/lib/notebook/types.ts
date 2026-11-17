@@ -6,8 +6,8 @@ import type { QueueKind, RatingName } from "#lib/review/types.ts";
 
 export type Example = { t: string; n?: string; span?: string };
 
-/** An entry in the list and on its own page. */
-export type Note = {
+/** An entry as the notebook's list shows it. */
+export type NoteRow = {
 	id: string;
 	phrase: string;
 	from: "own" | "collected";
@@ -19,6 +19,16 @@ export type Note = {
 	/** Days until it is next asked, when not due. */
 	next?: number;
 	gloss: string;
+};
+/** Which entries the list shows. */
+export type NoteFrom = "all" | NoteRow["from"];
+/** A page of the list, and where the next one starts. */
+export type NotebookPage = { rows: NoteRow[]; next?: string };
+/** What other pages show of the notebook. */
+export type NotebookGlance = { count: number; latest: string[] };
+
+/** An entry on its own page. */
+export type Note = NoteRow & {
 	register?: Register;
 	/** How it is used (own entries), or what makes it worth taking (collected ones). */
 	usage?: string;

@@ -44,7 +44,7 @@ export type KeyProvider = (typeof KEY_PROVIDERS)[number];
 export const PIECE_KINDS = ["own", "scenario", "translation"] as const;
 export type PieceKind = (typeof PIECE_KINDS)[number];
 /** writing: a scenario still being played or a translation on its sheet; revising: inside the two passes. */
-export const PIECE_STATES = ["writing", "revising", "finished", "set_aside"] as const;
+export const PIECE_STATES = ["writing", "revising", "finished", "abandoned"] as const;
 export type PieceState = (typeof PIECE_STATES)[number];
 /** How much the tutor brings up: what needs changing, or also what could be put better. */
 export const DETAILS = ["needed", "more"] as const;

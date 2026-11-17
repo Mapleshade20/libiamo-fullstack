@@ -12,7 +12,7 @@ import { nameOf, tx } from "#lib/i18n/tx.ts";
 import { dueNow } from "#lib/notebook/notebook.svelte.ts";
 import { shelfScenarios } from "#lib/scenario/scenario.remote.ts";
 import { reopen } from "#lib/writing/open.ts";
-import { followUp, myWriting } from "#lib/writing/writing.svelte.ts";
+import { followUp, shelfNow } from "#lib/writing/writing.svelte.ts";
 import FollowCard from "./FollowCard.svelte";
 import ScenarioCard from "./ScenarioCard.svelte";
 
@@ -24,7 +24,7 @@ import ScenarioCard from "./ScenarioCard.svelte";
  */
 let { head }: { head: string } = $props();
 const follow = $derived(followUp());
-const openPiece = $derived(myWriting().find((w) => w.open));
+const openPiece = $derived(shelfNow().open[0]);
 // Four at most: continue, follow-up, then scenarios; the "+" card only when there is room.
 const offered = $derived(sandboxed() ? tourScenarios(app.lang) : hasScenarios(app.lang) ? await shelfScenarios(app.lang) : []);
 const prompts = $derived(offered.slice(0, 4 - (openPiece ? 1 : 0) - (follow ? 1 : 0)));

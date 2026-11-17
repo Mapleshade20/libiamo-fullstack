@@ -10,6 +10,8 @@ import { tip } from "#lib/components/common/tip.ts";
 import SiteArt from "#lib/components/home/SiteArt.svelte";
 import { toast } from "#lib/components/shell/toast.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
+import { today } from "#lib/time/clock.svelte.ts";
+import { addDays } from "#lib/time/local-day.ts";
 import { siteOf } from "#lib/writing/sites.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
@@ -30,7 +32,7 @@ const TONES = [
 const isNew = $derived(page.params.id === "new");
 const issues = $derived(await issueList());
 const found = $derived(issues.find((i) => i.id === page.params.id));
-const inMonth = () => new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
+const inMonth = () => addDays(today(), 30);
 let it = $state({ title: "", line: "", date: "", tone: TONES[0].tone, deep: TONES[0].deep, scenarios: [] as string[] });
 let shown = "";
 $effect.pre(() => {
@@ -65,7 +67,7 @@ async function save() {
 	const r = await saveOneIssue({ isNew, issue: { id, ...$state.snapshot(it) } }).catch(() => ({ ok: false as const, error: "Could not save it." }));
 	saving = false;
 	if (!r.ok) return toast(r.error);
-	toast(new Date(`${it.date}T12:00`) > new Date() ? `Scheduled for ${it.date}` : "Saved");
+	toast(it.date > today() ? `Scheduled for ${it.date}` : "Saved");
 	if (isNew) goto(`/admin/issues/${id}`, { replace: true });
 }
 async function remove() {

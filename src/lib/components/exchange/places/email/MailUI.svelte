@@ -5,6 +5,7 @@ import Send from "@lucide/svelte/icons/send";
 import SquarePen from "@lucide/svelte/icons/square-pen";
 import { untrack } from "svelte";
 import { SvelteSet } from "svelte/reactivity";
+import { dropLocalDraft, keepLocalDraft, localDraft } from "#lib/client/drafts.ts";
 import { createExchange, type SurfaceProps } from "#lib/components/exchange/controller.svelte.ts";
 import FinishSheet from "#lib/components/exchange/FinishSheet.svelte";
 import SendRejectedNotice from "#lib/components/exchange/SendRejectedNotice.svelte";
@@ -47,7 +48,8 @@ const mailboxLinks = $derived([
 	["sent", Send, t.sent, 0],
 ] as const);
 const selected = $derived(items.find((item) => item.id === selectedId) ?? items[0] ?? null);
-const draftKey = $derived(`mail-draft:${props.scenarioId}`);
+// The mail being written stays on this device (lib/client/drafts.ts), one per scenario.
+const draftKey = $derived(props.scenarioId);
 
 $effect(() => {
 	if (selected && (reading || window.matchMedia("(min-width: 768px)").matches)) read.add(selected.id);
@@ -61,7 +63,7 @@ function openMailbox(next: Mailbox) {
 
 function loadDraft(): MailDraftFields | null {
 	try {
-		const saved = JSON.parse(localStorage.getItem(draftKey) ?? "null") as Partial<MailDraftFields> | null;
+		const saved = JSON.parse(localDraft("mail", draftKey) || "null") as Partial<MailDraftFields> | null;
 		if (!saved || (!saved.subject?.trim() && !saved.body?.trim())) return null;
 		return { subject: String(saved.subject ?? ""), body: String(saved.body ?? "").slice(0, MAIL_TEXT_MAX) };
 	} catch {
@@ -70,12 +72,8 @@ function loadDraft(): MailDraftFields | null {
 }
 
 function storeDraft(value: MailDraftFields | null) {
-	try {
-		if (value && (value.subject.trim() || value.body.trim())) localStorage.setItem(draftKey, JSON.stringify(value));
-		else localStorage.removeItem(draftKey);
-	} catch {
-		// Storage can be unavailable (private mode); the draft then lives only while the composer is open.
-	}
+	if (value && (value.subject.trim() || value.body.trim())) keepLocalDraft("mail", draftKey, JSON.stringify(value));
+	else dropLocalDraft("mail", draftKey);
 }
 
 /** Opens the composer, resuming an unsent draft before starting a new one. */

@@ -9,6 +9,7 @@ import { hasScenarios } from "#lib/constants.ts";
 import { nameOf, tx } from "#lib/i18n/tx.ts";
 import { library } from "#lib/scenario/scenario.remote.ts";
 import type { ScenarioCard as Card } from "#lib/scenario/types.ts";
+import { dateOfDay } from "#lib/time/clock.svelte.ts";
 import { siteOf } from "#lib/writing/sites.ts";
 
 /*
@@ -29,7 +30,7 @@ const shown = $derived.by(() => {
 	);
 	return sort === "for" ? list : [...list].sort((a, b) => b.publishedAt - a.publishedAt);
 });
-const dateOf = (d: string) => new Intl.DateTimeFormat(app.lang, { month: "long", day: "numeric" }).format(new Date(`${d}T12:00`));
+const dateOf = (d: string) => dateOfDay(d, { month: "long", day: "numeric" });
 const metaOf = (q: Card) =>
 	q.state === "written" ? tx("scenarioWritten") : q.state === "open" ? tx("scenarioActive") : tx("aboutMin", { m: q.minutes });
 $effect(() => {

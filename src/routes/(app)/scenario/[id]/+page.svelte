@@ -1,7 +1,9 @@
 <script lang="ts">
 import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import ArrowRight from "@lucide/svelte/icons/arrow-right";
+import { untrack } from "svelte";
 import { app } from "#lib/account/app.svelte.ts";
+import { keepLocalDraft, localDraft } from "#lib/client/drafts.ts";
 import Accordion from "#lib/components/common/Accordion.svelte";
 import { autogrow } from "#lib/components/common/motion.ts";
 import Situation from "#lib/components/scenario/Situation.svelte";
@@ -10,12 +12,11 @@ import { sandboxed } from "#lib/components/tour/sandbox.svelte.ts";
 import { tourScenario } from "#lib/components/tour/scenarios.ts";
 import Button from "#lib/components/ui/button/button.svelte";
 import { tx } from "#lib/i18n/tx.ts";
-import { notesNow } from "#lib/notebook/notebook.svelte.ts";
-import { keepPlan, plan as planOf, scenarioView } from "#lib/scenario/scenario.remote.ts";
+import { glanceNow } from "#lib/notebook/notebook.svelte.ts";
+import { scenarioView } from "#lib/scenario/scenario.remote.ts";
 import { reopen } from "#lib/writing/open.ts";
 import { siteOf } from "#lib/writing/sites.ts";
-import { myWriting } from "#lib/writing/writing.svelte.ts";
-import { beforeNavigate, goto } from "$app/navigation";
+import { shelfNow } from "#lib/writing/writing.svelte.ts";
 import { page } from "$app/state";
 
 /*
@@ -24,7 +25,7 @@ import { page } from "$app/state";
  * Then a moment to prepare: phrases from their own notebook that could fit, and a plan in their own words (planning
  * before a task makes what follows more fluent and more ambitious); the session afterwards reads the plan as their
  * notes. The button opens the place: the simulated surface, or for a translation, the sheet it is written on. The plan
- * is kept on the server as it is typed, and the piece takes it when it is created.
+ * is kept on this device as it is typed, and the piece takes it when it is created.
  */
 const where = $derived({ id: page.params.id ?? "", lang: app.lang });
 const scenario = $derived(sandboxed() ? tourScenario(where.id, where.lang) : await scenarioView(where));
@@ -32,36 +33,21 @@ const s = $derived(scenario?.situation);
 const sim = $derived(scenario?.scene);
 const st = $derived(scenario ? siteOf(scenario.site) : undefined);
 const progress = $derived(scenario?.state ?? "new");
-const started = $derived(scenario?.openPiece ? myWriting().find((w) => w.id === scenario.openPiece) : undefined);
+const started = $derived(scenario?.openPiece ? shelfNow().open.find((w) => w.id === scenario.openPiece) : undefined);
 const written = $derived(scenario?.writtenPiece);
-// Phrases the learner already owns that could serve here: their notebook's latest few (phase 4 ranks them by fit).
-const owned = $derived((await notesNow()).slice(0, 4).map((n) => n.phrase));
-// The tour's plan stays on the page.
-let plan = $derived(sandboxed() ? "" : await planOf(where));
-let pending: (() => Promise<unknown>) | null = null;
-let timer: ReturnType<typeof setTimeout> | undefined;
+// Phrases the learner already owns that could serve here: their notebook's latest few (not yet ranked by fit).
+const owned = $derived((await glanceNow()).latest);
+// The plan stays on this device until the piece is made, which takes it (lib/client/drafts.ts); the tour's stays on the
+// page. The server's page has none yet: the device's comes in once the page runs.
+const planKey = $derived(`${where.id}|${where.lang}`);
+let plan = $state("");
+$effect(() => {
+	const key = planKey;
+	plan = sandboxed() ? "" : untrack(() => localDraft("plan", key));
+});
 function typed(text: string) {
 	plan = text;
-	if (sandboxed()) return;
-	const at = where;
-	clearTimeout(timer);
-	pending = () => keepPlan({ ...at, text }).catch(() => {});
-	timer = setTimeout(flush, 500);
-}
-function flush() {
-	clearTimeout(timer);
-	const send = pending;
-	pending = null;
-	return send?.();
-}
-// Going in waits for the plan just typed: the piece takes it.
-beforeNavigate(({ to }) => {
-	if (pending && !to?.url.pathname.startsWith(`/scenario/${where.id}/`)) flush();
-});
-async function goIn(e: MouseEvent, href: string) {
-	e.preventDefault();
-	await flush();
-	goto(href);
+	if (!sandboxed()) keepLocalDraft("plan", planKey, text);
 }
 const translation = $derived(scenario?.kind === "translation");
 const enter = $derived(translation ? tx("qEnterTr") : tx("qEnter", { site: scenario?.site ?? "" }));
@@ -161,7 +147,7 @@ $effect(() => {
 						<Button class="w-full" onclick={() => reopen(started)}>{tx("qContinue")}<ArrowRight aria-hidden="true" /></Button>
 					{:else}
 						{@const href = `/scenario/${scenario.id}/${translation ? "translate" : "play"}`}
-						<Button class="w-full" {href} onclick={(e: MouseEvent) => goIn(e, href)}>{enter}<ArrowRight aria-hidden="true" /></Button>
+						<Button class="w-full" {href}>{enter}<ArrowRight aria-hidden="true" /></Button>
 					{/if}
 					{#if written}
 						<a class="seen" href="/w/{written}">{tx("qSeeIt")}</a>

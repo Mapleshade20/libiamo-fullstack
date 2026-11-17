@@ -3,10 +3,13 @@ import { authClient } from "#lib/auth/client.ts";
 import { passwordProblem } from "#lib/auth/password-strength.ts";
 import type { SocialProviderId } from "#lib/auth/social.ts";
 import { keepCookie } from "#lib/client/cookie.ts";
+import { dropAllDrafts } from "#lib/client/drafts.ts";
+import { toast } from "#lib/components/shell/toast.svelte.ts";
 import type { AppLang } from "#lib/constants.ts";
 import { loadLang, t } from "#lib/i18n/index.svelte.ts";
 import { dirOf, htmlLang } from "#lib/i18n/langs.ts";
 import { learnerState } from "#lib/scope.ts";
+import { clearDraft } from "#lib/writing/draft.ts";
 import { goto } from "$app/navigation";
 import {
 	cancelEmailChange as cancelChange,
@@ -116,9 +119,9 @@ const refusal = (e: Failure, fallback = "auSomethingWrong") =>
 
 /** Into the app: the welcome for an account that has not set up, else home, speaking the language worked in. */
 export function enter() {
-	if (!account.me.onboarded) return goto("/welcome", { replace: true, invalidateAll: true });
+	if (!account.me.onboarded) return goto("/welcome", { replace: true, refreshAll: true });
 	applyLang();
-	return goto("/", { replace: true, invalidateAll: true });
+	return goto("/", { replace: true, refreshAll: true });
 }
 
 /** An address and password. Wrong ones get one message, never which of the two was wrong. */
@@ -196,9 +199,18 @@ export async function setKey(provider: string, model: string, key: string) {
 	return null;
 }
 /** Which model checks what the learner sends; applies at once. */
-export async function setDecisionModel(model: string) {
+/** Whether it was kept; when it was not, the learner is told and the page shows the server's again. */
+export async function setDecisionModel(model: string): Promise<boolean> {
 	if (account.me.key) account.me.key.decision = model;
-	await saveDecisionModel(model);
+	try {
+		await saveDecisionModel(model);
+		return true;
+	} catch (e) {
+		console.error("the decision model was not saved", e);
+		toast(t(app.lang, "setNotSaved"));
+		await hydrate().catch(() => {});
+		return false;
+	}
 }
 export const hasPassword = () => account.me.hasPassword;
 
@@ -219,12 +231,20 @@ export async function disconnect(provider: SocialProviderId): Promise<string | n
 export async function deleteAccount(email: string) {
 	await remove({ email });
 	await authClient.signOut().catch(() => {});
+	forgetDrafts();
 	adopt(null);
-	await goto("/sign-in", { replace: true, invalidateAll: true });
+	await goto("/sign-in", { replace: true, refreshAll: true });
 }
 
 export async function signOut(to = "/sign-in") {
 	await authClient.signOut();
+	forgetDrafts();
 	adopt(null);
-	await goto(to, { invalidateAll: true });
+	await goto(to, { refreshAll: true });
+}
+
+/** What was typed on this device and not sent goes with the account that typed it. */
+function forgetDrafts() {
+	dropAllDrafts();
+	clearDraft();
 }

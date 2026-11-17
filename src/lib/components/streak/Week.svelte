@@ -6,6 +6,7 @@ import FloatingPanel from "#lib/components/common/FloatingPanel.svelte";
 import { keepTourGlass, sandboxed, tourGlass } from "#lib/components/tour/sandbox.svelte.ts";
 import { tx } from "#lib/i18n/tx.ts";
 import { lang } from "#lib/notebook/notebook.svelte.ts";
+import { weekdayNames } from "#lib/time/format.ts";
 import { lookAtReviews } from "#lib/week/week.remote.ts";
 import { weekNow } from "#lib/week/week.svelte.ts";
 import Digits from "./Digits.svelte";
@@ -26,10 +27,9 @@ const n = $derived(days.filter((d) => d.kind === "full").length);
 const goal = $derived(view.goal);
 const lookOf = (k: string): Look => (k === "full" ? "full" : k === "learned" || k === "reviewed" ? "up" : "down");
 const RANK: Record<Look, number> = { down: 0, up: 1, full: 2 };
-const today = drinkOf();
-const names = $derived(
-	Array.from({ length: 7 }, (_, i) => new Intl.DateTimeFormat(app.lang, { weekday: "narrow" }).format(new Date(2026, 9, 26 + i))),
-);
+// Today's drink is the learner's weekday, as the server names their day (the same on both sides).
+const today = $derived(drinkOf(view.today));
+const names = $derived(weekdayNames(app.lang, "narrow"));
 let open = $state(false);
 let celebrate = $state(false);
 /** What the glasses show: today's state, except while a change is being played (it starts from the old one). */

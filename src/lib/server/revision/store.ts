@@ -1,6 +1,6 @@
-import { and, eq, inArray, isNotNull, lt, max, ne, sql } from "drizzle-orm";
+import { and, eq, exists, inArray, isNotNull, lt, max, ne, not, or, type SQL, sql } from "drizzle-orm";
 import { db } from "#lib/server/db/index.ts";
-import { piece, pieceRevision, pieceStep, user as users } from "#lib/server/db/schema.ts";
+import { exchange, exchangeMessage, piece, pieceRevision, pieceStep, sessionCase, user as users } from "#lib/server/db/schema.ts";
 import { learnerCaller } from "#lib/server/llm/callers.ts";
 import { Lanes } from "#lib/server/llm/lanes.ts";
 import { fileOwn } from "#lib/server/notebook/notes.ts";
@@ -337,6 +337,154 @@ export async function dropRevision(pieceId: string) {
 		await retire(pieceId);
 		await db.delete(pieceRevision).where(eq(pieceRevision.pieceId, pieceId));
 	});
+}
+
+/**
+ * Snapshots a finished piece no longer needs: its notes filed (or never asked for) more than a day ago. Normally
+ * dropRevision has taken them; a replay, or a page that never asked for notes, leaves them behind (about 20 KB each).
+ */
+export async function pruneRevisions(now = new Date()) {
+	const gone = await db
+		.delete(pieceRevision)
+		.where(
+			inArray(
+				pieceRevision.pieceId,
+				db
+					.select({ id: piece.id })
+					.from(piece)
+					.where(
+						and(eq(piece.state, "finished"), sql`${piece.notesRequestedAt} is null`, lt(piece.finishedAt, new Date(now.getTime() - 86_400_000))),
+					),
+			),
+		)
+		.returning({ id: pieceRevision.pieceId });
+	return gone.length;
+}
+
+/** How long an unfinished piece may go untouched before it is abandoned. */
+export const ABANDON_DAYS = 30;
+
+const one = { one: sql`1` };
+const snapshotWhere = (...c: (SQL | undefined)[]) =>
+	exists(
+		db
+			.select(one)
+			.from(pieceRevision)
+			.where(and(eq(pieceRevision.pieceId, piece.id), ...c)),
+	);
+/** A revision that can no longer be opened: no snapshot, or one an older version of the revision wrote. */
+const unopenable = () => and(eq(piece.state, "revising"), not(snapshotWhere(eq(pieceRevision.version, SNAPSHOT_VERSION))));
+
+/**
+ * Pieces nobody will finish, as of `now`:
+ * - in a revision: untouched for thirty days (its snapshot is written after every change), or one that can no longer be
+ *   opened (an hour on: a revision's piece is written a moment before its first snapshot);
+ * - a scenario's, its place closed (the worker closes it after 48 hours): at once when the learner wrote nothing in it,
+ *   else thirty days after it closed or was taken up again;
+ * - a translation taken up again and left on its sheet: thirty days after.
+ * A translation being written is not a piece yet (its draft is on the learner's device).
+ */
+function stale(now: Date) {
+	const before = new Date(now.getTime() - ABANDON_DAYS * 86_400_000);
+	const settled = new Date(now.getTime() - 3_600_000);
+	const closed = (...c: (SQL | undefined)[]) =>
+		exists(
+			db
+				.select(one)
+				.from(exchange)
+				.where(and(eq(exchange.pieceId, piece.id), ne(exchange.status, "in_progress"), ...c)),
+		);
+	const said = exists(
+		db
+			.select(one)
+			.from(exchangeMessage)
+			.where(and(eq(exchangeMessage.exchangeId, exchange.id), eq(exchangeMessage.role, "user"))),
+	);
+	return or(
+		and(
+			eq(piece.state, "revising"),
+			or(
+				and(not(snapshotWhere()), lt(piece.updatedAt, settled)),
+				snapshotWhere(ne(pieceRevision.version, SNAPSHOT_VERSION)),
+				snapshotWhere(lt(pieceRevision.updatedAt, before)),
+			),
+		),
+		and(
+			eq(piece.state, "writing"),
+			eq(piece.kind, "scenario"),
+			or(closed(not(said)), and(closed(lt(exchange.completedAt, before)), lt(piece.updatedAt, before))),
+		),
+		and(eq(piece.state, "writing"), eq(piece.kind, "translation"), lt(piece.updatedAt, before)),
+	);
+}
+
+/**
+ * A piece left unfinished, abandoned: its state goes, what was written stays. The revision's snapshot and its tape go;
+ * the text, the background, the context, a translation's assignment and a scenario's conversation stay, so it can be
+ * taken up again (server/writing/take-up.ts). `still` is why (by default, a revision that can no longer be opened):
+ * checked again in the piece's turn, so a learner who came back meanwhile keeps it, and never while its revision is in
+ * memory (someone is in it; an idle one leaves memory within half an hour). Whether it was abandoned now.
+ */
+export async function abandon(pieceId: string, still: SQL | undefined = unopenable()): Promise<boolean> {
+	return exclusive(pieceId, async () => {
+		if (held.has(pieceId)) return false;
+		return db.transaction(async (tx) => {
+			const [p] = await tx
+				.update(piece)
+				.set({ state: "abandoned", notesRequestedAt: null })
+				.where(and(eq(piece.id, pieceId), inArray(piece.state, ["writing", "revising"]), still))
+				.returning({ id: piece.id });
+			if (!p) return false;
+			await tx.delete(pieceRevision).where(eq(pieceRevision.pieceId, pieceId));
+			// An open case still reads its tape (pruneTapes takes it once the case is closed).
+			await tx
+				.delete(pieceStep)
+				.where(
+					and(
+						eq(pieceStep.pieceId, pieceId),
+						sql`not exists (select 1 from ${sessionCase} where ${sessionCase.pieceId} = ${pieceId} and ${sessionCase.status} = 'open')`,
+					),
+				);
+			return true;
+		});
+	});
+}
+
+/** Pieces nobody will finish (`stale`), abandoned, at most `limit` at a time. */
+export async function abandonStale(now = new Date(), limit = 200): Promise<number> {
+	const ids = await db.select({ id: piece.id }).from(piece).where(stale(now)).limit(limit);
+	let n = 0;
+	for (const { id } of ids) if (await abandon(id, stale(now))) n++;
+	return n;
+}
+
+/** How long a finished piece keeps its tape (design §5.7: as long as model call records). */
+export const KEEP_TAPE_DAYS = 30;
+
+/**
+ * Tapes kept as model call records are (design §5.7): a finished piece's, once its notes are filed, thirty days after it
+ * was finished, or at once when its learner does not help improve Libiamo (nobody reads theirs), and an abandoned
+ * piece's at once; an open case holds a tape until it is closed. A piece's own page reads its row, never its tape;
+ * only the admin and `case pull` do.
+ */
+export async function pruneTapes(now = new Date()) {
+	const before = new Date(now.getTime() - KEEP_TAPE_DAYS * 86_400_000);
+	const done = db
+		.select({ id: piece.id })
+		.from(piece)
+		.innerJoin(users, eq(users.id, piece.userId))
+		.where(
+			and(
+				or(
+					and(eq(piece.state, "finished"), sql`${piece.notesRequestedAt} is null`, or(lt(piece.finishedAt, before), eq(users.helpImprove, false))),
+					// An abandoned piece's tape was kept only for an open case.
+					eq(piece.state, "abandoned"),
+				),
+				sql`not exists (select 1 from ${sessionCase} where ${sessionCase.pieceId} = ${piece.id} and ${sessionCase.status} = 'open')`,
+			),
+		);
+	const gone = await db.delete(pieceStep).where(inArray(pieceStep.pieceId, done)).returning({ id: pieceStep.pieceId });
+	return new Set(gone.map((g) => g.id)).size;
 }
 
 /** Idle revisions leave memory (their snapshot written first). */

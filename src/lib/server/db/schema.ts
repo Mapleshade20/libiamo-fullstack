@@ -397,24 +397,6 @@ export const announcement = pgTable("announcement", {
 	createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
 	createdAt: created(),
 });
-/** What a learner plans to say in a scenario, typed on its page before going in; the piece takes it as its background
-    when it is created, and the plan goes. */
-export const scenarioPlan = pgTable(
-	"scenario_plan",
-	{
-		userId: text("user_id")
-			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }),
-		scenarioId: text("scenario_id")
-			.notNull()
-			.references(() => scenario.id, { onDelete: "cascade" }),
-		language: text("language").notNull(),
-		text: text("text").notNull(),
-		updatedAt: updated(),
-	},
-	(t) => [primaryKey({ columns: [t.userId, t.scenarioId, t.language] }), check("scenario_plan_language_check", oneOf(t.language, LEARNABLE))],
-);
-
 export const announcementRead = pgTable(
 	"announcement_read",
 	{
@@ -485,7 +467,11 @@ export const piece = pgTable(
 		check("piece_state_check", oneOf(t.state, PIECE_STATES)),
 		check("piece_posted_check", sql`${t.posted} is null or ${oneOf(t.posted, POSTED)}`),
 		check("piece_finished_check", sql`(${t.state} = 'finished') = (${t.finishedAt} is not null)`),
-		index("piece_user_idx").on(t.userId, t.language, t.updatedAt),
+		// A learner's pieces in a language, newest first (ids are uuidv7: their order is when each was made): the shelf,
+		// My writing's pages, a scenario's progress.
+		index("piece_user_idx").on(t.userId, t.language, t.id),
+		// Who has written in a scenario (its written count, whether where it happens is fixed).
+		index("piece_scenario_idx").on(t.scenarioId).where(sql`${t.scenarioId} is not null`),
 		index("piece_notes_retry_idx").on(t.notesRequestedAt).where(sql`${t.notesRequestedAt} is not null`),
 		uniqueIndex("piece_open_scenario_unique")
 			.on(t.userId, t.scenarioId)
@@ -728,7 +714,12 @@ export const note = pgTable(
 		check("note_language_check", oneOf(t.language, LEARNABLE)),
 		check("note_kind_check", oneOf(t.kind, NOTE_KINDS)),
 		check("note_register_check", sql`${t.register} is null or ${oneOf(t.register, REGISTERS)}`),
-		index("note_due_idx").on(t.userId, t.due).where(sql`${t.deletedAt} is null`),
+		// Review's count and sitting, both in one language.
+		index("note_due_idx").on(t.userId, t.language, t.due).where(sql`${t.deletedAt} is null`),
+		// The notebook's pages, newest first (by uuidv7 id).
+		index("note_list_idx").on(t.userId, t.language, t.id).where(sql`${t.deletedAt} is null`),
+		// Deleting an account (the partial indexes above cannot serve its cascade).
+		index("note_user_idx").on(t.userId),
 		index("note_piece_idx").on(t.pieceId),
 	],
 );
@@ -756,6 +747,8 @@ export const reviewLog = pgTable(
 		check("review_log_rating_check", sql`${t.rating} between 1 and 4`),
 		check("review_log_verdict_check", sql`${t.verdict} is null or ${oneOf(t.verdict, VERDICTS)}`),
 		index("review_log_note_idx").on(t.noteId),
+		// Deleting an account.
+		index("review_log_user_idx").on(t.userId),
 	],
 );
 
