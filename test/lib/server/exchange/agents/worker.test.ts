@@ -276,7 +276,7 @@ describe("agent reply worker scheduling", () => {
 		expect(hasEndedByMaxTurns({ status: "evaluated", completionReason: "user_requested" })).toBe(false);
 		expect(shouldDeliverIntoEndedSession({ status: "completed", completionReason: "max_turns" }, "pending")).toBe(false);
 		expect(shouldDeliverIntoEndedSession({ status: "completed", completionReason: "user_requested" }, "delivery_pending")).toBe(false);
-		expect(shouldDeliverIntoEndedSession({ status: "completed", completionReason: "max_session_age" }, "delivery_pending")).toBe(false);
+		expect(shouldDeliverIntoEndedSession({ status: "completed", completionReason: "max_age" }, "delivery_pending")).toBe(false);
 		// the abuse-terminating batch keeps its parting reply after the session ends,
 		// including when the feedback page has already flipped it to evaluated
 		expect(shouldDeliverIntoEndedSession({ status: "completed", completionReason: "terminated_abuse" }, "delivery_pending")).toBe(true);
