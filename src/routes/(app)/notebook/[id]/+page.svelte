@@ -3,6 +3,7 @@ import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import Pencil from "@lucide/svelte/icons/pencil";
 import Trash2 from "@lucide/svelte/icons/trash-2";
 import { app } from "#lib/account/app.svelte.ts";
+import { revalidate } from "#lib/client/refresh.ts";
 import ModalDialog from "#lib/components/common/ModalDialog.svelte";
 import ReviewFace from "#lib/components/review/ReviewFace.svelte";
 import EmptyState from "#lib/components/shell/EmptyState.svelte";
@@ -23,6 +24,7 @@ import { page } from "$app/state";
  * with the place as one quiet line), then the card review asks with when. Correcting or deleting it happens here
  * (the main app's /review/manage, folded in); a deleted entry leaves review too.
  */
+revalidate(noteNow(page.params.id ?? ""));
 const n = $derived(await noteNow(page.params.id ?? ""));
 const REG: Record<string, string> = {
 	neutral: "regNeutral",

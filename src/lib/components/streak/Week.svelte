@@ -2,6 +2,7 @@
 import ChevronRight from "@lucide/svelte/icons/chevron-right";
 import { onMount, tick } from "svelte";
 import { app } from "#lib/account/app.svelte.ts";
+import { revalidate } from "#lib/client/refresh.ts";
 import FloatingPanel from "#lib/components/common/FloatingPanel.svelte";
 import { keepTourGlass, sandboxed, tourGlass } from "#lib/components/tour/sandbox.svelte.ts";
 import { tx } from "#lib/i18n/tx.ts";
@@ -20,6 +21,7 @@ import type { Look, Moment } from "./glass/scene";
  * and garnished when both are done, which is what counts. Nothing is ever lost. Whenever today's glass changes, or a
  * new day clears yesterday's, the popover opens by itself and plays it where the learner can see it.
  */
+revalidate(weekNow());
 const view = $derived(await weekNow());
 const days = $derived(view.days.map((d, i) => ({ ...d, i, today: d.day === view.today })));
 const kind = $derived(days.find((d) => d.today)?.kind ?? "none");
@@ -105,8 +107,9 @@ function changes() {
 }
 onMount(() => {
 	changes();
-	// Nothing to review is the reviews done: a visit that finds the queue empty earns today's half.
-	if (!sandboxed()) lookAtReviews(lang()).catch(() => {});
+	// Nothing to review is the reviews done: a visit that finds the queue empty earns today's half (once: a day that has
+	// it already is not asked about again on every page).
+	if (!sandboxed() && kind !== "reviewed" && kind !== "full") lookAtReviews(lang()).catch(() => {});
 });
 // A day earned while this stays on the page (the reviews found empty, the tour): play it too.
 $effect(() => {

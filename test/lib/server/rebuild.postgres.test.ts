@@ -70,6 +70,7 @@ import { scenarioViewOf } from "#lib/server/scenario/scenarios.ts";
 import { sourceIdentity } from "#lib/server/translation/identity.ts";
 import { makeSourceRow, queueSources } from "#lib/server/translation/runner.ts";
 import { saveSheet, sheetOf, translationFor } from "#lib/server/translation/sheet.ts";
+import { credit } from "#lib/server/week/days.ts";
 import { PIECES_PAGE, piecesPage, shelvesOf } from "#lib/server/writing/pieces.ts";
 import { takeUp } from "#lib/server/writing/take-up.ts";
 import { POST as startPost } from "../../../src/routes/api/s/+server.ts";
@@ -584,6 +585,18 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 			expect(row).toMatchObject({ kind: "own", scenarioId: null });
 			expect(made.json.setup.translation).toBeUndefined();
 		});
+	});
+
+	it("earns each half of a day once, and leaves the day's row alone when it has that half already", async () => {
+		const at = new Date();
+		const version = async () => (await sql`select xmin::text as v from practice_day where user_id = ${learner.id}`)[0]?.v;
+		expect(await credit(db, learner, "reviewed", "en", at)).toBe(true);
+		const first = await version();
+		expect(await credit(db, learner, "reviewed", "en", at)).toBe(false);
+		expect(await version()).toBe(first);
+		// The other half is still earned, on the same row.
+		expect(await credit(db, learner, "learned", "en", at)).toBe(true);
+		expect(await version()).not.toBe(first);
 	});
 
 	it("retired revision callbacks cannot overwrite a replacement or recreate a deleted snapshot", async () => {

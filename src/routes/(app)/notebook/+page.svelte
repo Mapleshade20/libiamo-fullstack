@@ -1,6 +1,7 @@
 <script lang="ts">
 import { blur } from "svelte/transition";
 import { app } from "#lib/account/app.svelte.ts";
+import { revalidate } from "#lib/client/refresh.ts";
 import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
 import EmptyState from "#lib/components/shell/EmptyState.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
@@ -13,6 +14,8 @@ import type { NoteFrom, NoteRow } from "#lib/notebook/types.ts";
    The list comes a page at a time (server/notebook/notes.ts `notebookPage`), filtered on the server; the next page is
    asked for as the end of the list comes near. Most learners have one page. */
 let filter = $state<NoteFrom>("all");
+// The list opens unfiltered.
+revalidate(notebookNow("all"), dueNow());
 const first = $derived(await notebookNow(filter));
 const key = $derived(`${lang()}|${filter}`);
 // The pages after the first, for the list as it is now filtered.

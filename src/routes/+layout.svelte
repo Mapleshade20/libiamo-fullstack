@@ -5,6 +5,7 @@ import "#lib/components/shell/sheet.css";
 import { onMount, type Snippet } from "svelte";
 import { followSystem } from "#lib/account/look.svelte.ts";
 import { followTimeZone } from "#lib/account/time-zone.ts";
+import { settled } from "#lib/client/refresh.ts";
 import Toast from "#lib/components/shell/Toast.svelte";
 import { toast } from "#lib/components/shell/toast.svelte.ts";
 import Tour from "#lib/components/tour/Tour.svelte";
@@ -19,6 +20,7 @@ onMount(followSystem);
 // learner's time zone follows this device's.
 onMount(runClock);
 onMount(followTimeZone);
+onMount(settled);
 // What a page that left for another one whole (signing out, deleting the account) had to say.
 onMount(() => {
 	const said = sessionStorage.getItem("leftToast");

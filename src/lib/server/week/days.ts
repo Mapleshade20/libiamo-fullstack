@@ -54,9 +54,12 @@ export async function credit(w: Writer, u: WeekLearner, half: "learned" | "revie
 				learnedAt: sql`coalesce(${practiceDay.learnedAt}, excluded.learned_at)`,
 				reviewedAt: sql`coalesce(${practiceDay.reviewedAt}, excluded.reviewed_at)`,
 			},
+			// Only when it earns a half the day does not have yet: nothing is rewritten for a half already earned.
+			setWhere: sql`(${practiceDay.learnedAt} is null and excluded.learned_at is not null) or (${practiceDay.reviewedAt} is null and excluded.reviewed_at is not null)`,
 		})
 		.returning({ learnedAt: practiceDay.learnedAt, reviewedAt: practiceDay.reviewedAt });
 	await holdWeek(w, u, weekStartOf(day));
+	if (!row) return false;
 	const mine = (t: Date | null, mark: Date | null) => !!mark && t?.getTime() === mark.getTime();
 	return mine(row.learnedAt, set.learnedAt) || mine(row.reviewedAt, set.reviewedAt);
 }
