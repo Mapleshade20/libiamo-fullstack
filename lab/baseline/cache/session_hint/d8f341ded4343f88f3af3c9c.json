@@ -1,0 +1,24 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "medium",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "The writer's note about it, in their words: A post on Xiaohongshu after my weekend in Hangzhou.\nA learner of Simplified Chinese (as used in mainland China) is rewriting part of a post for Xiaohongshu (travel post):\n<<<\n大家好！我是美国人，在上海学中文已经一年了。上个周末我和朋友去杭州玩，我们沿着西湖走了三个小时，一路上风景好到让人舍不得走，你指的那处景色尤其让人挪不开眼。\n\n但是我有一个问题：我在一个饭馆点了西湖醋鱼，服务员说这个菜很有名，可是我觉得它太酸了，我不是很喜欢吃。是不是我点得不对？还有什么杭州菜你们推荐我试一试吗？谢谢！\n>>>\nThe part: \"但是我有一个问题：我在一个饭馆点了西湖醋鱼，服务员说这个菜很有名，可是我觉得它太酸了，我不是很喜欢吃。是不是我点得不对？还有什么杭州菜你们推荐我试一试吗？谢谢！\"\nWhat is wrong with it: 1. Here 有一个问题 announces a real difficulty, and Chinese readers expect the writer to say what went wrong, such as bad service, a bad dish or a bad experience. The post then asks only whether the writer ordered the wrong thing, so the frame promises more than the question delivers.\n2. 太…了 is a flat verdict, and with 西湖醋鱼, a famous Hangzhou dish, a local reader may hear the dish itself judged as wrong, not just unsuited to the writer. Stated this way, the criticism is much harsher than the writer seems to intend.\n3. The question asks whether the writer ordered wrong, but it does not say what the writer wants to know. Readers could answer that the wrong dish was chosen, that the restaurant was poor, or that the dish is meant to be this sour. Each answer needs a different reply, and the post does not say which one is wanted.\n4. The post asks for dish recommendations but never says they're for a future trip.\nWhat they mean (confirmed by them): 1. Only a question about my own taste and order.\n2. The dish was wrong or badly cooked.\n3. I should have ordered something else.\n4. I want to know which Hangzhou dishes to order on my next visit to Hangzhou.\nA version that works (never show it or any stretch of it): \"但是我有一个问题：我在一家饭馆点了西湖醋鱼，服务员说这个菜很有名，可是对我来说太酸了，我不太喜欢吃。是不是我点错了？下次去杭州，还有什么杭州菜你们推荐我试一试吗？谢谢！\"\nWords they already have as hints: 口味, 合适, 点错, 下次, 推荐, 喜欢\nThey are stuck. Write two hints that help them build it themselves, never giving them the wording:\n- plan: in English, one or two short sentences, as their tutor: how a fluent writer builds this part: what comes first, what follows, how the parts connect (contrast, cause, addition) and where the emphasis goes. Name no Simplified Chinese (as used in mainland China) word except the hint words above (none from the working version), no letter counts, no fill-in blanks. It is about the words of this part, never the content they talk about (\"first the interactions between them, then…\" plans a story, not the sentence). When the part is a word or two (left in English, or a missing word), say what kind of word goes there and how it sits in the sentence.\n- example: one short Simplified Chinese (as used in mainland China) sentence a fluent writer would actually write (grammatical and natural on its own), about an everyday topic unrelated to the post (different people, things and events), built the same way as the working version: the same pattern and the same connecting words, none of its other content words. Put [square brackets] around the few words it shares with the working version as they are (the frame they can borrow, at most four), never around the words that change.\nThe writer may write to you in any language; whatever they write in, everything you write for them is in English.\nReply with JSON only: {\"plan\":\"\",\"example\":\"\"}"
+		}
+	],
+	"result": {
+		"text": "{\"plan\":\"Announce the problem first, then describe what happened, and use a contrast clause to shift to your own taste. Then ask a direct yes-or-no question about your choice and end with a request tied to your next visit, so the question and the request carry the most weight.\",\"example\":\"[但是我有一个问题]：我在超市买了一包咖啡豆，店员说这个牌子很好，[可是对我来说]太苦了，我不太喜欢喝。[是不是我]选错了？\"}",
+		"usage": {
+			"input": 1375,
+			"output": 1526,
+			"reasoning": 1366,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 8380,
+		"costUsd": 0.0009005
+	},
+	"finish": "stop"
+}

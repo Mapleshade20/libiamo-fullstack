@@ -1,0 +1,24 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "A learner of English is rewriting part of a post. The sentence they are working towards, for you only (never quote it or give it away): \"a little kittypet from far away\". Gloss each hint word in the sense it has in that sentence, not its most common sense (\"alone\" in \"the clouds alone explain it\" means \"only\", not \"by oneself\").\n\nTheir hint words, exactly 2: \"far off\", \"house cat\". \"a / b\" is a choice between two words.\n\nFor each of these hint words and no others, in this order: piece: the hint word as given. gloss: in Simplified Chinese (as used in mainland China), what it means here and how it is used, in one or two short sentences (the kind of word, what it goes with, register if it matters; for a choice, how the two differ). example: one short, natural English sentence that uses it in the same sense, about everyday life and on a topic unrelated to the post (different people, events and subject), so it shows the word without giving away the sentence they are building.\nReply with JSON only: {\"notes\":[{\"piece\":\"\",\"gloss\":\"\",\"example\":\"\"}]}"
+		}
+	],
+	"result": {
+		"text": "{\"notes\":[{\"piece\":\"far off\",\"gloss\":\"表示距离很远，指遥远的地方，常作形容词或副词，与 far away 意思相近，可用于地点或时间。\",\"example\":\"The sound of the train seemed far off in the quiet valley.\"},{\"piece\":\"house cat\",\"gloss\":\"指养在家里的猫，是名词短语，强调它是家庭宠物，与野猫或流浪猫相对。\",\"example\":\"Our house cat sleeps on the windowsill every afternoon.\"}]}",
+		"usage": {
+			"input": 342,
+			"output": 578,
+			"reasoning": 407,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 3962,
+		"costUsd": 0.0003232
+	},
+	"finish": "stop"
+}

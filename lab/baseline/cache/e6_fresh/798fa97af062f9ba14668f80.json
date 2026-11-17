@@ -1,0 +1,28 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "medium",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "system",
+			"content": "You are a fluent, native German-speaking member of this community: Reddit 帖子（德语，发在 r/Munich 版块）."
+		},
+		{
+			"role": "user",
+			"content": "Readers: 慕尼黑的本地网友，多为德语母语者，熟悉租房市场. What the writer wants to do: 请教大家如何找到合租房，并询问怎样写给房东的好消息.\nThe writer's note about it, in their words: 发在 r/Munich 的德语帖子，想问大家怎么找合租房。\nA learner's draft:\n<<<\nHallo zusammen,\n\nich bin seit drei Monaten in München und ich suche eine WG für nächste Semester. Ich habe schon viele Nachrichten auf WG-Gesucht geschrieben, aber niemand hat mir geantwortet. Vielleicht liegt es daran, dass mein Deutsch ist nicht so gut, oder weil ich noch keine Schufa habe?\n\nHabt ihr Tipps, wie man eine gute Nachricht an die Vermieter schreiben kann? Ich bin ruhig, ich koche gern und ich kann bis 450 Euro bezahlen. Vielen Dank im voraus!\n>>>\nWork in two steps.\nStep 1. Under \"### POINTS\", list every point the draft makes, in order, as short plain German notes: what is meant, never how it is said. Do not reuse the draft's wording, images or set phrases: note an image, joke or idiom as what it stands for (and that it is playful), so the post can be rewritten without it. Include feelings, jokes and questions. Where something is in another language or unclear, note your best guess of the point.\nStep 2. Under \"### FRESH\", close the draft and write the post from your notes alone, as you would write it yourself for these readers: your own sentence shapes, emphasis, idioms and rhythm. Keep every point, the writer's register and tone markers (emoji, \"lol\", \"~\"), a similar length, and their order unless another order clearly serves the reader better.\nReply with the two sections only."
+		}
+	],
+	"result": {
+		"text": "### POINTS\n\n- Ich bin seit ungefähr drei Monaten in München.\n- Ich suche ein WG-Zimmer für das nächste Semester.\n- Ich habe schon viele Anfragen auf WG-Gesucht geschickt.\n- Bisher hat mir niemand geantwortet (Frust).\n- Vermutung 1: Mein Deutsch ist vielleicht nicht gut genug.\n- Vermutung 2: Vielleicht liegt es daran, dass ich noch keine Schufa habe.\n- Frage: Hat jemand Tipps für eine gute Nachricht an Vermieter?\n- Über mich: ruhig, koche gern.\n- Budget: bis 450 Euro warm (Zahlung).\n- Bedanke mich im Voraus.\n\n### FRESH\n\nHi zusammen,\n\nich wohne jetzt seit etwa drei Monaten in München und suche für das nächste Semester ein WG-Zimmer. Ich hab schon ziemlich viele Anfragen auf WG-Gesucht geschickt, aber bisher hat sich leider niemand gemeldet. Liegt das vielleicht an meinem Deutsch? Oder daran, dass ich noch keine Schufa habe? Ich zerbrech mir da langsam den Kopf.\n\nHat jemand Tipps, wie man eine gute Nachricht an die Vermieter schreibt? Ich bin eher ruhig, koch gern und kann bis 450 Euro zahlen. Danke schon mal im Voraus!",
+		"usage": {
+			"input": 674,
+			"output": 1547,
+			"reasoning": 1022,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 7158,
+		"costUsd": 0.0008409
+	},
+	"finish": "stop"
+}

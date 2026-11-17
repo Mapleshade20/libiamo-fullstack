@@ -1,0 +1,24 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "A language learner (their own language: English) pasted a draft in Simplified Chinese (as used in mainland China), the language they are learning, that they are about to post or send, with an optional note.\n\nNote: A post on Xiaohongshu after my weekend in Hangzhou.\n\nDraft:\n<<<\n大家好！我是美国人，在上海学中文已经一年了。上个周末我和朋友去杭州玩，我们在西湖旁边走路了三个小时，风景非常好看。\n\n但是我有一个问题：我在一个饭馆点了西湖醋鱼，服务员说这个菜很有名，可是我觉得它太酸了，我不是很喜欢吃。是不是我点得不对？还有什么杭州菜你们推荐我试一试吗？谢谢！\n>>>\n\nSay where it will be posted (platform and kind of post), who will read it and what the writer wants to do. platform, audience and purpose in English (the writer reads them), whatever language the note is in, a short phrase each (at most about twelve words). The purpose says only what the draft and note show the writer doing; never add aims they do not show.\nAlso give site: the site or medium's short name as its users write it (a site name, or \"Email\"); community: where on it, as its users write it (a subreddit like r/name, a fic's title, a recipient), short; and reader: a plausible handle or name for one typical reader there, written the way that site shows names.\nAnd title: the piece as an item on the writer's list, in Simplified Chinese (as used in mainland China), starting with a verb, the way writing prompts are titled (for example \"Reply to the author of “Long Way Home”\", \"Ask r/WarriorCats why StarClan never came\", \"Thank Sam for the playlist\"); at most about eight words, naming who or what it is for.\nReply with JSON only: {\"site\":\"\",\"community\":\"\",\"reader\":\"\",\"title\":\"\",\"platform\":\"\",\"audience\":\"\",\"purpose\":\"\"}"
+		}
+	],
+	"result": {
+		"text": "{\"site\":\"Xiaohongshu\",\"community\":\"旅行 travel posts\",\"reader\":\"旅行小达人\",\"title\":\"回复在杭州问西湖醋鱼的美国朋友\",\"platform\":\"Xiaohongshu (travel post)\",\"audience\":\"Chinese travel-lovers and locals who follow food and travel notes\",\"purpose\":\"Share a Hangzhou weekend and ask which dishes to try\"}",
+		"usage": {
+			"input": 632,
+			"output": 137,
+			"reasoning": 0,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 1492,
+		"costUsd": 0.0001317
+	},
+	"finish": "stop"
+}

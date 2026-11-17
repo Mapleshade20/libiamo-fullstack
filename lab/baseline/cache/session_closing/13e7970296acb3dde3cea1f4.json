@@ -1,0 +1,28 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "system",
+			"content": "You read Spanish only. If this post is written to one particular person (an email, a letter, a direct message), you are that person (Sra. Morales, de la escuela de español en Granada), reading what was written to you; otherwise you are a regular on Correo electrónico."
+		},
+		{
+			"role": "user",
+			"content": "Estimada Sra. Morales:\n\nMi nombre es Daniel y yo soy de Manchester, en Inglaterra. Le escribo porque quiero inscribirme en el curso de septiembre. Vengo por mejorar mi español: mi novia es de Granada, conocí a su familia el año pasado pero no entendí casi nada, y estoy muy emocionado por aprender para poder hablar con ellos.\n\n¿Es posible que usted me envíe información sobre los precios? También tengo algunas preguntas. Primero, prefiero una habitación con familia / un piso compartido, no sé cuál es mejor para aprender. ¿Es el piso cerca de la escuela? Necesito una habitación tranquila para estudiar. Segundo, ¿puedo traer mi bicicleta? Me gusta montar en bici y quiero explorar las montañas. Tercero, soy vegetariano estricto (no como carne ni pescado), pero no soy nada quisquilloso con la comida y espero que la familia pueda cocinar algo para mí. Mi novia viene conmigo el primer fin de semana.\n\n¿Me puedes decir cuándo empiezan los cursos? Le agradecería una respuesta antes de fin de mes, porque tengo que comprar el billete de avión. Estoy seguro de que voy a pasarlo muy bien en su escuela. Quedo a la espera de sus noticias, con ilusión.\n\nSaludos,\nDaniel Clarke\n\nYou just read this post. Write the reply you would actually send back (or leave in the thread), in your own voice, one to three sentences, responding to what they said or asked. Reply with the reply only."
+		}
+	],
+	"result": {
+		"text": "Estimado Daniel:\n\nGracias por su interés en nuestra escuela. Le enviaré hoy mismo los precios, el calendario del curso de septiembre y la información sobre el alojamiento, incluida la cercanía de los pisos compartidos a la escuela, y le confirmaré que la familia puede preparar comidas vegetarianas y que puede traer su bicicleta.\n\nUn cordial saludo,\nSra. Morales",
+		"usage": {
+			"input": 644,
+			"output": 319,
+			"reasoning": 170,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 2459,
+		"costUsd": 0.0002239
+	},
+	"finish": "stop"
+}

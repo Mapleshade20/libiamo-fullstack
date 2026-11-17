@@ -1,0 +1,24 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "A writer revised their Simplified Chinese (as used in mainland China) post sentence by sentence. Compare the version before the revision with the final one, as an editor protecting what the writer meant.\n\nBefore:\n<<<\n大家好！我是美国人，在上海学中文已经一年了。上个周末我和朋友去杭州玩，我们在西湖旁边走路了三个小时，风景非常好看。\n\n但是我有一个问题：我在一个饭馆点了西湖醋鱼，服务员说这个菜很有名，可是我觉得它太酸了，我不是很喜欢吃。是不是我点得不对？还有什么杭州菜你们推荐我试一试吗？谢谢！\n>>>\n\nFinal:\n<<<\n大家好！我是美国人，在上海学中文已经一年了。上个周末我和朋友去杭州玩，我们沿着西湖走了三个小时，一路上风景好到让人舍不得走，你指的那处景色尤其让人挪不开眼。\n\n但是我有一个问题：我在一家饭馆点了西湖醋鱼，服务员说这个菜很有名，可是对我来说太酸了，我不太喜欢吃。是不是我点错了？下次去杭州，还有什么杭州菜你们推荐我试一试吗？谢谢！\n>>>\n\nDuring the revision the writer confirmed what they meant at these places; changes that follow these are intended:\n- 「大家好！我是美国人，在上海学中文已经一年了。上个周末我和朋友去杭州玩，我们在西湖旁边走路了三个小时，风景非常好看。」→ Everything this passage says now: every point, question, hedge and feeling in it stays; only how it is put changes.\n- 「但是我有一个问题：我在一个饭馆点了西湖醋鱼，服务员说这个菜很有名，可是我觉得它太酸了，我不是很喜欢吃。是不是我点得不对？还有什么杭州菜你们推荐我试一试吗？谢谢！」→ 1. Only a question about my own taste and order.\n2. The dish was wrong or badly cooked.\n3. I should have ordered something else.\n4. I want to know which Hangzhou dishes to order on my next visit to Hangzhou.\n\nList only real problems in the final version: a point, detail, question or condition from before that is gone (lost); a claim whose meaning changed, e.g. a hedge or a hypothetical that became a flat statement (changed); text that appears twice (duplicated); a sentence that is broken where two pieces were joined (broken). Rewording, reordering and better phrasing are not problems. quote: the exact words from the final version (or, for lost, from before); note: one short English sentence to the writer, informal. [] if there is nothing.\nReply with JSON only: {\"issues\":[{\"kind\":\"lost|changed|duplicated|broken\",\"quote\":\"\",\"note\":\"\"}]}"
+		}
+	],
+	"result": {
+		"text": "{\"issues\":[{\"kind\":\"broken\",\"quote\":\"你指的那处景色尤其让人挪不开眼。\",\"note\":\"\\\"你指的\\\" points to nothing earlier in the post, so this clause reads as a fragment joined onto the sentence before it.\"}]}",
+		"usage": {
+			"input": 971,
+			"output": 1224,
+			"reasoning": 1136,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 6337,
+		"costUsd": 0.0007091
+	},
+	"finish": "stop"
+}

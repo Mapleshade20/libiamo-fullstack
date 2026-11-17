@@ -7,6 +7,7 @@ import { fileOwn } from "#lib/server/notebook/notes.ts";
 import { credit } from "#lib/server/week/days.ts";
 import { learnedFrom, StandIn } from "#lib/server/writing/learned.ts";
 import { building } from "$app/env";
+import { LANGS, type Lang } from "./draft.ts";
 import { type RevisionInput, RevisionSession, type RevisionState, SNAPSHOT_VERSION } from "./revision.ts";
 
 /*
@@ -97,7 +98,7 @@ async function retire(pieceId: string) {
 /** A new piece of the learner's writing with its revision, or a fresh revision of one of their unfinished pieces. */
 export async function startRevision(
 	user: Learner & { activeLanguage?: string | null },
-	input: RevisionInput,
+	handed: RevisionInput,
 	meta: { language?: string; kind: "own" | "scenario" | "translation"; scenarioId?: string; title?: string; place?: string; pieceId?: string },
 ): Promise<string> {
 	let id = meta.pieceId;
@@ -109,18 +110,23 @@ export async function startRevision(
 			.where(and(eq(piece.userId, user.id), eq(piece.scenarioId, meta.scenarioId), inArray(piece.state, ["writing", "revising"])));
 		id = open?.id;
 	}
+	let language = meta.language;
 	if (id) {
 		const [row] = await db
-			.select({ state: piece.state })
+			.select({ state: piece.state, language: piece.language })
 			.from(piece)
 			.where(and(eq(piece.id, id), eq(piece.userId, user.id)));
 		if (!row || row.state === "finished") id = undefined;
+		else language ??= row.language;
 	}
+	language ??= user.activeLanguage ?? "en";
+	// The scene does not guess the language again: it is the piece's.
+	const input: RevisionInput = { ...handed, target: (LANGS as readonly string[]).includes(language) ? (language as Lang) : "en" };
 	const fields = {
 		text: input.text,
 		background: input.background ?? null,
 		context: input.source ?? null,
-		tutorLanguage: input.feedback === "target" ? (meta.language ?? "en") : input.learner,
+		tutorLanguage: input.feedback === "target" ? language : input.learner,
 		detail: input.detail ?? "needed",
 		state: "revising",
 	};
@@ -130,7 +136,7 @@ export async function startRevision(
 			.insert(piece)
 			.values({
 				userId: user.id,
-				language: meta.language ?? user.activeLanguage ?? "en",
+				language,
 				kind: meta.kind,
 				scenarioId: meta.scenarioId ?? null,
 				// Until the scene names it, a piece is called by its first words.

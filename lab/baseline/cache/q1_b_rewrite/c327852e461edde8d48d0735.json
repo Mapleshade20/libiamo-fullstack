@@ -13,17 +13,16 @@
 		}
 	],
 	"result": {
-		"text": "### NATIVE\n\nHi David,\n\nThe heating in my flat has been broken since Monday, and it's been very cold at night. Could you arrange for someone to repair it this week? When can it be fixed?\n\nBest,\nMaple\n\n* * *\n\nHi David,\n\nSorry, I didn't mean to be rude. I understand the engineers are busy. Would it be possible to know roughly which day they could come? I'm home every morning, so any morning is fine for me.\n\nThanks,\nMaple\n\n### PASS 1\n\nHi David,\n\nThe heating in my flat has been broken since Monday, and it's very cold at night. ⟦You must send someone to repair it this week.⟧ When can it be fixed?\n\nBest,\nMaple\n\n* * *\n\nHi David,\n\nSorry, I didn't mean to be rude. I understand the engineers are busy. Would it be possible to know roughly which day they can come? I am at home every morning, so any morning is ok for me.\n\nThanks,\nMaple",
+		"text": "### NATIVE\n\nHi David,\n\nThe heating in my flat has been broken since Monday, and it's been really cold at night. Could you send someone to take a look at it this week? Do you know when it might be fixed?\n\nBest,\nMaple\n\n* * *\n\nHi David,\n\nSorry, I didn't mean to sound pushy. I understand the engineers are busy. Would it be possible to find out roughly which day they could come? I'm at home every morning, so any morning works for me.\n\nThanks,\nMaple\n\n### PASS 1\n\nHi David,\n\nThe heating in my flat has been broken since Monday, and it's very cold at night. ⟦You must send someone to repair it this week.⟧ When can it be fixed?\n\nBest,\nMaple\n\n* * *\n\nHi David,\n\nSorry, I didn't mean to be rude. I understand the engineers are busy. Is it possible to find out roughly which day they can come? I am at home every morning, so any morning is ok for me.\n\nThanks,\nMaple",
 		"usage": {
 			"input": 2693,
-			"output": 2722,
-			"reasoning": 2408,
+			"output": 1989,
+			"reasoning": 1670,
 			"cacheRead": 0,
 			"cacheWrite": 0
 		},
-		"ms": 12414,
-		"cached": false,
-		"costUsd": 0.0016303
+		"ms": 8761,
+		"costUsd": 0.0012638
 	},
 	"finish": "stop"
 }

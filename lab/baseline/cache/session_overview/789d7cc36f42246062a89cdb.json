@@ -1,0 +1,24 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "The writer's note about it, in their words: A post on Xiaohongshu after my weekend in Hangzhou.\nThe post (Xiaohongshu (travel post)):\n<<<\n大家好！我是美国人，在上海学中文已经一年了。上个周末我和朋友去杭州玩，我们在西湖旁边走路了三个小时，风景非常好看。\n\n但是我有一个问题：我在一个饭馆点了西湖醋鱼，服务员说这个菜很有名，可是我觉得它太酸了，我不是很喜欢吃。是不是我点得不对？还有什么杭州菜你们推荐我试一试吗？谢谢！\n>>>\n\nA reader replied: \"这位朋友，你是说你在杭州西湖边散步三个小时，很喜欢风景，但点的西湖醋鱼太酸，不太合你的口味，所以想问是不是点错了，也想知道还有哪些杭州菜值得试试。\"\nThe tutor's reading of what the post is really about: An American learner asks which Hangzhou dishes to try, after finding the famous West Lake sour fish too sour, and whether they ordered wrong.\nThe writer says that is not quite it: \"Mostly, but what I really want is food recommendations for my next trip.\"\n\nAs the tutor, reply to the writer in English, addressing them informally as a friendly tutor would, two or three short sentences: say plainly what the post's real point is now that they have said it, and whether the post as written gets that across; then lead into the map of the post that follows. No praise, no filler.\nIf what the writer said is a point the post never states, give newSpot: where it belongs (exact words of the post it should follow or replace), the problem (English), and the reading (English, what they mean). Else null.\ngist: the post's real point in one English sentence.\nThe writer may write to you in any language; whatever they write in, everything you write for them is in English.\nReply with JSON only: {\"reply\":\"\",\"gist\":\"\",\"newSpot\":null}"
+		}
+	],
+	"result": {
+		"text": "{\"reply\":\"Thanks, that helps. So the real point is that you want Hangzhou dish suggestions for your next trip, since the famous sour fish wasn't to your taste. The post asks for recommendations, but it never says they're for a future visit, so readers may not catch that. Let's go through the post piece by piece to see how it's built.\",\"gist\":\"The writer wants suggestions for Hangzhou dishes to order on a future visit, because the famous West Lake sour fish didn't suit their taste.\",\"newSpot\":{\"where\":\"还有什么杭州菜你们推荐我试一试吗？\",\"problem\":\"The post asks for dish recommendations but never says they're for a future trip.\",\"reading\":\"I want to know which Hangzhou dishes to order on my next visit to Hangzhou.\"}}",
+		"usage": {
+			"input": 654,
+			"output": 799,
+			"reasoning": 541,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 4033,
+		"costUsd": 0.0004649
+	},
+	"finish": "stop"
+}

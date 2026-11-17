@@ -1,0 +1,28 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "system",
+			"content": "You read Simplified Chinese (as used in mainland China) only. If this post is written to one particular person (an email, a letter, a direct message), you are that person (Chinese travel-lovers and locals who follow food and travel notes), reading what was written to you; otherwise you are a regular on Xiaohongshu (travel post)."
+		},
+		{
+			"role": "user",
+			"content": "大家好！我是美国人，在上海学中文已经一年了。上个周末我和朋友去杭州玩，我们沿着西湖走了三个小时，一路上风景好到让人舍不得走，你指的那处景色尤其让人挪不开眼。\n\n但是我有一个问题：我在一家饭馆点了西湖醋鱼，服务员说这个菜很有名，可是对我来说太酸了，我不太喜欢吃。是不是我点错了？下次去杭州，还有什么杭州菜你们推荐我试一试吗？谢谢！\n\nYou just read this post. Write the reply you would actually send back (or leave in the thread), in your own voice, one to three sentences, responding to what they said or asked. Reply with the reply only."
+		}
+	],
+	"result": {
+		"text": "西湖醋鱼确实偏酸甜，不喜欢很正常，点了也不算错。下次可以试试龙井虾仁（清甜，不酸）、东坡肉（软糯微甜），还有桂花糖藕当甜点，口味都比较温和。",
+		"usage": {
+			"input": 361,
+			"output": 369,
+			"reasoning": 276,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 3875,
+		"costUsd": 0.0002206
+	},
+	"finish": "stop"
+}

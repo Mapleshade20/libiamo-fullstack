@@ -1,0 +1,24 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "A writer revised their English post sentence by sentence. Compare the version before the revision with the final one, as an editor protecting what the writer meant.\n\nBefore:\n<<<\ni'm with theo actually\nthe letters in ch 9 aren't just setup, she already forgave him there, she just don't say it\n\n* * *\n\nnot all! the one with his drawing, she keeps it. so the ending is only her saying it out loud\n>>>\n\nFinal:\n<<<\ni'm with theo actually\nThe one letter in ch 9 isn't just setup, she already forgave him there, she just doesn't say it\n\n* * *\n\nnot all! The one with his drawing, she keeps it. keeping it means she's already let go, so the ending is only her saying it out loud\n>>>\n\nDuring the revision the writer confirmed what they meant at these places; changes that follow these are intended:\n- 「the letters in ch 9 aren't just setup, she already forgave him there, she just don't say it」→ 只指她留下他画的那封信\n- 「the one with his drawing, she keeps it. so the ending is only her saying it out loud」→ 留画表示她其实已经放下了\n\nList only real problems in the final version: a point, detail, question or condition from before that is gone (lost); a claim whose meaning changed, e.g. a hedge or a hypothetical that became a flat statement (changed); text that appears twice (duplicated); a sentence that is broken where two pieces were joined (broken). Rewording, reordering and better phrasing are not problems. quote: the exact words from the final version (or, for lost, from before); note: one short Simplified Chinese (as used in mainland China) sentence to the writer, informal. [] if there is nothing.\nReply with JSON only: {\"issues\":[{\"kind\":\"lost|changed|duplicated|broken\",\"quote\":\"\",\"note\":\"\"}]}"
+		}
+	],
+	"result": {
+		"text": "{\"issues\":[]}",
+		"usage": {
+			"input": 594,
+			"output": 472,
+			"reasoning": 462,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 3510,
+		"costUsd": 0.0002954
+	},
+	"finish": "stop"
+}

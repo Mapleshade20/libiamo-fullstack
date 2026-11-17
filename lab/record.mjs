@@ -8,6 +8,10 @@
 //
 // It spends (about four cents a case on Claude Haiku): every call the cache does not hold reaches the provider. A
 // prompt changed on purpose means recording the cases again (delete lab/baseline/cache first, or it keeps stale replies).
+//
+// The scripted learner takes THINK seconds (default 45) to write each version, as a real one does: what the page
+// prepares meanwhile in the background (the next spot's material) is then ready before they go on, as it is in a replay,
+// where every reply comes from the cache at once. Without it the two can ask in a different order, and a replay differs.
 import { readFileSync, writeFileSync } from "node:fs";
 
 const [origin, ...only] = process.argv.slice(2);
@@ -15,6 +19,8 @@ if (!origin) {
 	console.error("usage: node lab/record.mjs <origin> [case ...]");
 	process.exit(2);
 }
+const THINK = Number(process.env.THINK ?? 45) * 1000;
+const think = () => new Promise((r) => setTimeout(r, THINK));
 const cases = JSON.parse(readFileSync(new URL("./baseline/cases.json", import.meta.url), "utf8"));
 const SEP = "* * *";
 const plain = (s) => String(s ?? "").replace(/\[([^\]]+)\]/g, "$1");
@@ -121,6 +127,7 @@ async function play(c, seed) {
 		const how = BEHAVIOURS[(seed + n) % BEHAVIOURS.length];
 		let M = await api("material", { id: S.id });
 		if (M.doc) doc = M.doc;
+		await think();
 		const meanings = S.parts.map((p) => p.readings[0]?.meaning ?? p.problem);
 		let changed = false;
 		let keepIt = false;

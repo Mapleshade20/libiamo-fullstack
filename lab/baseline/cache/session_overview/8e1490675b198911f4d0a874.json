@@ -1,0 +1,24 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "The post (Email to a language school):\n<<<\nEstimada Sra. Morales:\n\nMi nombre es Daniel y yo soy de Manchester, en Inglaterra. Le escribo porque quiero aplicar para el curso de septiembre. Vengo a mejorar mi español: mi novia es de Granada, conocí a su familia el año pasado pero no entendí casi nada, y estoy muy emocionado de aprender para poder hablar con ellos.\n\n¿Es posible que usted me envíe información sobre los precios? También tengo algunas preguntas. Primero, prefiero una habitación con familia / un piso compartido, no sé cuál es mejor para aprender. ¿Es el piso cerca de la escuela? Necesito una habitación tranquila para estudiar. Segundo, ¿puedo traer mi bicicleta? Me gusta montar en bici y quiero explorar las montañas. Tercero, soy vegetariano (I'm not picky but I don't eat meat) y espero que la familia pueda cocinar algo para mí. Mi novia viene conmigo el primer fin de semana.\n\n¿Me puedes decir cuándo empiezan los cursos? Necesito una respuesta antes de fin de mes porque tengo que comprar el vuelo. Estoy seguro de que voy a pasarlo muy bien en su escuela. Mirando adelante a oír de usted.\n\nSaludos,\nDaniel Clarke\n>>>\n\nA reader replied: \"Querido Daniel, entiendo que quiere información sobre precios, si hay habitación con familia o piso compartido cerca de la escuela, si puede traer su bicicleta, si hay opciones vegetarianas, y cuándo empiezan los cursos de septiembre, con respuesta antes de fin de mes; si le leo bien, también quiere saber si su novia puede quedarse con usted el primer fin de semana.\"\nThe tutor's reading of what the post is really about: Daniel asks to join the September course to talk with his girlfriend's family, asks for prices and housing options (host family or shared flat), and needs a start date and a reply by month-end.\nThe writer says that is not quite it: \"Mostly yes, but the main thing I want is the prices and when the September course starts, so I can book my flight.\"\n\nAs the tutor, reply to the writer in English, addressing them informally as a friendly tutor would, two or three short sentences: say plainly what the post's real point is now that they have said it, and whether the post as written gets that across; then lead into the map of the post that follows. No praise, no filler.\nIf what the writer said is a point the post never states, give newSpot: where it belongs (exact words of the post it should follow or replace), the problem (English), and the reading (English, what they mean). Else null.\ngist: the post's real point in one English sentence.\nThe writer may write to you in any language; whatever they write in, everything you write for them is in English.\nReply with JSON only: {\"reply\":\"\",\"gist\":\"\",\"newSpot\":null}"
+		}
+	],
+	"result": {
+		"text": "{\"reply\":\"Got it: you need prices and the September start date so you can book your flight. The post does get that across. The price request and the end-of-month deadline are both there, though they come after your housing, bike and diet questions. Here's how the post is laid out, point by point.\",\"gist\":\"Daniel wants the prices and the September course start date by month-end so he can book his flight.\",\"newSpot\":null}",
+		"usage": {
+			"input": 990,
+			"output": 576,
+			"reasoning": 452,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 3757,
+		"costUsd": 0.000387
+	},
+	"finish": "stop"
+}

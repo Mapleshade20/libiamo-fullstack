@@ -1,0 +1,24 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "A language learner (their own language: English) pasted a draft in Spanish, the language they are learning, that they are about to post or send, with an optional note.\n\nNote: (none)\n\nDraft:\n<<<\nEstimada Sra. Morales:\n\nMi nombre es Daniel y yo soy de Manchester, en Inglaterra. Le escribo porque quiero aplicar para el curso de septiembre. Vengo por mejorar mi español: mi novia es de Granada, conocí a su familia el año pasado pero no entendí casi nada, y estoy muy excitado de aprender para poder hablar con ellos.\n\n¿Es posible que usted me envía información sobre los precios? También tengo algunas preguntas. Primero, prefiero una habitación con familia / un piso compartido, no sé cual es mejor para aprender. ¿Es el piso cerca de la escuela? Necesito una habitación tranquilo para estudiar. Segundo, ¿puedo traer mi bicicleta? Me gusta montar en bici y quiero explorar las montañas. Tercero, soy vegetariano (I'm not picky but I don't eat meat) y espero que la familia puede cocinar algo para mí. Mi novia viene conmigo el primer fin de semana.\n\n¿Me puedes decir cuándo empiezan los cursos? Necesito una respuesta antes de fin de mes porque tengo que comprar el vuelo. Estoy seguro de que voy a tener un buen tiempo en su escuela. Mirando adelante a oír de usted.\n\nSaludos,\nDaniel Clarke\n>>>\n\nSay where it will be posted (platform and kind of post), who will read it and what the writer wants to do. platform, audience and purpose in English (the writer reads them), whatever language the note is in, a short phrase each (at most about twelve words). The purpose says only what the draft and note show the writer doing; never add aims they do not show.\nAlso give site: the site or medium's short name as its users write it (a site name, or \"Email\"); community: where on it, as its users write it (a subreddit like r/name, a fic's title, a recipient), short; and reader: a plausible handle or name for one typical reader there, written the way that site shows names.\nAnd title: the piece as an item on the writer's list, in Spanish, starting with a verb, the way writing prompts are titled (for example \"Reply to the author of “Long Way Home”\", \"Ask r/WarriorCats why StarClan never came\", \"Thank Sam for the playlist\"); at most about eight words, naming who or what it is for.\nReply with JSON only: {\"site\":\"\",\"community\":\"\",\"reader\":\"\",\"title\":\"\",\"platform\":\"\",\"audience\":\"\",\"purpose\":\"\"}"
+		}
+	],
+	"result": {
+		"text": "{\"site\":\"Email\",\"community\":\"Sra. Morales, language school admissions\",\"reader\":\"Sra. Morales\",\"title\":\"Escribir a la Sra. Morales sobre el curso de septiembre\",\"platform\":\"Email to a language school\",\"audience\":\"Language school admissions contact, Sra. Morales\",\"purpose\":\"Apply for the September course and ask about prices and housing\"}",
+		"usage": {
+			"input": 890,
+			"output": 122,
+			"reasoning": 0,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 993,
+		"costUsd": 0.00015
+	},
+	"finish": "stop"
+}

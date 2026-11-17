@@ -13,17 +13,16 @@
 		}
 	],
 	"result": {
-		"text": "### PASS 1\n\nOsmanthus latte: house-made osmanthus syrup, with a little sea salt ⟦milk cap⟧.\nChestnut Basque cheesecake: the outside is caramelised, the inside still soft.\n⟦Hot red wine⟧ (alcohol-free): cinnamon, orange peel and cloves, suitable for rainy days.",
+		"text": "### PASS 1\n\nOsmanthus latte: homemade osmanthus syrup, with ⟦a little sea salt milk cap⟧.\n\nChestnut Basque cheesecake: the outside is baked golden-brown, the inside still soft.\n\n⟦Hot red wine⟧ (alcohol-free): cinnamon, orange peel and cloves, suitable for rainy days.",
 		"usage": {
 			"input": 2777,
-			"output": 2645,
-			"reasoning": 2519,
+			"output": 2660,
+			"reasoning": 2531,
 			"cacheRead": 0,
 			"cacheWrite": 0
 		},
-		"ms": 12169,
-		"cached": false,
-		"costUsd": 0.0016002
+		"ms": 12655,
+		"costUsd": 0.0016077
 	},
 	"finish": "stop"
 }

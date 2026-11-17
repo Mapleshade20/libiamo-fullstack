@@ -1,0 +1,28 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "medium",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "system",
+			"content": "You are a fluent, native English-speaking member of this community: Reddit question post."
+		},
+		{
+			"role": "user",
+			"content": "Readers: Warrior Cats fans on r/WarriorCats. What the writer wants to do: Asking fans whether StarClan could communicate on cloudy nights.\nThe writer's note about it, in their words: 我想在 r/WarriorCats 发一个提问帖，问问大家的看法。\nA learner's draft:\n<<<\nI’m on the early chapters of Darktail’s Judgment, and I get a little bit confused about the plot that StarClan didn’t show up when Darkpaw was at the moonstone and he went really miserable and furious for that.\n\nRavenpaw said StarClan had travelled with the Clans and left the forest skies, and it would be hard / not worth it to get back here for a distant little kittypet who want to join the Clans. But it was mentioned in the book that it was a overcast day, so without the moonlight it’s natural to be unable to reach StarClan back then when the Clans were still in the forest. (Could someone tell me if there was a similar case in the other books that the night sky’s cloudy when some cat’s at the Moonstone? Or do StarClan have the power to clear the clouds if they want to communicate?)\n\nAnd Darkpaw didn’t go for another try on a clear day; he just chose to transform himself into Darktail👿 instead.\n>>>\nWork in two steps.\nStep 1. Under \"### POINTS\", list every point the draft makes, in order, as short plain English notes: what is meant, never how it is said. Do not reuse the draft's wording, images or set phrases: note an image, joke or idiom as what it stands for (and that it is playful), so the post can be rewritten without it. Include feelings, jokes and questions. Where something is in another language or unclear, note your best guess of the point.\nStep 2. Under \"### FRESH\", close the draft and write the post from your notes alone, as you would write it yourself for these readers: your own sentence shapes, emphasis, idioms and rhythm. Keep every point, the writer's register and tone markers (emoji, \"lol\", \"~\"), a similar length, and their order unless another order clearly serves the reader better.\nReply with the two sections only."
+		}
+	],
+	"result": {
+		"text": "### POINTS\n\n1. The writer is early in *Darktail's Judgment* and is confused about the plot.\n2. When Darkpaw is at the Moonstone, StarClan doesn't appear, and he becomes very miserable and furious about it.\n3. Ravenpaw explains that StarClan travelled with the Clans and left the forest skies, so it would be hard, or not worth it, to come back for one distant outsider who wants to join.\n4. The book says it was an overcast day. Without moonlight, the writer thinks it makes sense that StarClan couldn't be reached back when the Clans were still in the forest.\n5. Question: has any other book had a cloudy night sky when a cat was at the Moonstone?\n6. Question: does StarClan have the power to clear the clouds if they want to communicate?\n7. Darkpaw never tried again on a clear day. He chose to become Darktail instead. The devil emoji is playful and dark, pointing to his villainous turn.\n\n### FRESH\n\nSo I'm only a few chapters into Darktail's Judgment and something's bugging me. When Darkpaw is up at the Moonstone, StarClan just doesn't show, and he gets totally crushed and angry about it. Ravenpaw says StarClan went off with the Clans and left the forest skies, and that it'd be a huge hassle to come all the way back for some random kittypet who wants in. But the book also says it's an overcast day, so with no moon out it kinda makes sense they couldn't reach him back then, right? Has there been a similar moment in other books where the sky's cloudy and a cat's at the Moonstone? Or can StarClan actually clear the clouds if they really want to talk? And Darkpaw never tried again on a clear night. He just decided to become Darktail instead 👿",
+		"usage": {
+			"input": 724,
+			"output": 1389,
+			"reasoning": 809,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 6596,
+		"costUsd": 0.0007669
+	},
+	"finish": "stop"
+}

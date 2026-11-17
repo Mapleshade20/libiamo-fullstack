@@ -1,0 +1,24 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "A learner of English is rewriting part of a post. The sentence they are working towards, for you only (never quote it or give it away): \"Maybe the clouds are the reason StarClan has gone quiet? When the Clans meet at the Moonstone under an overcast sky, the moonlight can't reach the stone.\". Gloss each hint word in the sense it has in that sentence, not its most common sense (\"alone\" in \"the clouds alone explain it\" means \"only\", not \"by oneself\").\n\nTheir hint words, exactly 2: \"cloud cover\", \"overcast\". \"a / b\" is a choice between two words.\n\nFor each of these hint words and no others, in this order: piece: the hint word as given. gloss: in English, what it means here and how it is used, in one or two short sentences (the kind of word, what it goes with, register if it matters; for a choice, how the two differ). example: one short, natural English sentence that uses it in the same sense, about everyday life and on a topic unrelated to the post (different people, events and subject), so it shows the word without giving away the sentence they are building.\nReply with JSON only: {\"notes\":[{\"piece\":\"\",\"gloss\":\"\",\"example\":\"\"}]}"
+		}
+	],
+	"result": {
+		"text": "{\"notes\":[{\"piece\":\"cloud cover\",\"gloss\":\"An uncountable noun for how much of the sky is hidden by clouds, used mainly in weather reports and science. It often appears with \\\"under\\\" or \\\"of\\\" (for example, \\\"thick cloud cover\\\"). It is more technical and neutral than everyday words like \\\"clouds\\\".\",\"example\":\"The forecast predicts heavy cloud cover over the coast tomorrow, so we'll skip the beach.\"},{\"piece\":\"overcast\",\"gloss\":\"An adjective describing weather or the sky when it is grey and covered with cloud, so the sun is hidden. It is used mostly for the weather or a day, and it is a common, neutral word in everyday English.\",\"example\":\"The morning looked overcast, so Mum took an umbrella just in case.\"}]}",
+		"usage": {
+			"input": 379,
+			"output": 616,
+			"reasoning": 353,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 3976,
+		"costUsd": 0.0003459
+	},
+	"finish": "stop"
+}

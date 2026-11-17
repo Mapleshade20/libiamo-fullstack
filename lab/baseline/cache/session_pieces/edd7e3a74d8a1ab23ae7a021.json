@@ -1,0 +1,24 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "A learner of English is rewriting part of a post. The sentence they are working towards, for you only (never quote it or give it away): \"the one with his drawing, she keeps it. keeping it means she's already let go, so the ending is only her saying it out loud\". Gloss each hint word in the sense it has in that sentence, not its most common sense (\"alone\" in \"the clouds alone explain it\" means \"only\", not \"by oneself\").\n\nTheir hint words, exactly 6: \"hold on to\", \"moved on\", \"release\", \"drop\", \"keepsake\", \"put down\". \"a / b\" is a choice between two words.\n\nFor each of these hint words and no others, in this order: piece: the hint word as given. gloss: in Simplified Chinese (as used in mainland China), what it means here and how it is used, in one or two short sentences (the kind of word, what it goes with, register if it matters; for a choice, how the two differ). example: one short, natural English sentence that uses it in the same sense, about everyday life and on a topic unrelated to the post (different people, events and subject), so it shows the word without giving away the sentence they are building.\nReply with JSON only: {\"notes\":[{\"piece\":\"\",\"gloss\":\"\",\"example\":\"\"}]}"
+		}
+	],
+	"result": {
+		"text": "{\"notes\":[{\"piece\":\"hold on to\",\"gloss\":\"保留、留住，指不舍得放手，继续拥有或保存某物或某种感情。常接具体物品或感情，如 hold on to a memory，语体中性。\",\"example\":\"My grandfather still holds on to the old radio his father gave him.\"},{\"piece\":\"moved on\",\"gloss\":\"已经走出来、转向新的事情，指心理上不再被过去牵绊。常用于经历之后，表示已经接受并继续生活，语体中性偏口语。\",\"example\":\"Our team lost the contract, but we quickly moved on to the next project.\"},{\"piece\":\"release\",\"gloss\":\"放开、释放，指松开抓握的东西或让被束缚的事物自由，这里引申为不再紧抓某物。多用于正式或书面语境，常接 release something 或 release one's grip。\",\"example\":\"She finally released the rope and let the kite fly away.\"},{\"piece\":\"drop\",\"gloss\":\"放弃、不再提及或追究，指主动停止某个话题或做法，而不是物理上的掉落。口语中常用，常接 drop a subject、drop a habit。\",\"example\":\"Please drop the subject; we are not talking about money tonight.\"},{\"piece\":\"keepsake\",\"gloss\":\"纪念品、留作纪念的物件，指因为有感情意义而被保存下来的小东西。是名词，常与 as a keepsake 连用，语体偏书面或温情。\",\"example\":\"Ben kept his grandmother's ticket stub as a keepsake from the concert.\"},{\"piece\":\"put down\",\"gloss\":\"放下，这里指不再背负（愤怒、怨恨等情绪），也可指把东西放到一边。是短语动词，接具体物品时表示放下，接情绪时表示不再执着，语体中性。\",\"example\":\"After years of anger, Mia finally put down the grudge and called her brother.\"}]}",
+		"usage": {
+			"input": 390,
+			"output": 1634,
+			"reasoning": 1015,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 10238,
+		"costUsd": 0.000856
+	},
+	"finish": "stop"
+}
