@@ -137,16 +137,17 @@ export async function saveSheet(
 	});
 }
 
-/** Only this server-held assignment supplies the original to the revision. */
+/** Only this server-held assignment supplies the original to the revision; the text is the one the sheet sent. */
 export async function translationFor(userId: string, pieceId: string) {
 	const [p] = await db
 		.select()
 		.from(piece)
-		.where(and(eq(piece.id, pieceId), eq(piece.userId, userId), eq(piece.kind, "translation")));
-	if (!p) return null;
+		.where(and(eq(piece.id, pieceId), eq(piece.userId, userId), eq(piece.kind, "translation"), inArray(piece.state, ["writing", "revising"])));
+	if (!p?.scenarioId) return null;
 	const a = Assignment.parse(p.assignment);
 	const v = a.version;
 	return {
+		text: p.text,
 		translation: {
 			source: a.source,
 			original: v.original,

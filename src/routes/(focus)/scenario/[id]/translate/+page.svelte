@@ -91,15 +91,9 @@ async function done() {
 		? await sendSheet({ id, lang: data.language, text: text.trim(), plan: localDraft("plan", key), ...data.binding }).catch(() => null)
 		: null;
 	const pieceId = sent?.pieceId ?? null;
-	// The server hands the revision the source and the original from the piece.
+	// The server hands the revision what was sent, the source and the original from the piece.
 	const started = pieceId
-		? await startPiece({
-				text: text.trim(),
-				pieceId,
-				learner: app.prefs.native,
-				feedback: app.prefs.feedback as Setup["feedback"],
-				lang: data?.language ?? app.lang,
-			} as unknown as Setup).catch(() => null)
+		? await startPiece({ pieceId, learner: app.prefs.native, feedback: app.prefs.feedback as Setup["feedback"] }).catch(() => null)
 		: null;
 	if (!started) {
 		leaving = false;

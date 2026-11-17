@@ -8,7 +8,6 @@ import { practised, sandboxed } from "#lib/components/tour/sandbox.svelte.ts";
 import { isAppLang } from "#lib/constants.ts";
 import { loadLang, t } from "#lib/i18n/index.svelte.ts";
 import { type Stop as Halt, LimitError, needKey, stopOf } from "#lib/llm/stops.ts";
-import { clearDraft } from "#lib/writing/draft.ts";
 import { refreshWriting } from "#lib/writing/writing.svelte.ts";
 import { goto } from "$app/navigation";
 import { Cancelled, Clock, reduced, SLOW } from "./clock";
@@ -425,8 +424,6 @@ export class Session {
 			this.go = null;
 			if (!alive()) return;
 		}
-		// The draft is on its way now; the home page's box starts empty next time.
-		if (!sandboxed()) clearDraft();
 		this.run(1);
 	}
 	/** The scene card's "Start" (or, after a failure, "Try again"). */

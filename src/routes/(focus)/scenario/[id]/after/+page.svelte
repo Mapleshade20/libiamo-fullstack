@@ -42,13 +42,12 @@ let starting = $state(false);
 async function review() {
 	if (!after || starting) return;
 	starting = true;
+	// The server reads the conversation from the place itself.
 	const pieceId = await startPiece({
-		...after.handoff,
 		pieceId: after.pieceId,
 		learner: app.prefs.native,
 		feedback: app.prefs.feedback as Setup["feedback"],
-		lang: after.language,
-	} as Setup & { pieceId: string }).catch(() => null);
+	}).catch(() => null);
 	starting = false;
 	if (!pieceId) return toast(tx("startFailed"));
 	goto(`/live/${pieceId}`);

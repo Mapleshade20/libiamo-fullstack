@@ -1,5 +1,6 @@
 import { learner } from "#lib/server/guard.ts";
 import { stopOf } from "#lib/server/llm/transport.ts";
+import { pageSetup } from "#lib/server/revision/handover.ts";
 import type { RevisionSession } from "#lib/server/revision/revision.ts";
 import {
 	abandon,
@@ -59,20 +60,7 @@ export async function POST({ params, request }) {
 	}
 	// Where the page was, with what it was started from; and the page's bookmark. Neither is a step on the tape.
 	if (params.action === "resume") {
-		const i = h.session.input;
-		const setup = {
-			text: i.text,
-			background: i.background,
-			source: i.source,
-			detail: i.detail,
-			learner: i.learner,
-			feedback: i.feedback,
-			lang: p.language,
-			exchange: i.exchange,
-			translation: i.translation,
-			scenario: p.scenarioId ? { id: p.scenarioId, title: p.title, site: p.place } : undefined,
-		};
-		return Response.json({ setup, ...h.session.resume() });
+		return Response.json({ setup: pageSetup(h.session.input, p), ...h.session.resume() });
 	}
 	if (params.action === "progress") {
 		try {
