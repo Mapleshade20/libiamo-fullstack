@@ -35,7 +35,8 @@ export type Gate =
 /** The languages the app works in (the settings page's "Add a language" list, app/src/lib/constants.ts LEARNABLE). Text
  * in any other language is refused, not offered: there is nothing behind the door for it. */
 export const SUPPORTED = ["en", "es", "fr", "de", "it", "pt", "ja", "ko", "zh-CN", "ru", "ar", "nl", "tr", "pl"];
-const MAX_CHARS = 12_000;
+/** The longest draft taken in, the door's and the revision's alike. */
+export const MAX_CHARS = 12_000;
 const WORDS = new Intl.Segmenter(undefined, { granularity: "word" });
 
 /** The cases plain code settles, for free and at once; null means the model has to look. */

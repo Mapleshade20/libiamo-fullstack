@@ -1,72 +1,53 @@
-import { LEARNABLE } from "#lib/constants.ts";
 import { learner } from "#lib/server/guard.ts";
 import { LANGS, type Lang, normLang } from "#lib/server/revision/draft.ts";
-import { startRevision } from "#lib/server/revision/store.ts";
-import { translationFor } from "#lib/server/translation/sheet.ts";
+import { type Handed, handedWhole, heldPiece, ownDraft, pageSetup, StartBody } from "#lib/server/revision/handover.ts";
+import { pieceFor, startRevision } from "#lib/server/revision/store.ts";
 import { sourceKind } from "#lib/server/writing/source.ts";
+import { dev } from "$app/env";
 
 /*
- * Starts the revision of a piece from what the page handed over: a new piece of the learner's writing, or a fresh
- * revision of one of their unfinished pieces (`pieceId`). Answers the piece's id, which every action then names. A
- * translation sheet's piece brings its source, original and scenario from the server (the page never sees the original).
+ * Starts the revision of a piece (server/revision/handover.ts): the learner's own draft, or one of their open pieces the
+ * server holds (`pieceId`: a translation's sheet, a scenario's conversation). Answers the piece's id, which every action
+ * then names, and the setup its page opens with (the one `resume` gives).
  */
 export async function POST({ request }) {
 	const u = learner();
-	const b = await request.json();
-	// A piece kept from before Chinese became "zh-CN" still says "zh".
-	b.learner = normLang(b.learner);
-	const pieceId = typeof b.pieceId === "string" && /^[0-9a-f-]{36}$/.test(b.pieceId) ? b.pieceId : undefined;
-	const sheet = pieceId ? await translationFor(u.id, pieceId) : null;
-	if (sheet) Object.assign(b, sheet);
-	// Recorded sessions (lab/baseline) and fixtures still hand a translation over whole.
-	else if (b.translation) b.translation.target = normLang(b.translation.target);
-	const text = String(b.text ?? "").trim();
+	const raw = await request.json().catch(() => null);
+	const parsed = StartBody.safeParse(raw);
+	if (!parsed.success) return Response.json({ error: "bad request" }, { status: 400 });
+	const b = parsed.data;
+	let from: Handed | null;
+	if (b.pieceId) {
+		from = await heldPiece(u, b.pieceId);
+		if (!from) return Response.json({ error: "No such piece." }, { status: 404 });
+	} else {
+		const whole = dev ? await handedWhole(raw, b) : null;
+		if (whole === "noScenario") return Response.json({ error: "No such scenario." }, { status: 400 });
+		from = whole ?? ownDraft(b);
+	}
+	const { text, source } = from.input;
 	if (!text) return Response.json({ error: "empty draft" }, { status: 400 });
-	const source = String(b.source ?? "").trim();
 	// Any text is fine; a capture that does not read (a broken copy) is refused rather than taken as text.
-	if (sourceKind(source) === "broken") return Response.json({ error: "capture does not read", code: "badSource" }, { status: 400 });
-	// A finished scenario's conversation (src/lib/server/revision/scenario/exchange.ts), checked for its shape only.
-	const ex = b.exchange;
-	const exchange =
-		ex && typeof ex === "object" && Array.isArray(ex.transcript) && Array.isArray(ex.before) && ex.scene && typeof ex.lang === "string"
-			? ex
-			: undefined;
-	const tr = b.translation;
-	const translation =
-		tr && typeof tr.source === "string" && typeof tr.original === "string" && LANGS.includes(tr.target)
-			? {
-					source: tr.source,
-					original: tr.original,
-					target: tr.target as Lang,
-					context: String(tr.context ?? ""),
-					where: typeof tr.where === "string" ? tr.where : undefined,
-					readers: typeof tr.readers === "string" ? tr.readers : undefined,
-					glossary: Array.isArray(tr.glossary) ? tr.glossary : [],
-				}
-			: undefined;
-	const lang = [translation?.target, exchange?.lang, b.lang].find((l) => (LEARNABLE as readonly string[]).includes(l));
-	const scenario = b.scenario && typeof b.scenario.id === "string" ? b.scenario : null;
-	const id = await startRevision(
-		u,
-		{
-			exchange,
-			translation,
-			title: typeof scenario?.title === "string" ? scenario.title : undefined,
-			text,
-			background: String(b.background ?? "").trim() || undefined,
-			source: source || undefined,
-			detail: b.detail === "needed" ? "needed" : "more",
-			learner: (LANGS.includes(b.learner) ? b.learner : "en") as Lang,
-			feedback: b.feedback === "target" ? "target" : "native",
-		},
-		{
-			language: lang,
-			kind: translation ? "translation" : exchange ? "scenario" : "own",
-			scenarioId: scenario?.id,
-			title: typeof scenario?.title === "string" ? scenario.title : undefined,
-			place: typeof scenario?.site === "string" ? scenario.site : undefined,
-			pieceId,
-		},
-	);
-	return Response.json({ id });
+	if (source && from.kind === "own" && sourceKind(source) === "broken")
+		return Response.json({ error: "capture does not read", code: "badSource" }, { status: 400 });
+	// A piece kept from before Chinese became "zh-CN" still says "zh".
+	const native = normLang(b.learner);
+	const input = {
+		...from.input,
+		title: from.scenario?.title || undefined,
+		detail: b.detail ?? "more",
+		learner: (LANGS.includes(native as Lang) ? native : "en") as Lang,
+		feedback: b.feedback ?? "native",
+	};
+	const id = await startRevision(u, input, {
+		language: from.language,
+		kind: from.kind,
+		scenarioId: from.scenario?.id,
+		title: from.scenario?.title || undefined,
+		place: from.scenario?.site || undefined,
+		pieceId: b.pieceId,
+	});
+	const p = await pieceFor(u.id, id);
+	if (!p) return Response.json({ error: "No such piece." }, { status: 404 });
+	return Response.json({ id, setup: pageSetup(input, p) });
 }

@@ -1,5 +1,6 @@
 /* What the session's server steps send back (rehearsal-lab src/session/live.ts), as far as the page reads it. */
 
+/** What a revision's page opens with: the server's answer to `POST /api/s` and to `resume` (server/revision/handover.ts). */
 export type Setup = {
 	text: string;
 	background?: string;
@@ -11,10 +12,9 @@ export type Setup = {
 	scenario?: { id: string; title: string; site: string };
 	/** A scenario's conversation as it happened; `text` is then its learner turns joined by `SEP` lines. */
 	exchange?: Exchange;
-	/** A translation scenario: the source the learner translated, the text as first written, the names and terms given. */
+	/** A translation scenario: the source the learner translated and the names and terms given (never the original). */
 	translation?: {
 		source: string;
-		original: string;
 		glossary: { term: string; shown: string; gloss: string }[];
 		context: string;
 		where?: string;
@@ -22,6 +22,13 @@ export type Setup = {
 		target: string;
 	};
 };
+
+/** What a page sends to start a revision: the learner's own draft, or one of their pieces the server holds whole (a
+ *  translation's sheet, a scenario's conversation). */
+export type Start = { learner: string; feedback: Setup["feedback"]; detail?: Setup["detail"] } & (
+	| { text: string; background?: string; source?: string; lang?: string }
+	| { pieceId: string }
+);
 
 /** The line between two of the learner's turns in a scenario's text (rehearsal-lab src/scenario/exchange.ts). */
 export const SEP = "* * *";

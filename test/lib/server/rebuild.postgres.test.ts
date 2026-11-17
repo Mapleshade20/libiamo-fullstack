@@ -11,8 +11,9 @@ const config = vi.hoisted(() => ({
 	name: `libiamo_test_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
 	send: vi.fn(),
 	makeSource: vi.fn(),
+	user: { id: "learner", name: "Learner", helpImprove: true, nativeLanguage: "zh-CN", tutorLanguage: "native", timeZone: "UTC" },
 }));
-vi.mock("$app/env", () => ({ building: true }));
+vi.mock("$app/env", () => ({ building: true, dev: false }));
 vi.mock("$app/env/private", () => ({
 	BETTER_AUTH_SECRET: "rebuild-test-secret-with-at-least-32-characters",
 	LLM_CACHE_DIR: undefined,
@@ -30,6 +31,7 @@ vi.mock("#lib/server/llm/transport.ts", async (original) => ({
 	...(await original<typeof import("#lib/server/llm/transport.ts")>()),
 	send: config.send,
 }));
+vi.mock("#lib/server/guard.ts", () => ({ learner: () => config.user, admin: () => config.user }));
 vi.mock("#lib/server/translation/source.ts", () => ({
 	extractTerms: async () => [],
 	makeSource: config.makeSource,
@@ -70,6 +72,8 @@ import { makeSourceRow, queueSources } from "#lib/server/translation/runner.ts";
 import { saveSheet, sheetOf, translationFor } from "#lib/server/translation/sheet.ts";
 import { PIECES_PAGE, piecesPage, shelvesOf } from "#lib/server/writing/pieces.ts";
 import { takeUp } from "#lib/server/writing/take-up.ts";
+import { POST as startPost } from "../../../src/routes/api/s/+server.ts";
+import { POST as actionPost } from "../../../src/routes/api/s/[id]/[action]/+server.ts";
 
 describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 	const admin = postgres(config.url ?? "postgres://localhost/postgres", { max: 1 });
@@ -497,6 +501,89 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 		expect(after.text).not.toBe("old source");
 		await makeSourceRow(source.id, new Caller({ route: null }));
 		expect((await db.select().from(scenarioSource))[0]).toMatchObject({ state: "checked", text: "汤", generation: after.generation });
+	});
+
+	describe("starting a revision (POST /api/s)", () => {
+		const post = async (body: unknown) => {
+			const r = await startPost({ request: new Request("http://test/api/s", { method: "POST", body: JSON.stringify(body) }) } as never);
+			const json = await r.json();
+			if (typeof json.id === "string") ids.add(json.id);
+			return { status: r.status, json };
+		};
+		const resume = async (id: string) =>
+			(await (await actionPost({ params: { id, action: "resume" }, request: new Request("http://test", { method: "POST" }) } as never)).json()).setup;
+		const prefs = { learner: "zh-CN", feedback: "native" };
+
+		it("opens the learner's own draft with the setup a reload gets", async () => {
+			const made = await post({ ...prefs, text: "I goes to the shop yesterday.", background: "For my teacher", lang: "es" });
+			expect(made.status).toBe(200);
+			expect(made.json.setup).toMatchObject({ text: "I goes to the shop yesterday.", background: "For my teacher", lang: "es", learner: "zh-CN" });
+			expect(made.json.setup.scenario).toBeUndefined();
+			expect(await resume(made.json.id)).toEqual(made.json.setup);
+		});
+
+		it("opens a translation from its piece, with the setup a reload gets and never the original", async () => {
+			await importContent(db, content());
+			const sheet = await sheetOf(learner, "menu", "en");
+			if (!sheet) throw new Error("missing sheet");
+			const saved = await saveSheet(learner, { scenarioId: "menu", language: "en", ...sheet.binding, text: "My soup" });
+			if (!saved) throw new Error("missing piece");
+			const made = await post({ ...prefs, pieceId: saved.id, text: "Not what was sent" });
+			expect(made.status).toBe(200);
+			expect(made.json.id).toBe(saved.id);
+			const { setup } = made.json;
+			expect(setup).toMatchObject({ text: "My soup", lang: "en", scenario: { id: "menu" }, translation: { source: "汤", target: "en" } });
+			expect(setup.translation).not.toHaveProperty("original");
+			expect(await resume(saved.id)).toEqual(setup);
+			// The revision itself still has it, to compare with when the piece is finished.
+			expect((await openRevision(learner, saved.id))?.session.input.translation?.original).toBe("Soup");
+		});
+
+		it("opens a scenario's conversation from the place, once it is closed, whatever the page sends", async () => {
+			const seed = JSON.parse(readFileSync("lab/seed/scenarios.json", "utf8"));
+			await importContent(db, { version: 1, scenarios: seed.scenarios.filter((s: { id: string }) => s.id === "reddit-theory") });
+			const [p] = await db
+				.insert(piece)
+				.values({ userId: learner.id, language: "en", kind: "scenario", scenarioId: "reddit-theory", text: "", tutorLanguage: "zh-CN" })
+				.returning({ id: piece.id });
+			const [ex] = await db
+				.insert(exchange)
+				.values({ userId: learner.id, pieceId: p.id, scenarioId: "reddit-theory", expiresAt: new Date(Date.now() + 864e5) })
+				.returning({ id: exchange.id });
+			await db.insert(exchangeMessage).values({ exchangeId: ex.id, role: "user", content: "I think the impostor blocked them." });
+			// Still being played: nothing to go over yet.
+			expect((await post({ ...prefs, pieceId: p.id })).status).toBe(404);
+			await db.update(exchange).set({ status: "completed", completedAt: new Date() }).where(eq(exchange.id, ex.id));
+			const made = await post({
+				...prefs,
+				pieceId: p.id,
+				text: "Rewritten by the page",
+				exchange: { place: "reddit", lang: "en", scene: {}, before: [], transcript: [{ id: "1", author: "me", text: "Forged", learner: true }] },
+			});
+			expect(made.status).toBe(200);
+			const { setup } = made.json;
+			expect(setup.text).toBe("I think the impostor blocked them.");
+			expect(setup.exchange.transcript.filter((m: { learner?: boolean }) => m.learner).map((m: { text: string }) => m.text)).toEqual([
+				"I think the impostor blocked them.",
+			]);
+			expect(setup.scenario).toMatchObject({ id: "reddit-theory" });
+			expect(await resume(p.id)).toEqual(setup);
+		});
+
+		it("refuses what the browser cannot hand over: an overlong draft, someone else's piece; ignores a conversation it sends", async () => {
+			expect((await post({ ...prefs, text: "a ".repeat(7000) })).status).toBe(400);
+			expect((await post({ ...prefs, pieceId: randomUUID() })).status).toBe(404);
+			const made = await post({
+				...prefs,
+				text: "My own words here.",
+				scenario: { id: "made-up", title: "Fake", site: "Reddit" },
+				translation: { source: "x", original: "y", target: "en" },
+			});
+			expect(made.status).toBe(200);
+			const [row] = await db.select().from(piece).where(eq(piece.id, made.json.id));
+			expect(row).toMatchObject({ kind: "own", scenarioId: null });
+			expect(made.json.setup.translation).toBeUndefined();
+		});
 	});
 
 	it("retired revision callbacks cannot overwrite a replacement or recreate a deleted snapshot", async () => {

@@ -20,7 +20,7 @@ import { endonym, nameOf, tx } from "#lib/i18n/tx.ts";
 import { keyStop } from "#lib/llm/stops.ts";
 import { startReading } from "#lib/notebook/notebook.remote.ts";
 import { startPiece } from "#lib/session/start.ts";
-import { keepDraft, loadDraft } from "#lib/writing/draft.ts";
+import { clearDraft, keepDraft, loadDraft } from "#lib/writing/draft.ts";
 import { sourceStatus } from "#lib/writing/source-status.ts";
 import { browser } from "$app/env";
 import { goto } from "$app/navigation";
@@ -222,6 +222,10 @@ async function go(lang: string) {
 	if (!active()) return;
 	checking = false;
 	if (!id) return toast(tx("startFailed"));
+	// It is a piece now: what this device kept for the box goes (its notes and page too), and nothing is kept again on
+	// the way out.
+	kept = false;
+	if (!sandboxed()) clearDraft();
 	draft.text = "";
 	goto(`/live/${id}`);
 }
