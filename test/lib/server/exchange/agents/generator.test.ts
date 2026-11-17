@@ -325,7 +325,7 @@ describe("async take-up resolution", () => {
 describe("generation artifacts", () => {
 	beforeEach(() => vi.resetAllMocks());
 
-	it("returns the prompts sent, the raw reply, the parsed turn, and the first reply when it took a repair", async () => {
+	it("returns only the parsed turn, also when it took a repair: the call's record keeps the prompt", async () => {
 		const first = { text: "not json", usage: { input: 1, output: 1, reasoning: 0 }, ms: 1, cached: false, costUsd: 0 };
 		mockChatJson.mockResolvedValue({ value: reply, calls: [first, decided(reply).calls[0]] });
 
@@ -337,13 +337,10 @@ describe("generation artifacts", () => {
 		});
 
 		expect(mockChatJson).toHaveBeenCalledWith(expect.any(Array), agentResponseDecisionSchema, expect.objectContaining({ tag: "exchange/reply" }));
-		expect(result.requestMessages.map((m) => m.role)).toEqual(["system", "user"]);
-		expect(result.rawResponse).toBe(JSON.stringify(reply));
-		expect(result.parsedResult).toEqual({ ...reply, warnings: [] });
-		expect(result.providerMetadata).toMatchObject({ model: "m", repair: { initialContent: "not json" } });
+		expect(result).toEqual({ parsedResult: { ...reply, warnings: [] } });
 	});
 
-	it("wraps a reply that stays invalid after its repair as a parse failure, with the request", async () => {
+	it("wraps a reply that stays invalid after its repair as a parse failure", async () => {
 		mockChatJson.mockRejectedValue(new LimitError("error", "exchange/reply m: invalid JSON after repair: boom"));
 
 		const failure = await generateAgentResponse({
@@ -354,8 +351,7 @@ describe("generation artifacts", () => {
 		}).catch((error) => error);
 
 		expect(failure).toBeInstanceOf(AgentGenerationError);
-		expect(failure.failureArtifacts.requestMessages).toHaveLength(2);
-		expect(failure.failureArtifacts.providerMetadata.failureStage).toBe("parse");
+		expect(failure.stage).toBe("parse");
 	});
 
 	it("attributes other failures to the provider stage", async () => {
@@ -368,7 +364,6 @@ describe("generation artifacts", () => {
 			history: [],
 		}).catch((error) => error);
 
-		expect(failure.failureArtifacts.providerMetadata.failureStage).toBe("provider");
-		expect(failure.failureArtifacts.rawResponse).toBeNull();
+		expect(failure.stage).toBe("provider");
 	});
 });

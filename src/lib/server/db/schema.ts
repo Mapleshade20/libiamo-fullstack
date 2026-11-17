@@ -569,10 +569,8 @@ export const agentBatch = pgTable(
 		leaseExpiresAt: at("lease_expires_at"),
 		generationCount: integer("generation_count").notNull().default(0),
 		staleCount: integer("stale_count").notNull().default(0),
-		requestMessages: jsonb("request_messages"),
-		rawResponse: text("raw_response"),
+		/** The decision the turn came back with (no prompt or raw reply: the call's record keeps those, server/llm/records.ts). */
 		parsedResult: jsonb("parsed_result"),
-		providerMetadata: jsonb("provider_metadata"),
 		error: text("error"),
 		allowIdleFollowUp: boolean("allow_idle_follow_up"),
 		createdAt: created(),
@@ -636,6 +634,8 @@ export const exchangeMessage = pgTable(
 	},
 	(t) => [
 		index("exchange_message_exchange_idx").on(t.exchangeId),
+		// Deleting an account deletes its batches, which set this to null.
+		index("exchange_message_response_batch_idx").on(t.responseBatchId),
 		uniqueIndex("exchange_message_delivery_idx").on(t.deliveryId),
 		// Unread counts scan only replies past each exchange's watermark (server/exchange/unread.ts).
 		index("exchange_message_unread_idx").on(t.exchangeId, t.id).where(sql`${t.role} = 'assistant'`),
@@ -721,6 +721,8 @@ export const note = pgTable(
 		// Deleting an account (the partial indexes above cannot serve its cascade).
 		index("note_user_idx").on(t.userId),
 		index("note_piece_idx").on(t.pieceId),
+		// Deleting a reading (with its account) sets this to null.
+		index("note_reading_idx").on(t.readingId),
 	],
 );
 
