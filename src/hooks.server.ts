@@ -95,8 +95,9 @@ const handleAccess: Handle = ({ event, resolve }) => {
 		if (user && (path === "/sign-in" || path === "/sign-up")) redirect(303, user.onboardedAt ? "/" : "/welcome");
 		return resolve(event);
 	}
-	// A visitor at the site's address sees what Libiamo is; anywhere else, the way in.
-	if (!user) redirect(303, path === "/" ? "/about" : "/sign-in");
+	// A visitor at the site's address sees what Libiamo is; anywhere else, the way in. A page's data asked for from a page
+	// of the app (a session that ended while it was open) is someone who was in: the way in too.
+	if (!user) redirect(303, path === "/" && !event.isDataRequest ? "/about" : "/sign-in");
 	if (!user.onboardedAt && path !== "/welcome") redirect(303, "/welcome");
 	if ((path === "/admin" || path.startsWith("/admin/")) && user.role !== "admin") return new Response("Not found", { status: 404 });
 	return resolve(event);

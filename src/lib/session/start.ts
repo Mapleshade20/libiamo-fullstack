@@ -1,3 +1,4 @@
+import { leaveIfSignedOut } from "#lib/client/signed-out.ts";
 import { captureTourState } from "#lib/components/tour/lifetime.ts";
 import { needKey } from "#lib/llm/stops.ts";
 import { refreshWriting } from "#lib/writing/writing.svelte.ts";
@@ -18,6 +19,7 @@ export async function startPiece(start: Start): Promise<string> {
 		headers: { "content-type": "application/json" },
 		body: JSON.stringify(start),
 	});
+	leaveIfSignedOut(r);
 	const v = await r.json().catch(() => ({}));
 	if (!active()) throw new DOMException("Tour chapter changed", "AbortError");
 	if (!r.ok || typeof v.id !== "string" || !v.setup) throw new Error(v.error || "startFailed");

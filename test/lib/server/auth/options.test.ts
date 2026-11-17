@@ -69,6 +69,17 @@ describe("signing up", () => {
 		expect(sent.at(-1)?.subject).toBe("Libiamo · You already have an account");
 	});
 
+	it("signing in unconfirmed mails the link again, back to the inbox page; the answer itself sends the page nowhere", async () => {
+		const { client } = await instance();
+		await signUp(client, "ada@example.test", "plum orchard lantern 47");
+		sent.length = 0;
+		const { error } = await client.signIn.email({ email: "ada@example.test", password: "plum orchard lantern 47" });
+		expect(error?.code).toBe("EMAIL_NOT_VERIFIED");
+		const link = new URL(sent[0].text.match(/https?:\/\/\S+/)?.[0] ?? "");
+		expect(link.pathname).toBe("/api/auth/verify-email");
+		expect(link.searchParams.get("callbackURL")).toBe("/verify?done");
+	});
+
 	it("needs Turnstile's pass when it is configured", async () => {
 		env.TURNSTILE_SITE_KEY = "site";
 		env.TURNSTILE_SECRET_KEY = "secret";

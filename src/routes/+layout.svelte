@@ -6,6 +6,7 @@ import { onMount, type Snippet } from "svelte";
 import { followSystem } from "#lib/account/look.svelte.ts";
 import { followTimeZone } from "#lib/account/time-zone.ts";
 import Toast from "#lib/components/shell/Toast.svelte";
+import { toast } from "#lib/components/shell/toast.svelte.ts";
 import Tour from "#lib/components/tour/Tour.svelte";
 import { metaOf } from "#lib/seo.ts";
 import { runClock } from "#lib/time/clock.svelte.ts";
@@ -18,6 +19,13 @@ onMount(followSystem);
 // learner's time zone follows this device's.
 onMount(runClock);
 onMount(followTimeZone);
+// What a page that left for another one whole (signing out, deleting the account) had to say.
+onMount(() => {
+	const said = sessionStorage.getItem("leftToast");
+	if (!said) return;
+	sessionStorage.removeItem("leftToast");
+	toast(said);
+});
 // The head: only the public pages are indexed (lib/seo.ts); a page may name itself after this (the admin's do).
 const meta = $derived(metaOf(data.origin, page.error ? null : page.route.id));
 
