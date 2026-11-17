@@ -273,6 +273,17 @@ export function createExchange(getProps: () => SurfaceProps, options: { agentNam
 	// Bumped when a wake-up fires: work that fell due is usually still composing then, with the same
 	// due time, so the plan must be re-read at the new "now" or polling would stop there.
 	let wakes = $state(0);
+	// A tab out of sight does not poll; back in sight, it asks at once what came meanwhile.
+	let visible = $state(true);
+	onMount(() => {
+		const seen = () => {
+			visible = document.visibilityState === "visible";
+			if (visible && exchangeId !== null && !isCompleted) void refresh();
+		};
+		visible = document.visibilityState === "visible";
+		document.addEventListener("visibilitychange", seen);
+		return () => document.removeEventListener("visibilitychange", seen);
+	});
 
 	$effect(() => {
 		void wakes;
@@ -284,7 +295,7 @@ export function createExchange(getProps: () => SurfaceProps, options: { agentNam
 		});
 		if (plan.kind === "none") return;
 		if (plan.kind === "interval") {
-			if (submitting) return;
+			if (submitting || !visible) return;
 			const interval = setInterval(() => void refresh(), SESSION_POLL_INTERVAL_MS);
 			return () => clearInterval(interval);
 		}

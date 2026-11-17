@@ -5,6 +5,7 @@ import Copy from "@lucide/svelte/icons/copy";
 import ExternalLink from "@lucide/svelte/icons/external-link";
 import { diffWords } from "diff";
 import { app } from "#lib/account/app.svelte.ts";
+import { revalidate } from "#lib/client/refresh.ts";
 import Accordion from "#lib/components/common/Accordion.svelte";
 import InfoTip from "#lib/components/common/InfoTip.svelte";
 import LoadingReveal from "#lib/components/common/LoadingReveal.svelte";
@@ -30,6 +31,7 @@ import { page } from "$app/state";
  */
 const id = $derived(page.params.id ?? "");
 // The tour's piece lives in its sandbox; every other is the server's.
+revalidate(sandboxed() ? null : pieceById(page.params.id ?? ""));
 const w = $derived(sandboxed() ? tourPiece(id) : await pieceById(id));
 const r = $derived(w?.result);
 const st = $derived(siteOf(w?.site));

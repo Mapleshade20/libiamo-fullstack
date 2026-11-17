@@ -1,6 +1,7 @@
 <script lang="ts">
 import { fade } from "svelte/transition";
 import { app } from "#lib/account/app.svelte.ts";
+import { revalidate } from "#lib/client/refresh.ts";
 import { reducedMotion } from "#lib/components/common/motion.ts";
 import { createPlay } from "#lib/components/stickers/play.svelte.ts";
 import Sticker from "#lib/components/stickers/Sticker.svelte";
@@ -26,6 +27,7 @@ let { head }: { head: string } = $props();
 const follow = $derived(followUp());
 const openPiece = $derived(shelfNow().open[0]);
 // Four at most: continue, follow-up, then scenarios; the "+" card only when there is room.
+revalidate(!sandboxed() && hasScenarios(app.lang) ? shelfScenarios(app.lang) : null, dueNow());
 const offered = $derived(sandboxed() ? tourScenarios(app.lang) : hasScenarios(app.lang) ? await shelfScenarios(app.lang) : []);
 const prompts = $derived(offered.slice(0, 4 - (openPiece ? 1 : 0) - (follow ? 1 : 0)));
 const roomForAdd = $derived((openPiece ? 1 : 0) + (follow ? 1 : 0) + prompts.length < 4);

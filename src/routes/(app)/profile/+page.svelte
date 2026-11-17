@@ -5,6 +5,7 @@ import Pencil from "@lucide/svelte/icons/pencil";
 import { onMount, tick } from "svelte";
 import { account } from "#lib/account/account.svelte.ts";
 import { app } from "#lib/account/app.svelte.ts";
+import { revalidate } from "#lib/client/refresh.ts";
 import InfoTip from "#lib/components/common/InfoTip.svelte";
 import ModalDialog from "#lib/components/common/ModalDialog.svelte";
 import { shake } from "#lib/components/common/motion.ts";
@@ -28,6 +29,7 @@ import { shelfNow } from "#lib/writing/writing.svelte.ts";
  * glimpses. Settings (how the app works for them) are a page of their own.
  */
 // Each week with the aim it was held to; a week's days are the learner's local days (`YYYY-MM-DD`), shown as they are.
+revalidate(historyNow(26), glanceNow());
 const weeks = $derived(await historyNow(26));
 const goal = $derived(weeks[weeks.length - 1].goal);
 const met = (w: { days: string[]; goal: number }) => w.days.filter((d) => d === "full").length >= w.goal;

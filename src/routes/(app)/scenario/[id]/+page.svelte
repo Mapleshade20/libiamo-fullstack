@@ -4,6 +4,7 @@ import ArrowRight from "@lucide/svelte/icons/arrow-right";
 import { untrack } from "svelte";
 import { app } from "#lib/account/app.svelte.ts";
 import { keepLocalDraft, localDraft } from "#lib/client/drafts.ts";
+import { revalidate } from "#lib/client/refresh.ts";
 import Accordion from "#lib/components/common/Accordion.svelte";
 import { autogrow } from "#lib/components/common/motion.ts";
 import Situation from "#lib/components/scenario/Situation.svelte";
@@ -28,6 +29,7 @@ import { page } from "$app/state";
  * is kept on this device as it is typed, and the piece takes it when it is created.
  */
 const where = $derived({ id: page.params.id ?? "", lang: app.lang });
+revalidate(sandboxed() ? null : scenarioView({ id: page.params.id ?? "", lang: app.lang }), glanceNow());
 const scenario = $derived(sandboxed() ? tourScenario(where.id, where.lang) : await scenarioView(where));
 const s = $derived(scenario?.situation);
 const sim = $derived(scenario?.scene);
