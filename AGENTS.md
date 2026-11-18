@@ -18,6 +18,8 @@ pnpm db:migrate   # apply migrations
 node --experimental-transform-types lab/seed.ts  # works, name tables, scenarios and issues (lab/seed/scenarios.json) into the dev database
 pnpm case pull <piece>            # a piece's record into cases/ (git-ignored), its replies into cases/cache (CASE_DATABASE_URL, read only)
 pnpm case replay <origin> <piece>|--all|--open  # replay cases on a server with LLM_CACHE_DIR=cases/cache
+[COOKIE=…] node lab/patrol.mjs <origin> [path…]   # pages' CSP violations, console errors, exceptions, statuses (before a release, on `node build`)
+[COOKIE=…] node lab/frames.mjs <origin> <path> --do "<js>"  # every frame a flow paints and each address it passed through
 node --experimental-transform-types scripts/backdrops.ts  # download the backdrop pictures missing from src/lib/assets/backdrops (needs magick)
 ```
 

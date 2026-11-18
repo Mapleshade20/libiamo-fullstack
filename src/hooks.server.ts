@@ -3,6 +3,7 @@ import { type Handle, sequence } from "@sveltejs/kit/hooks";
 import { svelteKitHandler } from "better-auth/svelte-kit";
 import { dirOf, htmlLang } from "#lib/i18n/langs.ts";
 import { perRequest } from "#lib/scope.ts";
+import { accessOf } from "#lib/server/access.ts";
 import { pageSetup } from "#lib/server/account/page.ts";
 import { auth } from "#lib/server/auth/auth.ts";
 import { sql } from "#lib/server/db/index.ts";
@@ -79,33 +80,14 @@ const handleAuth: Handle = async ({ event, resolve }) => {
 	return svelteKitHandler({ event, resolve, auth, building });
 };
 
-/** Pages for someone signed out; a signed-in visitor to the first two goes in instead. */
-const SIGNED_OUT = ["/sign-in", "/sign-up", "/verify", "/forgot-password"];
-/** Paths that answer anyone: Better Auth, the probe, the interface strings the signed-out pages speak, crawlers' files. */
-const OPEN = ["/api/auth/", "/health", "/api/i18n/", "/robots.txt", "/sitemap.xml"];
-/** The pages anyone may read, signed in, signed out or not set up yet (routes/(public)). */
-const DOCUMENTS = ["/about", "/terms", "/privacy", "/changelog"];
-
-/*
- * Who may see what, decided here before any page or remote function runs (a redirect thrown inside a query called
- * from the browser is not honoured, sveltejs/kit#17262). Remote functions and endpoints still check the learner
- * themselves: a refused request to them is a 401, never a redirect.
- */
+/* Who may see what (server/access.ts), before any page or remote function runs. */
 const handleAccess: Handle = ({ event, resolve }) => {
-	const path = event.url.pathname;
+	if (building) return resolve(event);
 	const user = event.locals.user;
-	if (building || OPEN.some((p) => path.startsWith(p)) || DOCUMENTS.includes(path)) return resolve(event);
-	if (path.startsWith("/_app/remote/")) return resolve(event);
-	if (path.startsWith("/api/")) return user ? resolve(event) : Response.json({ error: "Sign in first." }, { status: 401 });
-	if (SIGNED_OUT.includes(path)) {
-		if (user && (path === "/sign-in" || path === "/sign-up")) redirect(303, user.onboardedAt ? "/" : "/welcome");
-		return resolve(event);
-	}
-	// A visitor at the site's address sees what Libiamo is; anywhere else, the way in. A page's data asked for from a page
-	// of the app (a session that ended while it was open) is someone who was in: the way in too.
-	if (!user) redirect(303, path === "/" && !event.isDataRequest ? "/about" : "/sign-in");
-	if (!user.onboardedAt && path !== "/welcome") redirect(303, "/welcome");
-	if ((path === "/admin" || path.startsWith("/admin/")) && user.role !== "admin") return new Response("Not found", { status: 404 });
+	const access = accessOf(event.url.pathname, user ? { onboarded: !!user.onboardedAt, admin: user.role === "admin" } : null, event.isDataRequest);
+	if ("redirect" in access) redirect(303, access.redirect);
+	if ("status" in access)
+		return access.status === 401 ? Response.json({ error: "Sign in first." }, { status: 401 }) : new Response("Not found", { status: 404 });
 	return resolve(event);
 };
 
