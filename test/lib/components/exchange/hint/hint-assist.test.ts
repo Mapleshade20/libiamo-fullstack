@@ -50,17 +50,19 @@ describe("createHintAssist", () => {
 		expect(hint.loading).toBe(false);
 	});
 
-	it("reports failures with the server message, or as a generic failure", async () => {
+	it("reports a failure without the server's words, and clears it on the next request", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
 		const hint = createHintAssist(() => 7, api);
 		hint.toggle("composer", trigger, () => ({ draft: "" }));
 
-		requestHint.mockRejectedValueOnce(new Error("Trial budget exhausted."));
+		requestHint.mockRejectedValueOnce(new Error("nokey"));
 		await hint.requestContent();
-		expect(hint.error).toBe("Trial budget exhausted.");
+		expect(hint.failed).toBe(true);
 
-		requestHint.mockRejectedValueOnce(new Error(""));
+		requestHint.mockResolvedValueOnce({ contentHint: "Say thanks first." });
 		await hint.requestContent();
-		expect(hint.error).toBe("");
+		expect(hint.failed).toBe(false);
+		expect(hint.contentHint).toBe("Say thanks first.");
 	});
 
 	it("asks for expression help only with a query, and not while a request is running", async () => {

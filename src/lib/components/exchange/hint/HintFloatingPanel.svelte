@@ -33,7 +33,7 @@ const motionOrigin = $derived(hint.origin);
 const isGettingHint = $derived(hint.loading);
 const contentHint = $derived(hint.contentHint);
 const expressionPhrases = $derived(hint.phrases);
-const hintError = $derived(hint.error === null ? null : hint.error || t(language, "exHintFailed"));
+const hintError = $derived(hint.failed ? t(language, "exHintFailed") : null);
 
 let panelEl = $state<HTMLDivElement | null>(null);
 let resultContentEl = $state<HTMLDivElement | null>(null);

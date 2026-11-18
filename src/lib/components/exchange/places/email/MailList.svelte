@@ -71,7 +71,7 @@ const segments = $derived([
 
 	{#if failedReply}
 		<div class="mx-3 mb-2 flex items-center gap-3 rounded-lg border border-[#FF3B30]/25 bg-[#FFF3F2] px-3 py-2 text-sm text-[#B42318]" role="alert">
-			<p class="min-w-0 flex-1">{failedReply.error || translate(language, "exReplyFailed")}</p>
+			<p class="min-w-0 flex-1">{translate(language, "exReplyFailed")}</p>
 			<button
 				type="button"
 				class="inline-flex min-h-11 items-center justify-center shrink-0 rounded-md px-3 font-semibold text-[#0A84FF] hover:bg-white disabled:opacity-40"

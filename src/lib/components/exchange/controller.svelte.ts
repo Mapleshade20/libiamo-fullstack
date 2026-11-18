@@ -14,7 +14,7 @@ import {
 import { getDeliveryDelayMs } from "#lib/exchange/reply-timing.ts";
 import { clock } from "#lib/time/clock.svelte.ts";
 import { goto } from "$app/navigation";
-import type { ExchangeApi, SendResult } from "./actions.ts";
+import type { ExchangeApi, SendRejection, SendResult } from "./actions.ts";
 import { createHintAssist } from "./hint/hint-assist.svelte.ts";
 import { createTimeFormatter } from "./message-format.ts";
 
@@ -73,7 +73,7 @@ export function createExchange(getProps: () => SurfaceProps, options: { agentNam
 	let completing = $state(false);
 	let initializing = $state(false);
 	let confirmingFinish = $state(false);
-	let rejection = $state<{ message: string; key: number } | null>(null);
+	let rejection = $state<{ reason: SendRejection; key: number } | null>(null);
 	let autoFinished = false;
 	let optimistic = $state<ChatMessage[]>([]);
 	let retrying = $state<string[]>([]);
@@ -140,7 +140,7 @@ export function createExchange(getProps: () => SurfaceProps, options: { agentNam
 			return true;
 		}
 		if (result.status === "rejected") {
-			rejection = { message: result.error ?? "", key: (rejection?.key ?? 0) + 1 };
+			rejection = { reason: result.reason, key: (rejection?.key ?? 0) + 1 };
 			// A refusal can mean the exchange moved on elsewhere (finished in another tab): re-read it.
 			void refresh();
 			return false;
@@ -155,7 +155,6 @@ export function createExchange(getProps: () => SurfaceProps, options: { agentNam
 				text: "",
 				timestamp: formatTimestamp(new Date()),
 				deliveryState: result.status,
-				error: result.status === "failed" ? result.error : undefined,
 			},
 		];
 		// Server truth replaces the optimistic copies as soon as it contains the learner message.

@@ -31,7 +31,7 @@ const lastOutgoingRead = $derived(isLastOutgoingMessageRead(messages, exchange.a
 			{/if}
 			{#if message.deliveryState === "failed"}
 				<p class="max-w-[82%] rounded-[20px] border border-[#FF3B30]/30 bg-[#FFF2F1] px-3 py-2 text-[15px] leading-5 text-[#C9281D] md:max-w-[68%]">
-					{message.error || translate(language, "exReplyFailed")}
+					{translate(language, "exReplyFailed")}
 				</p>
 				<button
 					type="button"

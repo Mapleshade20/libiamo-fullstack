@@ -6,13 +6,16 @@ import { app } from "#lib/account/app.svelte.ts";
 import { keepLocalDraft, localDraft } from "#lib/client/drafts.ts";
 import { revalidate } from "#lib/client/refresh.ts";
 import Accordion from "#lib/components/common/Accordion.svelte";
+import LimitNotice from "#lib/components/common/LimitNotice.svelte";
 import { autogrow } from "#lib/components/common/motion.ts";
+import Reveal from "#lib/components/common/Reveal.svelte";
 import Situation from "#lib/components/scenario/Situation.svelte";
 import EmptyState from "#lib/components/shell/EmptyState.svelte";
 import { sandboxed } from "#lib/components/tour/sandbox.svelte.ts";
 import { tourScenario } from "#lib/components/tour/scenarios.ts";
 import Button from "#lib/components/ui/button/button.svelte";
 import { tx } from "#lib/i18n/tx.ts";
+import { keyStop } from "#lib/llm/stops.ts";
 import { glanceNow } from "#lib/notebook/notebook.svelte.ts";
 import { scenarioView } from "#lib/scenario/scenario.remote.ts";
 import { reopen } from "#lib/writing/open.ts";
@@ -54,6 +57,13 @@ function typed(text: string) {
 	if (!sandboxed()) keepLocalDraft("plan", planKey, text);
 }
 const translation = $derived(scenario?.kind === "translation");
+/* The place's people answer on the learner's key from the first message: without one, going in is stopped here and
+   says why. A translation is written first and needs the key only when it is revised (which asks there). */
+let noKey = $state<"nokey" | null>(null);
+function keyFirst(e: MouseEvent) {
+	noKey = translation ? null : keyStop();
+	if (noKey) e.preventDefault();
+}
 const enter = $derived(translation ? tx("qEnterTr") : tx("qEnter", { site: scenario?.site ?? "" }));
 $effect(() => {
 	document.title = `${scenario?.title ?? tx("navLibrary")} · ${tx("homeTitle")}`;
@@ -151,8 +161,13 @@ $effect(() => {
 						<Button class="w-full" onclick={() => reopen(started)}>{tx("qContinue")}<ArrowRight aria-hidden="true" /></Button>
 					{:else}
 						{@const href = `/scenario/${scenario.id}/${translation ? "translate" : "play"}`}
-						<Button class="w-full" {href}>{enter}<ArrowRight aria-hidden="true" /></Button>
+						<Button class="w-full" {href} onclick={(e: MouseEvent) => keyFirst(e)}>{enter}<ArrowRight aria-hidden="true" /></Button>
 					{/if}
+					<Reveal open={!!noKey}>
+						{#if noKey}
+							<LimitNotice kind={noKey} {tx} />
+						{/if}
+					</Reveal>
 					{#if written}
 						<a class="seen" href="/w/{written}">{tx("qSeeIt")}</a>
 					{/if}

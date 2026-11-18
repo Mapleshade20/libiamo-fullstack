@@ -10,6 +10,7 @@ import { EXCHANGE_MAX_AGE_SECONDS } from "#lib/exchange/limits.ts";
 import { type ChatMessage, foldedChainIds } from "#lib/exchange/messages.ts";
 import { getSessionExpiry, RE_ENGAGE_DELAY_MS, sampleReplyDelayMs } from "#lib/exchange/reply-timing.ts";
 import { isAsyncSurface, resolveScene } from "#lib/exchange/scene.ts";
+import type { Stop } from "#lib/llm/stops.ts";
 import { SITE_OF } from "#lib/scenario/types.ts";
 import { addressedCastParticipants, allocateParticipants, drawTakerCount } from "#lib/server/exchange/agents/floor.ts";
 import { scheduleWorldMoment } from "#lib/server/exchange/agents/worker.ts";
@@ -130,7 +131,7 @@ async function scheduleArrivalTakeUp(
 	if ((serving?.count ?? 0) === 0) {
 		await tx
 			.update(exchangeMessage)
-			.set({ llmMetadata: { ...getMessageMetadata(message.llmMetadata), noReply: true, failed: false, failureError: null } })
+			.set({ llmMetadata: { ...getMessageMetadata(message.llmMetadata), noReply: true, failed: false, failureStop: null } })
 			.where(eq(exchangeMessage.id, message.id));
 	}
 }
@@ -349,7 +350,7 @@ type SubmitMessageResult =
 type SessionMessageMetadata = {
 	clientMessageId?: string;
 	failed?: boolean;
-	failureError?: string | null;
+	failureStop?: Stop | null;
 	hidden?: boolean;
 	displayContent?: string;
 	assistantAuthorName?: string;
@@ -440,10 +441,10 @@ export async function submitMessage(
 					// The retry counter scopes settlement: the fresh taker concludes on its own, without
 					// inheriting the failed rows it supersedes. A pre-marker message gains the arrival flag,
 					// so its wait settles within its conversation from here on.
-					revivedMetadata = { ...existingMetadata, failed: false, failureError: null, attempt: (existingMetadata.attempt ?? 0) + 1, arrival: true };
+					revivedMetadata = { ...existingMetadata, failed: false, failureStop: null, attempt: (existingMetadata.attempt ?? 0) + 1, arrival: true };
 					isRetry = true;
 				} else {
-					revivedMetadata = { ...existingMetadata, failed: false, failureError: null };
+					revivedMetadata = { ...existingMetadata, failed: false, failureStop: null };
 				}
 				await tx.update(exchangeMessage).set({ llmMetadata: revivedMetadata }).where(eq(exchangeMessage.id, existing.id));
 				revivedMessageId = existing.id;

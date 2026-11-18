@@ -1,10 +1,12 @@
 <script lang="ts">
 import type { Component } from "svelte";
+import { fly } from "svelte/transition";
 import { account } from "#lib/account/account.svelte.ts";
 import { app } from "#lib/account/app.svelte.ts";
 import { loadedPicture } from "#lib/account/picture.svelte.ts";
 import { dropLocalDraft, localDraft } from "#lib/client/drafts.ts";
 import { refreshQuery } from "#lib/client/refresh.ts";
+import LimitNotice from "#lib/components/common/LimitNotice.svelte";
 import type { ExchangeApi } from "#lib/components/exchange/actions.ts";
 import ConversationReadReceipt from "#lib/components/exchange/ConversationReadReceipt.svelte";
 import type { SurfaceProps } from "#lib/components/exchange/controller.svelte.ts";
@@ -16,8 +18,10 @@ import RedditUI from "#lib/components/exchange/places/reddit/RedditUI.svelte";
 import EmptyState from "#lib/components/shell/EmptyState.svelte";
 import type { ExchangePlace } from "#lib/constants.ts";
 import { enterPlace, finishPlace, hintInPlace, placeOf, readInPlace, sendToPlace } from "#lib/exchange/exchange.remote.ts";
+import { keyFailureIn } from "#lib/exchange/messages.ts";
 import { loadLang } from "#lib/i18n/index.svelte.ts";
 import { tx } from "#lib/i18n/tx.ts";
+import { keyStop } from "#lib/llm/stops.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
 
@@ -77,6 +81,10 @@ const api: ExchangeApi = {
 	},
 };
 const Surface = $derived(view ? SURFACES[view.place] : null);
+/* The place says only that a reply did not come, in its own language; what the learner can fix (no key, a key the
+   provider refuses) is said over it, in theirs, with the way to the key. It goes once a key is saved or the reply
+   is tried again. */
+const stopped = $derived(keyStop() ?? keyFailureIn(view?.persisted?.messages ?? []));
 // The learner's picture where the place shows it, once the browser has it (else the place draws their initial).
 const picture = loadedPicture(() => account.me.picture);
 // An exchange already over is read on the after page.
@@ -104,8 +112,29 @@ $effect(() => {
 			{api}
 		/>
 	{/key}
+	{#if stopped}
+		<div class="stopped" transition:fly={{ y: -8, duration: 200 }}>
+			<LimitNotice kind={stopped} {tx} />
+		</div>
+	{/if}
 {:else if !place.loading}
 	<main class="grid min-h-dvh place-items-center">
 		<EmptyState art="clink" title={tx("qMissing")} action={{ label: tx("shelfAll"), href: "/library" }} />
 	</main>
 {/if}
+
+<style>
+.stopped {
+	position: fixed;
+	inset-block-start: 12px;
+	inset-inline: 12px;
+	/* Over the place, which is fixed at 999; under its own menus. */
+	z-index: 1001;
+	max-width: 26rem;
+	margin-inline: auto;
+	border-radius: 6px;
+	/* The notice's tint is translucent: the place must not show through. */
+	background: var(--bg);
+	box-shadow: var(--shadow);
+}
+</style>

@@ -20,6 +20,7 @@ import { type AgentEvent, isThreadedUi } from "#lib/server/exchange/agents/promp
 import { buildSceneTranscript } from "#lib/server/exchange/prompt-context.ts";
 import { settingOf } from "#lib/server/exchange/setting.ts";
 import { learnerCaller } from "#lib/server/llm/callers.ts";
+import { type Stop, stopOf } from "#lib/server/llm/transport.ts";
 
 export const DEFAULT_WORKER_SCAN_INTERVAL_MS = 1_000;
 export const DEFAULT_WORKER_LEASE_MS = 30_000;
@@ -102,6 +103,25 @@ export function shouldDeliverIntoEndedSession(
 
 function safeError(error: unknown): string {
 	return error instanceof Error && error.message.trim() ? error.message.slice(0, 500) : "The AI reply could not be generated.";
+}
+
+/** What stopped a generation, through the errors that wrap the model call's. */
+function stopIn(error: unknown): Stop {
+	for (let e = error; e; e = (e as { cause?: unknown }).cause) if (stopOf(e) !== "error") return stopOf(e);
+	return "error";
+}
+
+/**
+ * A failed batch's error as stored (the admin reads it): led by what stopped it when the learner can fix that (no key,
+ * a key the provider refuses), which is all the learner's message is told (`stopOfFailure`).
+ */
+function failureText(error: unknown): string {
+	const stop = stopIn(error);
+	return stop === "error" ? safeError(error) : `${stop}: ${safeError(error)}`;
+}
+export function stopOfFailure(stored: string | null): Stop {
+	const led = /^(nokey|refused):/.exec(stored ?? "");
+	return led ? (led[1] as Stop) : "error";
 }
 
 /**
@@ -206,8 +226,8 @@ export async function settleUserMessageFlags(tx: SessionTx, messageId: number): 
 	const flags = awaiting
 		? { noReply: false }
 		: failure
-			? { noReply: false, failed: true, failureError: failure.error ?? "The AI reply could not be generated." }
-			: { noReply: true, failed: false, failureError: null };
+			? { noReply: false, failed: true, failureStop: stopOfFailure(failure.error) }
+			: { noReply: true, failed: false, failureStop: null };
 	for (const target of chain) {
 		await tx
 			.update(exchangeMessage)
@@ -794,7 +814,10 @@ export class AgentReplyWorker {
 	}
 
 	private async handleGenerationFailure(batch: ClaimedBatch, now: WorkerNow, error: unknown): Promise<void> {
-		const retry = shouldRetryGeneration(batch.generationCount);
+		// No key, or a key the provider refuses, fails the same way every time: the learner is told now, not after three
+		// tries and three minutes of "typing".
+		const stop = stopIn(error);
+		const retry = stop === "error" && shouldRetryGeneration(batch.generationCount);
 		try {
 			await db.transaction(async (tx) => {
 				// The failure settlement writes message flags from sibling batches: lock the session
@@ -805,7 +828,7 @@ export class AgentReplyWorker {
 					.set({
 						status: retry ? "pending" : "failed",
 						...(retry ? { dueAt: new Date(now.getTime() + this.retryBackoffMs) } : { completedAt: now }),
-						error: safeError(error),
+						error: failureText(error),
 						workerId: null,
 						claimToken: null,
 						leaseExpiresAt: null,
@@ -813,7 +836,7 @@ export class AgentReplyWorker {
 					.where(this.batchClaimFence(batch))
 					.returning({ id: agentBatch.id });
 				if (!retry && stillClaimed.length > 0) {
-					await settleInputMessage(tx, batch, { failed: true, failureError: safeError(error) });
+					await settleInputMessage(tx, batch, { failed: true, failureStop: stop });
 				}
 			});
 		} catch (persistenceError) {

@@ -43,7 +43,7 @@ vi.mock("#lib/server/exchange/setting.ts", () => ({
 import { URGENCY_PRESETS } from "#lib/exchange/limits.ts";
 import { getDeliveryDelayMs } from "#lib/exchange/reply-timing.ts";
 import { agentBatch, agentDelivery, exchange, exchangeMessage } from "#lib/server/db/schema.ts";
-import type { AgentGenerationArtifacts } from "#lib/server/exchange/agents/generator.ts";
+import { type AgentGenerationArtifacts, AgentGenerationError } from "#lib/server/exchange/agents/generator.ts";
 import {
 	AgentReplyWorker,
 	buildDeliveredReplyMetadata,
@@ -61,6 +61,7 @@ import {
 	shouldRetryGeneration,
 	WORLD_WINDOW_LIMIT,
 } from "#lib/server/exchange/agents/worker.ts";
+import { LimitError } from "#lib/server/llm/transport.ts";
 
 afterEach(() => vi.useRealTimers());
 
@@ -612,7 +613,7 @@ describe("agent reply worker scheduling", () => {
 		const batchUpdate = updates.find((update) => update.table === agentBatch);
 		expect(batchUpdate?.set.status).toBe("no_reply");
 		const messageUpdate = updates.find((update) => update.table === exchangeMessage);
-		expect(messageUpdate?.set).toEqual({ llmMetadata: { attempt: 0, arrival: true, noReply: true, failed: false, failureError: null } });
+		expect(messageUpdate?.set).toEqual({ llmMetadata: { attempt: 0, arrival: true, noReply: true, failed: false, failureStop: null } });
 		expect(inserts).toEqual([]);
 	});
 
@@ -631,7 +632,7 @@ describe("agent reply worker scheduling", () => {
 			parsedResult: { decision: "no_reply", deliveries: [], allowIdleFollowUp: false, terminationReason: null },
 		} as unknown as AgentGenerationArtifacts;
 		// A manually retried Discord message: the failure was cleared, the attempt counter never moves.
-		const message = { id: 501, exchangeId: 5, role: "user", llmMetadata: { clientMessageId: "m1", failed: false, failureError: null } };
+		const message = { id: 501, exchangeId: 5, role: "user", llmMetadata: { clientMessageId: "m1", failed: false, failureStop: null } };
 		const { tx, updates } = makeRecordingTx(32, [], null, {
 			messageRow: message,
 			siblings: [
@@ -650,7 +651,7 @@ describe("agent reply worker scheduling", () => {
 		);
 
 		const messageUpdate = updates.find((update) => update.table === exchangeMessage);
-		expect(messageUpdate?.set).toEqual({ llmMetadata: { clientMessageId: "m1", failed: false, failureError: null, noReply: true } });
+		expect(messageUpdate?.set).toEqual({ llmMetadata: { clientMessageId: "m1", failed: false, failureStop: null, noReply: true } });
 	});
 
 	it("cancels a world batch whose session ended while it was generating, deciding under the session lock", async () => {
@@ -873,7 +874,7 @@ describe("agent reply worker scheduling", () => {
 		expect(operations.some((operation) => operation.kind === "insert" && operation.table === exchangeMessage)).toBe(false);
 		// ... and the message settles as if nothing landed, instead of waiting forever
 		const settled = operations.find((operation) => operation.kind === "update" && operation.table === exchangeMessage);
-		expect(settled?.set).toEqual({ llmMetadata: { attempt: 0, arrival: true, noReply: true, failed: false, failureError: null } });
+		expect(settled?.set).toEqual({ llmMetadata: { attempt: 0, arrival: true, noReply: true, failed: false, failureStop: null } });
 		const warning = operations.find((operation) => operation.kind === "update" && operation.table === agentBatch && operation.set?.parsedResult);
 		expect((warning?.set?.parsedResult as { warnings?: string[] })?.warnings?.[0]).toContain("missing its target");
 		// the batch still finalizes once nothing is left pending
@@ -985,6 +986,42 @@ describe("agent reply worker scheduling", () => {
 	});
 });
 
+describe("a generation that fails", () => {
+	/** One failed generation of a live reply batch: what its batch and its learner message were set to. */
+	async function fail(error: unknown) {
+		const message = { id: 501, exchangeId: 5, role: "user", llmMetadata: { clientMessageId: "m1" } };
+		const { tx, updates } = makeSettleTx({ message });
+		mockDb.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback(tx));
+		const worker = new AgentReplyWorker({});
+		const batch = { id: 9, exchangeId: 5, claimToken: "token-9", kind: "reply", generationCount: 1, inputMessageId: 501 };
+		await (worker as unknown as { handleGenerationFailure: (b: unknown, n: Date, e: unknown) => Promise<void> }).handleGenerationFailure(
+			batch,
+			new Date("2026-08-21T12:00:00.000Z"),
+			error,
+		);
+		return {
+			batch: updates.find((update) => update.table === agentBatch)?.set,
+			message: updates.find((update) => update.table === exchangeMessage)?.set.llmMetadata,
+		};
+	}
+	const generation = (cause: LimitError) => new AgentGenerationError(cause.message, "provider", { cause });
+
+	it("fails at once on no key or a refused key, and tells the learner's message which", async () => {
+		const nokey = await fail(generation(new LimitError("nokey")));
+		expect(nokey.batch).toMatchObject({ status: "failed", error: "nokey: nokey" });
+		expect(nokey.message).toEqual({ clientMessageId: "m1", failed: true, failureStop: "nokey" });
+		const refused = await fail(generation(new LimitError("refused", "openrouter refused the key (401)")));
+		expect(refused.batch).toMatchObject({ status: "failed", error: "refused: openrouter refused the key (401)" });
+		expect(refused.message).toEqual({ clientMessageId: "m1", failed: true, failureStop: "refused" });
+	});
+
+	it("tries any other failure again later, telling the message nothing yet", async () => {
+		const other = await fail(generation(new LimitError("error", "HTTP 500: upstream")));
+		expect(other.batch).toMatchObject({ status: "pending", error: "HTTP 500: upstream" });
+		expect(other.message).toBeUndefined();
+	});
+});
+
 /** Transaction double for settlement: replays the input message, sibling batches and
  * delivered-delivery counts, recording every metadata write. */
 function makeSettleTx(options: {
@@ -1008,6 +1045,7 @@ function makeSettleTx(options: {
 				where: () =>
 					Object.assign(Promise.resolve(options.delivered ?? []), {
 						groupBy: () => Promise.resolve(options.delivered ?? []),
+						for: () => Promise.resolve([{ id: 5 }]),
 					}),
 			}),
 		}),
@@ -1028,7 +1066,7 @@ describe("aggregated message flags", () => {
 		updates.filter((update) => update.table === exchangeMessage).map((update) => update.set.llmMetadata as Record<string, unknown>);
 
 	it("leaves the message answered or awaiting while any sibling has delivered or is still working", async () => {
-		const head = message({ noReply: true, failed: true, failureError: "boom" });
+		const head = message({ noReply: true, failed: true, failureStop: "error" });
 		const { tx, updates } = makeSettleTx({
 			message: head,
 			siblings: [
@@ -1040,7 +1078,7 @@ describe("aggregated message flags", () => {
 		});
 		await settleUserMessageFlags(tx as never, 501);
 		// a delivering sibling clears the silence flag but leaves an earlier failure alone
-		expect(metadataWrites(updates)).toEqual([{ attempt: 0, failed: true, failureError: "boom", noReply: false }]);
+		expect(metadataWrites(updates)).toEqual([{ attempt: 0, failed: true, failureStop: "error", noReply: false }]);
 	});
 
 	it("sets noReply on the head and every folded message when all siblings ended silent", async () => {
@@ -1069,7 +1107,21 @@ describe("aggregated message flags", () => {
 			userMessages: [head],
 		});
 		await settleUserMessageFlags(tx as never, 501);
-		expect(metadataWrites(updates)).toEqual([{ attempt: 0, noReply: false, failed: true, failureError: "provider exploded" }]);
+		expect(metadataWrites(updates)).toEqual([{ attempt: 0, noReply: false, failed: true, failureStop: "error" }]);
+	});
+
+	it("tells the message a key failure a sibling ended with, never the provider's words", async () => {
+		const head = message();
+		const { tx, updates } = makeSettleTx({
+			message: head,
+			siblings: [
+				{ id: 11, status: "failed", error: "refused: openrouter refused the key (402)" },
+				{ id: 12, status: "failed", error: "refused: openrouter refused the key (402)" },
+			],
+			userMessages: [head],
+		});
+		await settleUserMessageFlags(tx as never, 501);
+		expect(metadataWrites(updates)).toEqual([{ attempt: 0, noReply: false, failed: true, failureStop: "refused" }]);
 	});
 
 	it("settles nothing when every sibling was cancelled by session-level guards", async () => {
@@ -1092,7 +1144,7 @@ describe("aggregated message flags", () => {
 		// the sibling query carries the attempt counter and the reply kind
 		const where = (tx.query.agentBatch.findMany as ReturnType<typeof vi.fn>).mock.calls[0][0].where;
 		expect(bareStrings(where)).toEqual(expect.arrayContaining([2, "reply"]));
-		expect(metadataWrites(updates)).toEqual([{ attempt: 2, noReply: true, failed: false, failureError: null }]);
+		expect(metadataWrites(updates)).toEqual([{ attempt: 2, noReply: true, failed: false, failureStop: null }]);
 	});
 });
 
