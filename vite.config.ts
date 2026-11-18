@@ -4,7 +4,7 @@ import { sveltekit } from "@sveltejs/kit/vite";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vitest/config";
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
 	plugins: [
 		tailwindcss(),
 		sveltekit({
@@ -23,10 +23,33 @@ export default defineConfig({
 						: true,
 			},
 			adapter: adapter(),
+			/*
+			 * What a page may load: the app's own origin, Turnstile (its script and frame, on the signed-out pages) and the
+			 * learner's Gravatar picture. Kit adds a nonce to every script it writes and to app.html's
+			 * (`%sveltekit.nonce%`). Styles stay 'unsafe-inline': Svelte writes style attributes and its transitions insert
+			 * style rules. A new third party goes here, and into the privacy policy, or the browser refuses it.
+			 */
+			csp: {
+				mode: "auto",
+				directives: {
+					"default-src": ["self"],
+					"script-src": ["self", "https://challenges.cloudflare.com"],
+					"style-src": ["self", "unsafe-inline"],
+					"img-src": ["self", "data:", "https://gravatar.com", "https://*.gravatar.com"],
+					"font-src": ["self"],
+					// The dev server's hot updates come over a WebSocket.
+					"connect-src": command === "serve" ? ["self", "ws:"] : ["self"],
+					"frame-src": ["https://challenges.cloudflare.com"],
+					"object-src": ["none"],
+					"base-uri": ["self"],
+					"form-action": ["self"],
+					"frame-ancestors": ["none"],
+				},
+			},
 		}),
 	],
 	server: { host: "127.0.0.1" },
 	test: {
 		include: ["test/**/*.test.ts"],
 	},
-});
+}));

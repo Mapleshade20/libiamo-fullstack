@@ -1,4 +1,7 @@
 <script lang="ts">
+// Shipped with the app (a hashed, cached asset) rather than fetched from a CDN: unreliable in mainland China, and it would
+// see the learner's address. The picker keeps it in IndexedDB after the first load.
+import dataSource from "emoji-picker-element-data/en/emojibase/data.json?url";
 import { onMount } from "svelte";
 
 interface Props {
@@ -18,11 +21,7 @@ onMount(async () => {
 </script>
 
 {#if isLoaded}
-	<emoji-picker
-		class="light"
-		onemoji-click={onEmojiSelected}
-		data-source="https://unpkg.com/emoji-picker-element-data@^1/en/emojibase/data.json"
-	></emoji-picker>
+	<emoji-picker class="light" onemoji-click={onEmojiSelected} data-source={dataSource}></emoji-picker>
 {:else}
 	<div class="flex h-64 w-full items-center justify-center p-4">
 		<div class="flex items-center gap-2">

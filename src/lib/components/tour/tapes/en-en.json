@@ -10,7 +10,7 @@
 		"key": "/api/s",
 		"body": "{\"text\":\"This chapter make me cry on the bus. Draco takes forever to change in this fic, so when Hermione forgave him, I believed it. I can't wait the next update!\",\"background\":\"\",\"source\":\"\",\"model\":\"haiku\",\"grader\":\"haiku\",\"cache\":\"on\",\"imageOffset\":0,\"reviewEvery\":30,\"limit\":\"none\",\"learner\":\"zh-CN\",\"feedback\":\"target\",\"lang\":\"en\",\"detail\":\"more\",\"noCache\":false}",
 		"status": 200,
-		"reply": "{\"id\":\"2026-11-10T04-32-08-528Z-haiku\"}",
+		"reply": "{\"id\":\"2026-11-10T04-32-08-528Z-haiku\",\"setup\":{\"text\":\"This chapter make me cry on the bus. Draco takes forever to change in this fic, so when Hermione forgave him, I believed it. I can't wait the next update!\",\"detail\":\"more\",\"learner\":\"zh-CN\",\"feedback\":\"target\",\"lang\":\"en\"}}",
 		"ms": 14
 	},
 	{

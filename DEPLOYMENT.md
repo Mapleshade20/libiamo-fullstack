@@ -140,6 +140,9 @@ Two things follow for the proxy in front:
   (a 524; the free plan cannot raise it). The spaces keep long answers inside
   it. To check after a deployment, send a revision step that takes longer than
   20 seconds through the public host with `curl -N` and watch the spaces arrive.
+  Leave off the features that inject a script into pages (Rocket Loader, Web
+  Analytics' automatic snippet, email obfuscation): the app's
+  Content-Security-Policy refuses them.
 - **The proxy must pass the spaces on as they come.** Caddy does by default
   (checked with `encode gzip zstd`). nginx buffers responses, but honours the
   app's `X-Accel-Buffering: no` on these answers.
@@ -229,7 +232,7 @@ that identify or terminate the public origin in this order:
 2. Before switching traffic, add the new OAuth callbacks:
    `https://libiamo.net/api/auth/callback/google` and
    `https://libiamo.net/api/auth/callback/github`. Update the providers' homepage
-   or application URL to `https://libiamo.net/welcome`, and add
+   or application URL to `https://libiamo.net/about`, and add
    `https://libiamo.net` as a Google authorized JavaScript origin if that field is
    in use. Google redirect URIs are exact matches; GitHub OAuth Apps support
    several callback URLs, so the old one can remain during the transition.
@@ -246,9 +249,10 @@ in once on the new host. Do not enable cross-subdomain cookies just for this
 one-time move.
 
 Google's production OAuth policy expects the public homepage to describe the app
-and link to its privacy policy and terms. `/welcome` supplies the product
-description; set the consent-screen homepage, privacy and terms URLs to
-`/welcome`, `/privacy` and `/terms` on the public origin before requesting or
+and link to its privacy policy and terms. `/about` (where the site's address
+leads anyone signed out) supplies the product description; set the
+consent-screen homepage, privacy and terms URLs to `/about`, `/privacy` and
+`/terms` on the public origin before requesting or
 renewing Google production verification.
 
 SMTP settings do not change when `SMTP_FROM` already uses a verified sender such
@@ -448,5 +452,14 @@ the browser, scheme included.
 **No emails arrive.** `SMTP_PASS` is wrong or unset. Sending is fire-and-forget,
 so sign-up still appears to succeed; only the message is lost.
 
-**502 or truncated responses during feedback / translation evaluation.** The proxy
-timed out on a long LLM call. Raise `proxy_read_timeout` (§3).
+**502, 524 or truncated responses during a revision step.** The proxy timed out
+on a long model call, or held back the spaces a long answer sends while it waits
+(§3): raise `proxy_read_timeout`, and check that nothing between the app and the
+browser buffers responses.
+
+**A page is missing a script, a frame or a picture, and the console says "Content
+Security Policy".** The app allows only its own origin, Turnstile and Gravatar
+(`vite.config.ts`, `csp`). A proxy or CDN feature that injects its own script
+(Cloudflare's Rocket Loader, Web Analytics' automatic snippet, email
+obfuscation) is refused: turn it off, or add its source there and to the
+privacy policy.

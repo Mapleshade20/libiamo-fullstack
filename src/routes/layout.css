@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* The wordmark's face, served with the app (OFL; Latin is all "Libiamo" needs). */
+@import "@fontsource/italianno/latin-400.css";
 @import "../lib/components/common/interaction-motion.css";
 
 /* Dark is the learner's choice on <html data-theme> (app.html sets it before the first paint). */
