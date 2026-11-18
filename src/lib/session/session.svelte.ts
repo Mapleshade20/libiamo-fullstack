@@ -271,10 +271,12 @@ export class Session {
 			throw e;
 		});
 		leaveIfSignedOut(r);
-		const v = await r.json().catch(() => ({}));
+		// A slow step's answer began as a 200 before it was known (server/kept-alive.ts): a failure is said by `error`.
+		const v = await r.json().catch(() => ({ error: "" }));
 		if (!this.active()) throw new Cancelled();
 		// The server says what stopped a model call: no key, the key refused, or a failure a retry may fix.
-		if (!r.ok) throw v.code === "nokey" || v.code === "refused" ? new LimitError(v.code) : new Error(v.error || this.tt("error"));
+		if (!r.ok || v?.error !== undefined)
+			throw v.code === "nokey" || v.code === "refused" ? new LimitError(v.code) : new Error(v.error || this.tt("error"));
 		return v as T;
 	}
 	/** The bookmark goes to the server after every answer, the newest only, one request at a time; the tour keeps none. */

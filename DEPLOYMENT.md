@@ -130,10 +130,19 @@ podman compose --env-file .env.docker up -d app
 
 ## 3. Reverse proxy
 
-The app does not stream responses — LLM calls complete server-side and the full
-response is returned at once — so no flush/buffering tuning is needed. The one
-thing that matters is that a single request can legitimately take minutes while
-the translation-evaluation chain runs.
+A revision's step or a collected phrase waits on the learner's model, usually
+well under a minute, sometimes longer (a slow model, a retried request). The app
+answers within 20 seconds as usual; an answer not ready by then begins anyway
+and sends a space every 15 seconds until the JSON follows (`src/lib/server/kept-alive.ts`).
+Two things follow for the proxy in front:
+
+- **Cloudflare** gives up on a response that has not begun within 100 seconds
+  (a 524; the free plan cannot raise it). The spaces keep long answers inside
+  it. To check after a deployment, send a revision step that takes longer than
+  20 seconds through the public host with `curl -N` and watch the spaces arrive.
+- **The proxy must pass the spaces on as they come.** Caddy does by default
+  (checked with `encode gzip zstd`). nginx buffers responses, but honours the
+  app's `X-Accel-Buffering: no` on these answers.
 
 ### nginx
 
@@ -158,8 +167,8 @@ server {
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
 
-        # Feedback generation and the translation-evaluation chain make
-        # multi-step LLM calls that outlast the 60s default.
+        # A revision's steps wait on the learner's model and can outlast the
+        # 60s default.
         proxy_read_timeout 300s;
         proxy_send_timeout 300s;
     }

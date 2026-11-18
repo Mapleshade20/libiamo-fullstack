@@ -28,6 +28,7 @@ import { configuredProviders } from "#lib/server/auth/options.ts";
 import { db } from "#lib/server/db/index.ts";
 import { account, user, userKey } from "#lib/server/db/schema.ts";
 import { learner } from "#lib/server/guard.ts";
+import { forgetLearner } from "#lib/server/revision/store.ts";
 import { setWeekGoal } from "#lib/server/week/days.ts";
 import { week } from "#lib/week/week.remote.ts";
 import { command, getRequestEvent, query } from "$app/server";
@@ -238,6 +239,7 @@ export const cancelEmailChange = command(async () => {
 export const deleteAccount = command(z.object({ email: z.string().max(254) }), async ({ email }) => {
 	const u = learner();
 	if (email.trim().toLowerCase() !== u.email.toLowerCase()) error(400, "The address does not match.");
+	forgetLearner(u.id);
 	await db.delete(user).where(eq(user.id, u.id));
 	logAuthEvent("auth.account_deleted", { userId: u.id, email: u.email, ip: clientIp(getRequestEvent().request.headers) });
 });

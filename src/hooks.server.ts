@@ -17,10 +17,16 @@ import { getRequestEvent } from "$app/server";
 process.on("sveltekit:shutdown", async (reason) => {
 	console.log(`shutdown: ${reason}`);
 	// The cast's replies in flight finish first; every revision in memory is written, so a restart picks each one up.
-	stopSourceRunner();
-	await stopAgentReplyWorker();
-	await flushRevisions();
-	await sql.end({ timeout: 5 });
+	// The pool closes whatever went wrong before it, or its connections keep the process alive until it is killed.
+	try {
+		stopSourceRunner();
+		await stopAgentReplyWorker();
+		await flushRevisions();
+	} catch (e) {
+		console.error("shutdown:", e);
+	} finally {
+		await sql.end({ timeout: 5 });
+	}
 });
 /* A failed promise nobody waited for (a model call made ahead of need) is a bug to log, never a reason to end the one
    process every learner's revision lives in. */
