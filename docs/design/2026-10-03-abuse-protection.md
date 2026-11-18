@@ -8,7 +8,24 @@ status: done
 
 Issue #93, items 1 and 2.
 
-## Trial quota: hold, then settle
+## Since the rebuild (2026-11-17)
+
+Learners bring their own AI key and there is no trial (docs/design/2026-11-13-step-3-rebuild.md), so the trial quota,
+the trusted mail domains and the staged trial below are gone, as are the form actions. What still holds:
+
+- **Turnstile** guards only the signed-out endpoints (`CAPTCHA_PROTECTED_PATHS` in `src/lib/server/auth/captcha.ts`:
+  sign-up, sign-in, both password-reset steps, the confirmation mail), from the `interaction-only` widget in the auth
+  layout. A direct request carries the token in `x-captcha-response`; verification fails closed.
+- **The audit log**, as described below.
+- **Password strength**: every way a password is set passes Better Auth's `before` hook (`passwordProblem`), which
+  answers with a catalog key; the pages ask first only to answer sooner.
+- **Proxy rate limits**, as in the table below.
+- A learner's key is stored encrypted under `BETTER_AUTH_SECRET`: rotating the secret makes every saved key
+  unreadable (learners enter theirs again) and signs everyone out.
+
+The sections marked *(before the rebuild)* are kept as the record of what was built then.
+
+## Trial quota: hold, then settle *(before the rebuild)*
 
 The old flow checked `trialTokensLeft > 0` before a call and debited after it, so N concurrent calls
 all passed on the same positive balance. Instead, each env-provider call:
@@ -26,7 +43,7 @@ all passed on the same positive balance. Instead, each env-provider call:
 A burst can now overspend by at most one call's worth per hold the balance could cover, not by the
 number of requests. BYOK and explicit (Lab) routes are untouched. No rate limiting, by decision.
 
-## Sign-up and email change
+## Sign-up and email change *(before the rebuild; see above)*
 
 - **Cloudflare Turnstile** on sign-in, sign-up, both forgot-password steps and Profile's change email/change password
   dialogs (`TURNSTILE_SITE_KEY`/`TURNSTILE_SECRET_KEY`; both empty turns it off, only one refuses to start). Form actions verify
@@ -50,7 +67,7 @@ number of requests. BYOK and explicit (Lab) routes are untouched. No rate limiti
   client IP (from `ADDRESS_HEADER` only, see below). A provider account created with a new user is the sign-up, not
   a link; the unlink is logged from the last-login-method guard, which deletes the row itself.
 
-## Password strength
+## Password strength *(before the rebuild; see above)*
 
 Every password must score at least 2 on zxcvbn (`lib/auth/password-strength.ts`, `zxcvbn-typescript`).
 The Better Auth `before` hook checks `/sign-up/email`, `/reset-password` and `/change-password`, with
@@ -86,7 +103,3 @@ that header, the same one adapter-node trusts; without it they record no address
 client-supplied one.
 
 New endpoints or remote functions that send mail or change credentials belong in this table.
-
-## Not done here
-
-Binding `generateExpressions`/`evaluateTranslation` to a task remains open.

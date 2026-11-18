@@ -6,10 +6,7 @@
 		<meta name="color-scheme" content="light dark">
 		<meta name="darkreader-lock">
 		<link rel="icon" href="%sveltekit.assets%/favicon.ico">
-		<link rel="preconnect" href="https://fonts.googleapis.com">
-		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Italianno&display=swap">
-		<script>
+		<script nonce="%sveltekit.nonce%">
 		// The learner's theme is on <html> from the server; "system" is decided here, before the first paint
 		// (lib/account/look.svelte.ts follows the system after). Paintings are for the light theme only.
 		(() => {
@@ -18,7 +15,8 @@
 			if (html.dataset.theme === "dark" && html.dataset.backdrop === "painting") html.dataset.backdrop = "none";
 			// Back from the session page (a separate document): name the trip so the scene card shrinks into the box.
 			addEventListener("pagereveal", (e) => {
-				const from = navigation?.activation?.from?.url;
+				// Optional chaining does not cover an undeclared global: browsers with pagereveal but no Navigation API.
+				const from = typeof navigation === "undefined" ? undefined : navigation.activation?.from?.url;
 				if (!e.viewTransition || !from) return;
 				html.dataset.vt = `${new URL(from).pathname}>${location.pathname}`;
 				e.viewTransition.finished.finally(() => delete html.dataset.vt);

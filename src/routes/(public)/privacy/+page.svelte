@@ -1,5 +1,5 @@
 <h1>Privacy Policy</h1>
-<p class="updated">Last updated November 16, 2026</p>
+<p class="updated">Last updated November 17, 2026</p>
 
 <section aria-labelledby="pv-scope">
 	<h2 id="pv-scope">1. Scope</h2>
@@ -83,7 +83,6 @@
 		</li>
 		<li>Cloudflare Turnstile, which checks that a person is signing up, signing in or resetting a password.</li>
 		<li>The mail, hosting and database providers that run Libiamo.</li>
-		<li>Services your browser loads from directly: Google Fonts (a typeface) and unpkg (the emoji list in a Discord scenario).</li>
 		<li>Authorities or others when the law requires it, or to protect people, the service or legal rights.</li>
 	</ul>
 	<p>Each of these may see technical details such as your IP address and browser.</p>
