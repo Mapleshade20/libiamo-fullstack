@@ -1,4 +1,5 @@
 import { learner } from "#lib/server/guard.ts";
+import { type Answer, keptAlive } from "#lib/server/kept-alive.ts";
 import { stopOf } from "#lib/server/llm/transport.ts";
 import { pageSetup } from "#lib/server/revision/handover.ts";
 import type { RevisionSession } from "#lib/server/revision/revision.ts";
@@ -9,6 +10,7 @@ import {
 	dropRevision,
 	fileNotes,
 	finishPiece,
+	type Held,
 	openRevision,
 	pieceFor,
 	reloadRevision,
@@ -19,7 +21,9 @@ import { dev } from "$app/env";
 
 // Each action is one step of the revision page's flow (src/lib/session/session.svelte.ts); `id` is the piece's.
 // biome-ignore lint/suspicious/noExplicitAny: request bodies are checked by the revision's methods.
-const ACTIONS: Record<string, (s: RevisionSession, b: any) => unknown> = {
+type Action = (s: RevisionSession, b: any) => unknown;
+type Learner = ReturnType<typeof learner>;
+const ACTIONS: Record<string, Action> = {
 	scene: (s, b) => s.inferScene(b.correction || undefined),
 	start: (s) => s.start(),
 	pass1: (s, b) => s.pass1(b.detail === "needed" || b.detail === "more" ? b.detail : undefined),
@@ -78,6 +82,11 @@ export async function POST({ params, request }) {
 	const fn = ACTIONS[params.action];
 	if (!fn) return Response.json({ error: "unknown action" }, { status: 404 });
 	const b = await request.json().catch(() => ({}));
+	// A step can wait minutes on the model: the answer is kept alive past Cloudflare's 100 seconds.
+	return keptAlive(step(u, h, params, fn, b));
+}
+
+async function step(u: Learner, h: Held, params: { id: string; action: string }, fn: Action, b: Record<string, unknown>): Promise<Answer> {
 	try {
 		const out = await act(params.id, h, params.action, b, async (s) => (await fn(s, b)) ?? {});
 		if (params.action === "scene") {
@@ -103,10 +112,10 @@ export async function POST({ params, request }) {
 			if (asking) void fileNotes(u, params.id);
 			else if (ask) await dropRevision(params.id);
 		}
-		return Response.json(out);
+		return { body: out };
 	} catch (e) {
 		console.error(e);
 		// What stopped a model call, as the page shows it: no key, the key refused, or a failure a retry may fix.
-		return Response.json({ error: String((e as Error)?.message ?? e), code: stopOf(e) }, { status: 500 });
+		return { body: { error: String((e as Error)?.message ?? e), code: stopOf(e) }, status: 500 };
 	}
 }

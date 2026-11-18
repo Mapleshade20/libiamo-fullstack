@@ -1,6 +1,7 @@
 import { and, count, desc, eq, ilike, inArray, max, or, sql, sum } from "drizzle-orm";
 import { db } from "#lib/server/db/index.ts";
 import { llmCall, note, piece, session, user, userKey } from "#lib/server/db/schema.ts";
+import { forgetLearner } from "#lib/server/revision/store.ts";
 
 /*
  * Every account, for the admin, a page at a time: who they are, their setup, how much they write, and their model calls
@@ -132,5 +133,6 @@ export async function callsOf(userId: string, limit = 300): Promise<UserCall[]> 
 }
 
 export async function deleteUser(id: string) {
+	forgetLearner(id);
 	await db.delete(user).where(eq(user.id, id));
 }

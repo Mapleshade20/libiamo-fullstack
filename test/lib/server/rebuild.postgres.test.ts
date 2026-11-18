@@ -41,7 +41,7 @@ vi.mock("#lib/server/translation/source.ts", () => ({
 
 import { encryptKey } from "#lib/server/account/key.ts";
 import { sessions } from "#lib/server/admin/sessions.ts";
-import { users } from "#lib/server/admin/users.ts";
+import { deleteUser, users } from "#lib/server/admin/users.ts";
 import { db, sql } from "#lib/server/db/index.ts";
 import {
 	exchange,
@@ -64,7 +64,19 @@ import { learnerCaller } from "#lib/server/llm/callers.ts";
 import { pruneCalls, writeRecord } from "#lib/server/llm/records.ts";
 import { NOTEBOOK_PAGE, notebookGlance, notebookPage, rateNote } from "#lib/server/notebook/notes.ts";
 import { newCard } from "#lib/server/review/scheduler.ts";
-import { abandon, abandonStale, act, dropRevision, openRevision, pruneRevisions, pruneTapes, startRevision } from "#lib/server/revision/store.ts";
+import {
+	abandon,
+	abandonStale,
+	act,
+	dropRevision,
+	flushRevisions,
+	heldRevision,
+	openRevision,
+	pruneRevisions,
+	pruneTapes,
+	putAwayIdle,
+	startRevision,
+} from "#lib/server/revision/store.ts";
 import { importContent } from "#lib/server/scenario/content.ts";
 import { scenarioViewOf } from "#lib/server/scenario/scenarios.ts";
 import { sourceIdentity } from "#lib/server/translation/identity.ts";
@@ -664,6 +676,57 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 			}),
 		]);
 		expect(seen).toEqual(["first starts", "first ends", "second"]);
+	});
+
+	it("answers a reload and the bookmark at once while an action waits on the model", async () => {
+		const id = await startRevision(learner, { text: "Initial", learner: "en", feedback: "native" }, { kind: "own", language: "en" });
+		ids.add(id);
+		const h = await openRevision(learner, id);
+		if (!h) throw new Error("missing revision");
+		let release = () => {};
+		const waiting = act(id, h, "slow", {}, () => new Promise<object>((r) => (release = () => r({}))));
+		const post = (action: string, body?: object) =>
+			actionPost({ params: { id, action }, request: new Request("http://test", { method: "POST", body: JSON.stringify(body ?? {}) }) } as never);
+		const soon = <T>(p: Promise<T>) => Promise.race([p, new Promise<"waited">((r) => setTimeout(() => r("waited"), 500))]);
+		try {
+			const resumed = await soon(post("resume"));
+			expect(resumed).not.toBe("waited");
+			expect(await (resumed as Response).json()).toMatchObject({ setup: { text: "Initial" } });
+			const marked = await soon(post("progress", { phase: 1, answers: [] }));
+			expect(marked).not.toBe("waited");
+			expect((marked as Response).status).toBe(200);
+		} finally {
+			release();
+			await waiting;
+		}
+	});
+
+	it("puts a deleted learner's revisions away unwritten, and shutdown writes the others whatever fails", async () => {
+		await db.insert(user).values([
+			{ id: "gone", email: "gone@example.test", name: "Gone" },
+			{ id: "vanished", email: "vanished@example.test", name: "Vanished" },
+		]);
+		const as = (id: string) => ({ ...learner, id });
+		const start = (who: string) => startRevision(as(who), { text: `By ${who}`, learner: "en", feedback: "native" }, { kind: "own", language: "en" });
+		const [gone, vanished, kept] = [await start("gone"), await start("vanished"), await start(learner.id)];
+		for (const id of [gone, vanished, kept]) ids.add(id);
+		// Deleting an account puts its revisions away first.
+		await deleteUser("gone");
+		expect(heldRevision(gone, "gone")).toBeNull();
+		// A piece deleted some other way leaves its revision with nowhere to write.
+		const lost = heldRevision(vanished, "vanished");
+		await db.delete(user).where(eq(user.id, "vanished"));
+		const mine = heldRevision(kept, learner.id);
+		if (!lost || !mine) throw new Error("missing revision");
+		mine.session.input.text = "Changed before shutdown";
+		await expect(flushRevisions()).resolves.toBeUndefined();
+		expect((await db.select().from(pieceRevision).where(eq(pieceRevision.pieceId, kept)))[0].state).toMatchObject({
+			input: { text: "Changed before shutdown" },
+		});
+		// Idle, it leaves memory even though its snapshot cannot be written.
+		await putAwayIdle(Date.now() + 31 * 60_000);
+		expect(heldRevision(vanished, "vanished")).toBeNull();
+		expect(heldRevision(kept, learner.id)).toBeNull();
 	});
 
 	it("retries a rating with the same request id without advancing FSRS or logging twice", async () => {

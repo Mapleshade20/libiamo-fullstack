@@ -92,11 +92,10 @@ export class Collector {
 					retry: this.retries,
 				}),
 			});
-			await answered(r);
-			const { items, readingId } = (await r.json()) as {
+			const { items, readingId } = await answered<{
 				readingId?: string;
 				items: { n: number; id?: string; phrase: string; meaning: string; register: string; why: string; example: string }[];
-			};
+			}>(r);
 			if (!this.active()) return;
 			if (readingId) this.readings.set(block, readingId);
 			const stale: (string | undefined)[] = [];

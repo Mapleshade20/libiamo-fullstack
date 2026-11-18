@@ -24,13 +24,13 @@ export function needKey() {
 /** The stop a server's error code names. */
 export const stopFrom = (code: unknown): Stop => (code === "nokey" || code === "refused" ? code : "error");
 export const stopOf = (e: unknown): Stop => (e instanceof LimitError ? e.kind : "error");
-/** Throws the response's stop when the server did not answer. */
-export async function answered(r: Response): Promise<Response> {
-	if (r.ok) return r;
+/**
+ * The response's body, or the stop it names. A failed answer always carries `error`: a slow one began as a 200 before
+ * it was known (server/kept-alive.ts), and one cut off on the way is not JSON.
+ */
+export async function answered<T>(r: Response): Promise<T> {
 	leaveIfSignedOut(r);
-	const v = await r
-		.clone()
-		.json()
-		.catch(() => ({}));
+	const v = await r.json().catch(() => null);
+	if (r.ok && v && typeof v === "object" && !("error" in v)) return v as T;
 	throw new LimitError(stopFrom(v?.code ?? (r.status === 402 ? "refused" : null)));
 }

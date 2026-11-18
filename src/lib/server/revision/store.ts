@@ -17,7 +17,7 @@ import { type RevisionInput, RevisionSession, type RevisionState, SNAPSHOT_VERSI
  * thirty minutes; shutdown writes every snapshot first.
  */
 type Learner = { id: string; helpImprove: boolean; timeZone?: string | null };
-type Held = {
+export type Held = {
 	userId: string;
 	session: RevisionSession;
 	/** The next step's number on the tape. */
@@ -163,15 +163,17 @@ export async function startRevision(
 	});
 }
 
-/** The learner's revision of a piece: in memory, or loaded from its snapshot. Null when they have none there. */
+/**
+ * The learner's revision of a piece: in memory, or loaded from its snapshot. Null when they have none there. One in
+ * memory is answered at once, not in the piece's turn: an action can wait minutes on a model there, and a reload
+ * (`resume`) or the bookmark must not wait behind it. `act` still refuses a revision replaced meanwhile.
+ */
 export async function openRevision(user: Learner, pieceId: string): Promise<Held | null> {
+	const h = held.get(pieceId);
+	if (h) return using(h, user);
 	return exclusive(pieceId, async () => {
 		const h = held.get(pieceId);
-		if (h) {
-			if (h.userId !== user.id) return null;
-			h.used = Date.now();
-			return h;
-		}
+		if (h) return using(h, user);
 		const [row] = await db
 			.select({ version: pieceRevision.version, state: pieceRevision.state, userId: piece.userId })
 			.from(pieceRevision)
@@ -186,10 +188,16 @@ export async function openRevision(user: Learner, pieceId: string): Promise<Held
 		const ai = await callerFor(user, pieceId, () => loaded);
 		// Another request may have loaded it meanwhile.
 		const again = held.get(pieceId);
-		if (again) return again;
+		if (again) return using(again, user);
 		loaded = hold(pieceId, user.id, RevisionSession.restore(row.state as RevisionState, ai), (last?.seq ?? -1) + 1);
 		return loaded;
 	});
+}
+
+function using(h: Held, user: Learner) {
+	if (h.userId !== user.id) return null;
+	h.used = Date.now();
+	return h;
 }
 
 /** One action of the page, on the tape with what it answered, and the snapshot written after it. */
@@ -493,21 +501,38 @@ export async function pruneTapes(now = new Date()) {
 	return new Set(gone.map((g) => g.id)).size;
 }
 
-/** Idle revisions leave memory (their snapshot written first). */
-setInterval(() => {
-	const now = Date.now();
-	for (const [id, h] of held)
-		if (now - h.used > IDLE_MS)
-			void exclusive(id, async () => {
-				if (held.get(id) !== h || Date.now() - h.used <= IDLE_MS) return;
-				await save(id, h);
+/**
+ * Idle revisions leave memory, their snapshot written first. One whose snapshot cannot be written (its piece deleted
+ * meanwhile) leaves all the same: the snapshot was written with its last step, and keeping it would only retry the write
+ * every minute until a restart.
+ */
+export async function putAwayIdle(now = Date.now()) {
+	const idle = [...held].filter(([, h]) => now - h.used > IDLE_MS);
+	await Promise.all(
+		idle.map(([id, h]) =>
+			exclusive(id, async () => {
+				if (held.get(id) !== h || now - h.used <= IDLE_MS) return;
+				await save(id, h).catch((e) => console.error(`revision ${id}: idle save failed:`, e));
 				await retire(id);
-			}).catch((e) => console.error(`revision ${id}: idle save failed:`, e));
-}, 60_000).unref();
+			}),
+		),
+	);
+}
+if (!building) setInterval(() => putAwayIdle().catch((e) => console.error("idle revisions not put away:", e)), 60_000).unref();
 
-/** Every snapshot written, for shutdown. */
+/**
+ * A learner's revisions leave memory unwritten, before their account is deleted: a snapshot written after it would
+ * refer to a piece that is gone. A step in flight finishes without writing (a retired revision never writes again).
+ */
+export function forgetLearner(userId: string) {
+	for (const [id, h] of held) if (h.userId === userId) void retire(id);
+}
+
+/** Every snapshot written, for shutdown; one that fails is logged and does not stop the others. */
 export async function flushRevisions() {
-	await Promise.all([...held].map(([id, h]) => exclusive(id, () => save(id, h))));
+	const all = [...held];
+	const done = await Promise.allSettled(all.map(([id, h]) => exclusive(id, () => save(id, h))));
+	for (const [i, d] of done.entries()) if (d.status === "rejected") console.error(`revision ${all[i][0]}: not written at shutdown:`, d.reason);
 }
 
 /** Development only: the revision thrown away and loaded again from its snapshot (lab/replay.mjs --reload). */

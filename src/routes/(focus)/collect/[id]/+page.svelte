@@ -154,8 +154,7 @@ async function fill() {
 			headers: { "content-type": "application/json" },
 			body: JSON.stringify({ ...SETUP, readingId, highlights: sent, retry: retries }),
 		});
-		await answered(r);
-		const got = (await r.json()) as { items: (Item & { n: number; id?: string })[] };
+		const got = await answered<{ items: (Item & { n: number; id?: string })[] }>(r);
 		if (!active()) return;
 		const stale: (string | undefined)[] = [];
 		for (const s of sent) {
@@ -264,9 +263,7 @@ async function askAbout(m: Mark, q: string) {
 			method: "POST",
 			headers: { "content-type": "application/json" },
 			body: JSON.stringify({ ...SETUP, phrase: m.data.phrase, history: m.thread.filter((x) => x.a !== null), question: q }),
-		})
-			.then(answered)
-			.then((x: Response) => x.json());
+		}).then((x) => answered<{ answer?: string }>(x));
 		if (!active()) return;
 		turn.a = r.answer ?? tx("colFailed");
 	} catch (e) {
