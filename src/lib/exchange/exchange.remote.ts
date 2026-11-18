@@ -2,6 +2,7 @@ import { error } from "@sveltejs/kit";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import EmojiConverter from "emoji-js";
 import { z } from "zod";
+import type { SendResult } from "#lib/components/exchange/actions.ts";
 import type { ExchangePlace } from "#lib/constants.ts";
 import { db } from "#lib/server/db/index.ts";
 import { exchange, piece, scenario } from "#lib/server/db/schema.ts";
@@ -12,7 +13,7 @@ import { sendOptionsFor } from "#lib/server/exchange/send-options.ts";
 import { settingFrom } from "#lib/server/exchange/setting.ts";
 import { acknowledgeAssistantMessage, earliestOutstandingDueAtInScope, getNextAgentWorkDueAt, getUnreadInbox } from "#lib/server/exchange/unread.ts";
 import { learner } from "#lib/server/guard.ts";
-import { learnerCaller } from "#lib/server/llm/callers.ts";
+import { learnerCaller, routeOf } from "#lib/server/llm/callers.ts";
 import { stopOf } from "#lib/server/llm/transport.ts";
 import { shelves } from "#lib/writing/writing.remote.ts";
 import { command, query } from "$app/server";
@@ -121,21 +122,18 @@ async function owned(exchangeId: number) {
 }
 
 const SendInput = z.object({ exchangeId: z.number().int(), fields: z.record(z.string(), z.string().max(60_000)) });
-export type SendOutcome =
-	| { status: "pending" }
-	| { status: "failed"; error?: string }
-	| { status: "rejected"; error?: string }
-	| { status: "exchange_completed" };
 
 /** One learner message; the cast's reply is composed in the background (server/exchange/agents). */
-export const sendToPlace = command(SendInput, async ({ exchangeId, fields }): Promise<SendOutcome> => {
+export const sendToPlace = command(SendInput, async ({ exchangeId, fields }): Promise<SendResult> => {
 	const { u, ex, s } = await owned(exchangeId);
 	const raw = fields.message ?? "";
 	const clientMessageId = (fields.clientMessageId ?? "").trim();
-	if (!raw.trim()) return { status: "rejected", error: "Message is required" };
-	if (clientMessageId.length > 200) return { status: "rejected", error: "Client message ID is too long" };
+	const invalid = { status: "rejected", reason: "invalid" } as const;
+	if (!raw.trim() || clientMessageId.length > 200) return invalid;
+	// The cast answers on the learner's key: without one the message is not kept, rather than failing a minute later.
+	if (!(await routeOf(u.id))) return { status: "rejected", reason: "nokey" };
 	const tooLong = s.ui === "email" ? parseMailMessage(raw).body.length > MAIL_TEXT_MAX : raw.length > TEXT_MAX;
-	if (tooLong) return { status: "rejected", error: "Message is too long" };
+	if (tooLong) return invalid;
 	const message = emoji.replace_unified(raw);
 	const options = await sendOptionsFor({
 		ui: s.ui,
@@ -146,13 +144,14 @@ export const sendToPlace = command(SendInput, async ({ exchangeId, fields }): Pr
 		clientMessageId,
 		userName: u.name || "Learner",
 	});
-	if (!options.ok) return { status: "rejected", error: options.error };
+	if (!options.ok) return invalid;
 	try {
 		const r = await submitMessage(ex.id, message, u.id, clientMessageId || undefined, options.options);
 		return "sessionCompleted" in r ? { status: "exchange_completed" } : { status: "pending" };
 	} catch (e) {
 		const m = (e as Error).message;
-		if (/not in progress|Maximum conversation turns|required/i.test(m)) return { status: "rejected", error: m };
+		if (/not in progress|Maximum conversation turns/i.test(m)) return { status: "rejected", reason: "closed" };
+		if (/required/i.test(m)) return invalid;
 		console.error("exchange send failed:", e);
 		return { status: "failed" };
 	}

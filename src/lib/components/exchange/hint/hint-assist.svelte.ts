@@ -13,8 +13,7 @@ export function createHintAssist(getExchangeId: () => number | null, api: () => 
 	let expressionQuery = $state("");
 	let contentHint = $state("");
 	let phrases = $state<string[]>([]);
-	/** `null` when there is no error; an empty string is a failure without a server message. */
-	let error = $state<string | null>(null);
+	let failed = $state(false);
 	let loading = $state(false);
 	let token = 0;
 	let getContext: () => HintContext = () => ({ draft: "" });
@@ -22,7 +21,7 @@ export function createHintAssist(getExchangeId: () => number | null, api: () => 
 	function clearResult() {
 		token += 1;
 		loading = false;
-		error = null;
+		failed = false;
 		contentHint = "";
 		phrases = [];
 	}
@@ -56,7 +55,10 @@ export function createHintAssist(getExchangeId: () => number | null, api: () => 
 			phrases = result.phrases ?? [];
 		} catch (cause) {
 			if (current !== token) return;
-			error = cause instanceof Error ? cause.message : "";
+			// The server's answer is a code (`nokey`, `refused`, `error`), not words: the panel says the hint failed, and
+			// the play page says what to do about a key.
+			console.error("hint failed:", cause);
+			failed = true;
 		} finally {
 			if (current === token) loading = false;
 		}
@@ -81,8 +83,8 @@ export function createHintAssist(getExchangeId: () => number | null, api: () => 
 		get phrases() {
 			return phrases;
 		},
-		get error() {
-			return error;
+		get failed() {
+			return failed;
 		},
 		get loading() {
 			return loading;

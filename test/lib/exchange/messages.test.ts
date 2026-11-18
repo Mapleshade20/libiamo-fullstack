@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	buildChatMessages,
 	buildOpeningMessages,
+	keyFailureIn,
 	type PersistedExchangeMessage,
 	parsePersistedMessageDate,
 	resolveOpeningAgentName,
@@ -16,14 +17,23 @@ function build(rawMessages: PersistedExchangeMessage[]) {
 }
 
 describe("buildChatMessages", () => {
-	it("follows a failed learner turn with a failed placeholder carrying the persisted error and retry text", () => {
-		const result = build([message(1, "user", "Hello", { clientMessageId: "c1", failed: true, failureError: "Budget exhausted." })]);
+	it("follows a failed learner turn with a failed placeholder carrying the retry text", () => {
+		const result = build([message(1, "user", "Hello", { clientMessageId: "c1", failed: true, failureStop: "refused" })]);
 
 		expect(result.map((item) => [item.id, item.role, item.deliveryState])).toEqual([
 			["1", "user", undefined],
 			["retry-1", "agent", "failed"],
 		]);
-		expect(result[1]).toMatchObject({ error: "Budget exhausted.", clientMessageId: "c1", retryText: "Hello", text: "" });
+		expect(result[1]).toMatchObject({ clientMessageId: "c1", retryText: "Hello", text: "" });
+	});
+
+	it("finds a reply that failed on the learner's key while it waits to be retried", () => {
+		const user = (metadata: Record<string, unknown>) => ({ role: "user", llmMetadata: { clientMessageId: "c", ...metadata } });
+		expect(keyFailureIn([user({}), user({ failed: true, failureStop: "error" })])).toBeNull();
+		expect(keyFailureIn([user({ failed: true, failureStop: "nokey" })])).toBe("nokey");
+		expect(keyFailureIn([user({}), user({ failed: true, failureStop: "refused" })])).toBe("refused");
+		// Retried: the failure is cleared.
+		expect(keyFailureIn([user({ failed: false, failureStop: null })])).toBeNull();
 	});
 
 	it("marks an unanswered learner turn as pending, but not one the agent chose not to answer", () => {
@@ -84,7 +94,7 @@ describe("buildChatMessages", () => {
 		const messages = build([
 			message(1, "user", "First question", { clientMessageId: "m1", foldedInto: 2 }),
 			message(2, "user", "Actually, one more thing", { clientMessageId: "m2" }),
-			message(3, "user", "Failed but folded", { clientMessageId: "m3", failed: true, failureError: "boom", foldedInto: 2 }),
+			message(3, "user", "Failed but folded", { clientMessageId: "m3", failed: true, failureStop: "error", foldedInto: 2 }),
 		]);
 
 		// the head carries the chain's shared wait; the folded messages get neither a pending

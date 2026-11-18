@@ -94,7 +94,7 @@ const isLearner = $derived(comment.message?.role === "user");
 		{#if !isCollapsed}
 			<div class="mb-1 pl-7 text-sm leading-6 {failed ? "text-red-600" : "text-[#1C1C1C]"}">
 				{#if failed}
-					{comment.message?.error || translate(language, "exReplyFailed")}
+					{translate(language, "exReplyFailed")}
 				{:else}
 					<MarkdownRenderer content={comment.text} />
 				{/if}

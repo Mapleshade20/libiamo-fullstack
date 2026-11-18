@@ -366,7 +366,7 @@ describe("session service", () => {
 				userId: USER_ID,
 				status: "in_progress",
 				task: { urgency: "high", maxTurns: 3 },
-				messages: [{ id: 9, role: "user", content: "Hello", llmMetadata: { clientMessageId: "client-1", failed: true, failureError: "boom" } }],
+				messages: [{ id: 9, role: "user", content: "Hello", llmMetadata: { clientMessageId: "client-1", failed: true, failureStop: "error" } }],
 			});
 			mockDb.query.agentBatch.findFirst.mockResolvedValue(null);
 
@@ -847,7 +847,7 @@ describe("session service", () => {
 						llmMetadata: {
 							clientMessageId: "m1",
 							failed: true,
-							failureError: "boom",
+							failureStop: "error",
 							thread: { commentId: "reddit-user-m1", targetCommentId: null },
 						},
 					},

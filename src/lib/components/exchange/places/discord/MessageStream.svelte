@@ -113,7 +113,7 @@ let tapped = $state<string | null>(null);
 					<div class="mt-0.5 leading-normal break-words text-[#DBDEE1]">
 						{#if message.deliveryState === "failed"}
 							<div class="mt-1 flex flex-wrap items-center gap-2">
-								<span class="whitespace-pre-wrap text-[#F28B82]">{message.error || translate(language, "exReplyFailed")}</span>
+								<span class="whitespace-pre-wrap text-[#F28B82]">{translate(language, "exReplyFailed")}</span>
 								{#if !exchange.limitReached}
 									<button
 										type="button"

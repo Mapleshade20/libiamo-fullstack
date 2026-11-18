@@ -20,7 +20,8 @@ $effect(() => {
 	position: fixed;
 	left: calc(var(--side) + (100vw - var(--side)) / 2);
 	bottom: max(28px, env(safe-area-inset-bottom));
-	z-index: 90;
+	/* Above the simulated places (fixed at 999) and their menus (up to 2000): a place's refusals are toasts. */
+	z-index: 2100;
 	translate: -50% 0;
 	max-width: min(440px, calc(100vw - 32px));
 	padding: 10px 16px;

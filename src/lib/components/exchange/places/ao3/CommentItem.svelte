@@ -45,7 +45,7 @@ const failed = $derived(message?.deliveryState === "failed");
 			<img class="h-[72px] w-[72px] shrink-0 border border-[#ccc] object-cover p-0.5 md:h-[100px] md:w-[100px]" alt="" src={icon}>
 			<div class="min-w-0 flex-1 leading-6 break-words">
 				{#if failed && message}
-					<p class="text-[#900]">{message.error || translate(language, "exReplyFailed")}</p>
+					<p class="text-[#900]">{translate(language, "exReplyFailed")}</p>
 					<button type="button" class="ao3-action mt-2" onclick={() => exchange.retry(message.id)} disabled={exchange.isSubmitting}>
 						{translate(language, "exRetry")}
 					</button>

@@ -1,3 +1,4 @@
+import type { Stop } from "#lib/llm/stops.ts";
 import type { CommentThreadMetadata } from "./comment-thread.ts";
 
 /** One stored conversation message, as the exchange loader returns it. */
@@ -45,7 +46,6 @@ export type ChatMessage = {
 	timestamp: string;
 	authorName: string;
 	deliveryState?: "pending" | "failed";
-	error?: string;
 	clientMessageId?: string;
 	retryText?: string;
 	thread?: CommentThreadMetadata;
@@ -57,7 +57,8 @@ type MessageMetadata = {
 	clientMessageId?: string;
 	failed?: boolean;
 	noReply?: boolean;
-	failureError?: string | null;
+	/** Why the reply failed: what the learner can fix (no key, a refused key), else "error". */
+	failureStop?: Stop | null;
 	hidden?: boolean;
 	displayContent?: string;
 	assistantAuthorName?: string;
@@ -225,7 +226,6 @@ export function buildChatMessages({
 			timestamp,
 			authorName: responderName,
 			deliveryState: failed ? "failed" : "pending",
-			error: failed ? metadata.failureError || undefined : undefined,
 			clientMessageId: metadata.clientMessageId,
 			retryText: mapped.text,
 			thread: placeholderThread(metadata.thread),
@@ -259,6 +259,18 @@ export function resolveOpeningAgentName(openingState: ChatOpeningState, userName
 	for (const message of Array.isArray(openingState.previousMessages) ? openingState.previousMessages : []) {
 		const sender = message.sender?.trim();
 		if (sender && sender !== userName) return sender;
+	}
+	return null;
+}
+
+/**
+ * A reply that failed for a reason the learner can fix (no key, a key the provider refuses), while it waits to be
+ * retried: the place says only that the reply did not come; the page says how to fix it (the play page).
+ */
+export function keyFailureIn(messages: readonly { role: string; llmMetadata?: unknown }[]): "nokey" | "refused" | null {
+	for (const m of messages) {
+		const md = m.role === "user" ? metadataOf(m.llmMetadata) : {};
+		if (md.failed === true && (md.failureStop === "nokey" || md.failureStop === "refused")) return md.failureStop;
 	}
 	return null;
 }

@@ -8,9 +8,13 @@
  */
 export type SendResult =
 	| { status: "pending" }
-	| { status: "failed"; error?: string }
-	| { status: "rejected"; error?: string }
+	| { status: "failed" }
+	| { status: "rejected"; reason: SendRejection }
 	| { status: "exchange_completed" };
+/** `closed`: the exchange is over or its turns are used up (another tab, an expiry); `nokey`: no key to answer on
+ *  (the play page says so already, unless the key went in another tab); `invalid`: a message the place should not have
+ *  let through (empty, too long, a reply to nothing). Pages word them; the server sends no words. */
+export type SendRejection = "closed" | "nokey" | "invalid";
 
 export type HintMode = "content" | "expression";
 /** What the learner is writing and, in threads, the comments it answers. */
