@@ -2,7 +2,7 @@
 // pass 2 compares with; the source is what the writer means, so pass 2 asks nothing about meaning. Names and terms
 // from the scenario's glossary are given: never a spot.
 
-import { type Caller, type CallResult, chat, chatJson, extractJson } from "#lib/server/llm/caller.ts";
+import { type Caller, type CallResult, chat, chatJson } from "#lib/server/llm/caller.ts";
 import { type Draft, LANG_NAMES } from "#lib/server/revision/draft.ts";
 import { DRAFT_CONVENTIONS, draftBlock, ROUTING, VOICE } from "#lib/server/revision/pass1/context.ts";
 import { label, MARK_RULES, merge, type Rewrite } from "#lib/server/revision/pass1/rewrite.ts";
@@ -81,28 +81,13 @@ export async function analyzeTranslation(d: Draft, t: Translation, ai: Caller, l
 		"",
 		`Reply with JSON only. ${SCAN_RULE}\n${SHAPE_V6}`,
 	].join("\n");
-	const r = await chat(
+	const { value } = await chatJson(
 		[
 			{ role: "system", content: `You are a ${LANG_NAMES[d.target]} writing tutor.` },
 			{ role: "user", content: user },
 		],
+		AnalysisSchema,
 		{ ai, sample: 0, tag: "translate/pass2" },
 	);
-	let raw: unknown = null;
-	try {
-		raw = extractJson(r.text);
-	} catch {}
-	const parsed = AnalysisSchema.safeParse(raw);
-	if (parsed.success) return parsed.data;
-	return (
-		await chatJson(
-			[
-				{ role: "user", content: user },
-				{ role: "assistant", content: r.text },
-				{ role: "user", content: `The JSON did not validate:\n${parsed.error.message}\nReply with the corrected JSON only.` },
-			],
-			AnalysisSchema,
-			{ ai, tag: "translate/pass2-repair" },
-		)
-	).value;
+	return value;
 }
