@@ -55,7 +55,8 @@ export function createAuthOptions(store: AuthStore) {
 		secret: BETTER_AUTH_SECRET,
 		// No cookie cache: every request reads the session and the user, so a setting written by the app (finishing the
 		// welcome, a granted role) is seen on the next request. One indexed lookup per request is cheap at this size.
-		session: { cookieCache: { enabled: false } },
+		// A sign-in lasts twenty days from the last day it was used (Better Auth moves the expiry on once a day).
+		session: { cookieCache: { enabled: false }, expiresIn: 60 * 60 * 24 * 20 },
 		// A state that cannot be parsed (an OAuth round trip left until it expired) has nowhere to go but here.
 		onAPIError: { errorURL: "/sign-in" },
 		socialProviders: providers(),

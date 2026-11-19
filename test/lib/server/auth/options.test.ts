@@ -107,6 +107,19 @@ describe("signing in", () => {
 		expect(sent.at(-1)?.to).toBe("ada-new@example.test");
 	});
 
+	it("keeps a sign-in for twenty days", async () => {
+		const { client, auth, signInWithUser } = await instance();
+		await signUp(client, "ada@example.test", "plum orchard lantern 47");
+		const ctx = await auth.$context;
+		const found = await ctx.internalAdapter.findUserByEmail("ada@example.test");
+		await ctx.internalAdapter.updateUser(found?.user.id as string, { emailVerified: true });
+		const { headers } = await signInWithUser("ada@example.test", "plum orchard lantern 47");
+		const session = await auth.api.getSession({ headers });
+		const days = (new Date(session?.session.expiresAt ?? 0).getTime() - Date.now()) / 86_400_000;
+		expect(days).toBeGreaterThan(19.99);
+		expect(days).toBeLessThanOrEqual(20);
+	});
+
 	it("asks the store to grant the admin role when there is a list", async () => {
 		env.ADMIN_EMAILS = ["ada@example.test"];
 		const { client, auth } = await instance();
