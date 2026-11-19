@@ -17,6 +17,14 @@ test("a step reads as the learner saw it", () => {
 	});
 	assert.equal(readStep(step("apply", { id: "s1", final: "x", self: false })).label, "Stop s1 · took the tutor's");
 	assert.equal(readStep(step("pass1", {}, { doc: [["a ", { item: "p1", parts: ["b"] }, { item: "d1", parts: ["c"] }]] })).lines[0].text, "2 marks");
+	// A stop opens on its material: the reader's reaction, the tutor's ask and the version held up.
+	const opened = readStep(step("material", { id: "s3" }, { reader: "Huh?", prompt: "Say it plainly.", ref: "I [went] home.", construct: "past" }));
+	assert.deepEqual(
+		opened.lines.map((l) => l.who),
+		["reader", "tutor", "card"],
+	);
+	assert.match(opened.lines[2].text, /^I went home\.\npast$/);
+	assert.equal(readStep(step("material", { id: "s3", meanings: ["left"] }, { prompt: "p" })).lines[0].who, "me");
 });
 
 test("signals come from the tape and the calls, with no model", () => {

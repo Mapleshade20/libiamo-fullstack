@@ -10,7 +10,7 @@ export type AgentWorkPollingPlan = { kind: "interval" } | { kind: "wake"; delayM
  * pacing out its deliveries): poll continuously while a reply placeholder is up
  * or work falls due within the horizon, otherwise wake once when the next work
  * item is due — and stop when nothing is outstanding. The conversation and the
- * Hall's unread inbox share it, at their own polling intervals.
+ * home page's inbox share it, at their own polling intervals.
  */
 export function planAgentWorkPolling(input: { hasPendingPlaceholder: boolean; agentWorkDueAt: Date | null; now: Date }): AgentWorkPollingPlan {
 	const dueAt = input.agentWorkDueAt?.getTime() ?? null;

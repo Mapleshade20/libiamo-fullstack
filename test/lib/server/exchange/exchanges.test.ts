@@ -702,7 +702,7 @@ describe("session service", () => {
 				status: "in_progress",
 				task: redditTask,
 				messages: [],
-				expiresAt: new Date(now.getTime() + 3_600_000),
+				expiresAt: new Date(Date.now() + 3_600_000),
 			});
 			mockDb.query.agentBatch.findMany.mockResolvedValue([]);
 			const inserts: Record<string, unknown>[] = [];
@@ -755,7 +755,7 @@ describe("session service", () => {
 				status: "in_progress",
 				task: redditTask,
 				messages: [],
-				expiresAt: new Date(now.getTime() + 3_600_000),
+				expiresAt: new Date(Date.now() + 3_600_000),
 			});
 			const inserts: Record<string, unknown>[] = [];
 			mockDb.insert.mockImplementation(
@@ -801,7 +801,7 @@ describe("session service", () => {
 				status: "in_progress",
 				task: redditTask,
 				messages: [],
-				expiresAt: new Date(now.getTime() + 3_600_000),
+				expiresAt: new Date(Date.now() + 3_600_000),
 			});
 			mockDb.query.agentBatch.findMany.mockResolvedValue([]);
 			const inserts: Record<string, unknown>[] = [];
@@ -852,7 +852,7 @@ describe("session service", () => {
 						},
 					},
 				],
-				expiresAt: new Date(now.getTime() + 3_600_000),
+				expiresAt: new Date(Date.now() + 3_600_000),
 			});
 			mockDb.query.agentBatch.findMany
 				.mockResolvedValueOnce([]) // no conversation is pending
@@ -914,7 +914,7 @@ describe("session service", () => {
 						llmMetadata: { clientMessageId: "m1", thread: { commentId: "reddit-user-m1", targetCommentId: "c1" } },
 					},
 				],
-				expiresAt: new Date(now.getTime() + 3_600_000),
+				expiresAt: new Date(Date.now() + 3_600_000),
 			});
 			mockDb.query.agentBatch.findMany
 				.mockResolvedValueOnce([{ id: 11, targetRef: "c1", inputMessageId: 1, participant: "alex" }])

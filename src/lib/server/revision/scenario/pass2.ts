@@ -6,7 +6,7 @@ import { z } from "zod";
 import { type Caller, chat, chatJson, extractJson } from "#lib/server/llm/caller.ts";
 import { type Draft, fbName, LANG_NAMES, levelLine, noteLines } from "#lib/server/revision/draft.ts";
 import { AnalysisSchema, leftLine, SCAN_RULE, type Sentence, SHAPE_V6, sentences, TASK_V6 } from "#lib/server/revision/pass2/analyze.ts";
-import { type Case, draftOf, exchange, SEP } from "#lib/server/revision/scenario/exchange.ts";
+import { type Case, exchange, SEP } from "#lib/server/revision/scenario/exchange.ts";
 
 export const Landed = z.object({
 	t: z.number(),
@@ -40,7 +40,7 @@ export async function analyzeExchange(
 	native: string,
 	ai: Caller,
 	evidence: boolean,
-	base: Draft = draftOf(c),
+	base: Draft,
 	stage: "draft" | "pass1" = "pass1",
 	left: string[] = [],
 ) {

@@ -419,8 +419,9 @@ export async function submitMessage(
 			with: { messages: { orderBy: sessionMessageChronologicalOrder } },
 		});
 		if (!session) throw new Error("Session not found");
+		// Past its expiry the place is closed, though the worker's sweep (every half minute) may not have said so yet.
+		if (session.status !== "in_progress" || session.expiresAt <= now) throw new Error("Session not in progress");
 		const setting = await settingOf(tx, exchangeId);
-		if (session.status !== "in_progress") throw new Error("Session not in progress");
 		const asyncSurface = isAsyncSurface(setting.ui);
 
 		let revivedMessageId: number | null = null;

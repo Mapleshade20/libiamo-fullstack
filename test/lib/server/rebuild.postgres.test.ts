@@ -59,6 +59,8 @@ import {
 	user,
 	userKey,
 } from "#lib/server/db/schema.ts";
+import { AgentReplyWorker } from "#lib/server/exchange/agents/worker.ts";
+import { submitMessage } from "#lib/server/exchange/exchanges.ts";
 import { Caller, type CallRecord, chat } from "#lib/server/llm/caller.ts";
 import { learnerCaller } from "#lib/server/llm/callers.ts";
 import { pruneCalls, writeRecord } from "#lib/server/llm/records.ts";
@@ -295,6 +297,31 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 		expect(await db.select().from(exchangeMessage)).toHaveLength(2);
 	});
 
+	it("closes an expired place on the worker's sweep, a silent one's piece at once, and takes nothing more in it", async () => {
+		const place = async (said: boolean) => {
+			const [p] = await db
+				.insert(piece)
+				.values({ userId: learner.id, language: "en", kind: "scenario", text: "", tutorLanguage: "zh-CN", state: "writing" })
+				.returning({ id: piece.id });
+			const [e] = await db
+				.insert(exchange)
+				.values({ userId: learner.id, pieceId: p.id, expiresAt: new Date(Date.now() - 1000) })
+				.returning({ id: exchange.id });
+			if (said) await db.insert(exchangeMessage).values({ exchangeId: e.id, role: "user", content: "Hi!" });
+			return { piece: p.id, exchange: e.id };
+		};
+		const silent = await place(false);
+		const talked = await place(true);
+		// Expired, not yet swept: nothing more is taken.
+		await expect(submitMessage(talked.exchange, "Still there?", learner.id)).rejects.toThrow("not in progress");
+		await new AgentReplyWorker({ onExpired: () => abandonStale() }).runOnce();
+		const states = new Map((await db.select({ id: piece.id, state: piece.state }).from(piece)).map((p) => [p.id, p.state]));
+		expect(states.get(silent.piece)).toBe("abandoned");
+		expect(states.get(talked.piece)).toBe("writing");
+		const closed = await db.select({ status: exchange.status }).from(exchange);
+		expect(closed.map((e) => e.status)).toEqual(["abandoned", "abandoned"]);
+	});
+
 	it("abandons a piece only if it is still stale in its turn, and never while its revision is in use", async () => {
 		const day = 864e5;
 		// A revision the learner came back to: in memory, its snapshot still from a month ago until they change something.
@@ -431,6 +458,39 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 		await writeRecord({ userId: learner.id, keepText: true }, call);
 		const [record] = await db.select().from(llmCall);
 		expect(record).toMatchObject({ messages: null, output: null, promptHash: null });
+		expect(await db.select().from(llmPrompt)).toHaveLength(0);
+	});
+
+	it("never prunes a prompt a record is being written with", async () => {
+		// A prompt whose calls are gone, about to be named again.
+		await writeRecord({ userId: learner.id, keepText: true }, call);
+		await db.delete(llmCall);
+		const [p] = await db
+			.insert(piece)
+			.values({ userId: learner.id, language: "en", kind: "own", text: "A draft.", tutorLanguage: "zh-CN", state: "revising" })
+			.returning({ id: piece.id });
+		// The piece held locked stops the record at its call's foreign key, after it has seen to its prompt.
+		let release!: () => void;
+		const holding = sql.begin(async (tx) => {
+			await tx`select 1 from piece where id = ${p.id} for update`;
+			await new Promise<void>((r) => {
+				release = r;
+			});
+		});
+		await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+		const writing = writeRecord({ userId: learner.id, pieceId: p.id, keepText: true }, call);
+		await vi.waitFor(async () => {
+			const [{ n }] = await admin`select count(*)::int as n from pg_stat_activity where datname = ${config.name} and wait_event_type = 'Lock'`;
+			expect(n).toBe(1);
+		});
+		await pruneCalls();
+		release();
+		await holding;
+		await writing;
+		expect(await db.select({ hash: llmCall.promptHash }).from(llmCall)).toHaveLength(1);
+		expect(await db.select().from(llmPrompt)).toHaveLength(1);
+		// Once nothing is writing with it and nothing names it, it goes.
+		await pruneCalls(new Date(Date.now() + 31 * 864e5));
 		expect(await db.select().from(llmPrompt)).toHaveLength(0);
 	});
 
