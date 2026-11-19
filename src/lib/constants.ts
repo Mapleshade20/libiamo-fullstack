@@ -63,9 +63,10 @@ export type CallState = (typeof CALL_STATES)[number];
 export const SCENARIO_KINDS = ["exchange", "translation"] as const;
 export type ScenarioKind = (typeof SCENARIO_KINDS)[number];
 /** Where a scenario happens: the five simulated places, or the translation sheet. */
-export const PLACES = ["ao3", "reddit", "email", "discord", "imessage", "translation"] as const;
+export const EXCHANGE_PLACES = ["ao3", "reddit", "email", "discord", "imessage"] as const;
+export type ExchangePlace = (typeof EXCHANGE_PLACES)[number];
+export const PLACES = [...EXCHANGE_PLACES, "translation"] as const;
 export type Place = (typeof PLACES)[number];
-export type ExchangePlace = Exclude<Place, "translation">;
 export const SCENARIO_STATUSES = ["draft", "published", "withdrawn"] as const;
 export type ScenarioStatus = (typeof SCENARIO_STATUSES)[number];
 /** How quickly the others answer in an exchange. */
@@ -116,7 +117,7 @@ export type Verdict = (typeof VERDICTS)[number];
 export const SUGGESTION_STATUSES = ["pending", "live", "unused"] as const;
 export type SuggestionStatus = (typeof SUGGESTION_STATUSES)[number];
 /** Where a suggested situation happened ("other" when it is none of the places). */
-export const SUGGESTION_PLACES = ["ao3", "reddit", "email", "discord", "imessage", "other"] as const;
+export const SUGGESTION_PLACES = [...EXCHANGE_PLACES, "other"] as const;
 export type SuggestionPlace = (typeof SUGGESTION_PLACES)[number];
 export const FEEDBACK_KINDS = ["idea", "bug", "other"] as const;
 export type FeedbackKind = (typeof FEEDBACK_KINDS)[number];

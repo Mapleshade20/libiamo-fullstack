@@ -40,6 +40,8 @@ vi.mock("#lib/server/translation/source.ts", () => ({
 }));
 
 import { encryptKey } from "#lib/server/account/key.ts";
+import { inbox } from "#lib/server/admin/inbox.ts";
+import { adminScenario, scenarioFromSuggestion } from "#lib/server/admin/scenarios.ts";
 import { sessions } from "#lib/server/admin/sessions.ts";
 import { deleteUser, users } from "#lib/server/admin/users.ts";
 import { db, sql } from "#lib/server/db/index.ts";
@@ -83,6 +85,7 @@ import {
 } from "#lib/server/revision/store.ts";
 import { importContent } from "#lib/server/scenario/content.ts";
 import { scenarioViewOf } from "#lib/server/scenario/scenarios.ts";
+import { suggest, suggestionsOf } from "#lib/server/scenario/suggestions.ts";
 import { sourceIdentity } from "#lib/server/translation/identity.ts";
 import { makeSourceRow, queueSources } from "#lib/server/translation/runner.ts";
 import { saveSheet, sheetOf, translationFor } from "#lib/server/translation/sheet.ts";
@@ -439,6 +442,35 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 		const [row] = await sessions();
 		expect(row.stops).toBe(3);
 		expect(row.signals.map((x) => x.kind)).toEqual(["kept", "tries", "answer", "lost", "slow"]);
+	});
+
+	it("carries a suggestion into its draft, frees its place in the queue, and shows it made only once learners are offered it", async () => {
+		const ask = (purpose: string, place: "other" | "email" = "other") =>
+			suggest(learner.id, { place, language: "en", situation: "My landlord has not fixed the heater.", who: "my landlord", purpose });
+		for (const n of [1, 2, 3, 4, 5]) expect(await ask(`Ask ${n}`)).toBe(true);
+		expect(await ask("One too many")).toBe(false);
+		const [first] = (await inbox()).suggestions.filter((x) => x.purpose === "Ask 1");
+		expect(first).toMatchObject({ who: "my landlord", status: "pending" });
+		// From elsewhere, it happens where the admin says.
+		await expect(scenarioFromSuggestion(first.id, learner.id)).rejects.toThrow("Say where it happens.");
+		const id = await scenarioFromSuggestion(first.id, learner.id, "email");
+		const made = await adminScenario(id);
+		expect(made).toMatchObject({ place: "email", status: "draft", from: { id: first.id, who: "my landlord" } });
+		expect(made?.versions.en).toMatchObject({ title: "Ask 1", goals: ["Ask 1"], people: [{ who: "my landlord" }] });
+		// A draft no longer holds a place among the five, but the learner sees it waiting until it is offered.
+		expect(await ask("Ask 6", "email")).toBe(true);
+		const mine = async () => (await suggestionsOf(learner.id)).find((x) => x.id === first.id);
+		expect(await mine()).toMatchObject({ status: "pending", scenarioId: null });
+		await db.update(scenario).set({ status: "published" }).where(eq(scenario.id, id));
+		// Published, but its version in the learner's language is still hidden.
+		expect(await mine()).toMatchObject({ status: "pending", scenarioId: null });
+		const { draft: _, ...shown } = made?.versions.en ?? {};
+		await db
+			.update(scenario)
+			.set({ versions: { en: shown } })
+			.where(eq(scenario.id, id));
+		expect(await mine()).toMatchObject({ status: "live", scenarioId: id });
+		expect((await inbox()).suggestions.find((x) => x.id === first.id)?.scenario).toMatchObject({ id, published: true });
 	});
 
 	it("deletes owned dynamic prompts with the account and refuses records arriving after deletion", async () => {

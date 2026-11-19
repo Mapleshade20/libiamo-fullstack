@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
-import type { Place, ScenarioKind, ScenarioStatus, SourceState, Urgency } from "#lib/constants.ts";
+import type { ExchangePlace, Place, ScenarioKind, ScenarioStatus, SourceState, Urgency } from "#lib/constants.ts";
 import { blankVersion } from "#lib/scenario/blank.ts";
 import { SITE_OF } from "#lib/scenario/types.ts";
 import { type TranslationVersion, type Version, versionsSchema } from "#lib/scenario/versions.ts";
+import { type InboxSuggestion, suggestionFor } from "#lib/server/admin/inbox.ts";
 import { db } from "#lib/server/db/index.ts";
 import { issueScenario, piece, scenario, scenarioSource, suggestion, work } from "#lib/server/db/schema.ts";
 import { sourceIdentity } from "#lib/server/translation/identity.ts";
@@ -61,6 +62,8 @@ export type AdminScenario = ScenarioDraft & {
 	written: number;
 	sources: AdminSource[];
 	works: { id: string; title: string }[];
+	/** The learner's suggestion it was made from. */
+	from: Omit<InboxSuggestion, "scenario"> | null;
 };
 
 const firstOf = (versions: Record<string, Version>) => versions.en ?? Object.values(versions)[0];
@@ -115,10 +118,11 @@ export async function adminScenarios(): Promise<AdminScenarioRow[]> {
 export async function adminScenario(id: string): Promise<AdminScenario | null> {
 	const [row] = await db.select().from(scenario).where(eq(scenario.id, id));
 	if (!row) return null;
-	const [sources, written, works] = await Promise.all([
+	const [sources, written, works, from] = await Promise.all([
 		db.select().from(scenarioSource).where(eq(scenarioSource.scenarioId, id)).orderBy(scenarioSource.language, scenarioSource.native),
 		writtenCounts([id]),
 		db.select({ id: work.id, title: work.title }).from(work).orderBy(work.title),
+		suggestionFor(id),
 	]);
 	return {
 		id: row.id,
@@ -133,6 +137,7 @@ export async function adminScenario(id: string): Promise<AdminScenario | null> {
 		publishedAt: row.publishedAt?.toISOString() ?? null,
 		written: written.get(id) ?? 0,
 		works,
+		from,
 		sources: sources.map((s) => ({
 			id: s.id,
 			generation: s.generation,
@@ -250,13 +255,20 @@ export async function freeId(base: string) {
 	for (let n = 2; ; n++) if (!taken.has(`${stem}-${n}`)) return `${stem}-${n}`;
 }
 
-/** A draft scenario from a learner's suggestion: its place, its language, what they wanted to do as the title. */
-export async function scenarioFromSuggestion(suggestionId: string, by: string) {
+/**
+ * A draft scenario from a learner's suggestion, in its language: what they wanted to do as its title and first goal, whom
+ * they were writing to as the first person. A suggestion from elsewhere happens where the admin says.
+ */
+export async function scenarioFromSuggestion(suggestionId: string, by: string, chosen?: ExchangePlace) {
 	const [s] = await db.select().from(suggestion).where(eq(suggestion.id, suggestionId));
 	if (!s) throw new ScenarioError("No such suggestion.");
-	const place = (s.place === "other" ? "reddit" : s.place) as Exclude<Place, "translation">;
+	const place = s.place === "other" ? chosen : (s.place as ExchangePlace);
+	if (!place) throw new ScenarioError("Say where it happens.");
 	const id = await freeId(s.purpose);
-	const version = blankVersion("exchange", place, s.purpose.slice(0, 300));
+	const purpose = s.purpose.slice(0, 300);
+	const version = blankVersion("exchange", place, purpose);
+	version.goals = [purpose];
+	if (s.who) version.people[0].who = s.who.slice(0, 300);
 	await db
 		.insert(scenario)
 		.values({ id, kind: "exchange", place, status: "draft", minutes: 10, urgency: "medium", versions: { [s.language]: version }, createdBy: by });

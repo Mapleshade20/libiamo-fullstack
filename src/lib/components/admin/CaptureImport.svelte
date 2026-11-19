@@ -34,6 +34,7 @@ let {
 	place,
 	lang,
 	people,
+	pasted = $bindable(""),
 	onimport,
 }: {
 	open?: boolean;
@@ -42,6 +43,8 @@ let {
 	lang: string;
 	/** The version's people now, kept by the import when something is written about them (`mergePeople`). */
 	people: ExchangeVersion["people"];
+	/** What is pasted: the editor may hand in a learner's suggested capture. */
+	pasted?: string;
 	onimport: (cut: CaptureCut) => void;
 } = $props();
 const PLATFORMS = [
@@ -53,7 +56,6 @@ const uid = $props.id();
 const here = $derived(PLATFORMS.find((p) => p.label === site)?.key);
 let scripts: Promise<Record<string, string>> | null = null;
 let copied = $state<string | null>(null);
-let pasted = $state("");
 const EN: Record<string, string> = {
 	srcFound: "{what}: {n} messages, {w} words.",
 	srcText: "Plain text, {w} words: not a capture. Copy it with a script.",

@@ -6,13 +6,15 @@ import MessageCircle from "@lucide/svelte/icons/message-circle";
 import { flip } from "svelte/animate";
 import { fade, slide } from "svelte/transition";
 import { inbox, makeScenario, markFeedbackDone, setSuggestionAside } from "#lib/admin/inbox.remote.ts";
-import { fmtDay, langEn } from "#lib/admin/records.ts";
+import { fmtDay } from "#lib/admin/records.ts";
+import Suggestion from "#lib/components/admin/Suggestion.svelte";
 import Accordion from "#lib/components/common/Accordion.svelte";
 import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
+import Select from "#lib/components/common/Select.svelte";
 import { tip } from "#lib/components/common/tip.ts";
 import { toast } from "#lib/components/shell/toast.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
-import type { SuggestionPlace } from "#lib/constants.ts";
+import { EXCHANGE_PLACES, type ExchangePlace } from "#lib/constants.ts";
 import { SITE_OF } from "#lib/scenario/types.ts";
 import { goto } from "$app/navigation";
 
@@ -25,7 +27,6 @@ let tab = $state("suggestions");
 const data = $derived(await inbox());
 const sug = $derived(data.suggestions);
 const fb = $derived(data.feedback);
-const placeName = (p: string) => (p === "other" ? "Elsewhere" : SITE_OF[p as Exclude<SuggestionPlace, "other">]);
 const pending = $derived(sug.filter((s) => s.status === "pending"));
 const handled = $derived(sug.filter((s) => s.status !== "pending"));
 const open = $derived(fb.filter((f) => !f.done));
@@ -37,8 +38,10 @@ const KIND = {
 	bug: { icon: Bug, label: "Something wrong" },
 	other: { icon: MessageCircle, label: "Other" },
 };
+/** Where a suggestion from elsewhere is to happen, chosen before it is made a scenario. */
+const placeOf = $state<Record<string, ExchangePlace>>({});
 async function use(id: string) {
-	const scenarioId = await makeScenario(id).catch(() => null);
+	const scenarioId = await makeScenario({ id, place: placeOf[id] }).catch(() => null);
 	if (!scenarioId) return toast("Could not make a scenario of it");
 	goto(`/admin/scenarios/${scenarioId}`);
 }
@@ -70,19 +73,7 @@ const feedbackDone = (id: string, done: boolean) => markFeedbackDone({ id, done 
 			<ul class="cards">
 				{#each pending as s (s.id)}
 					<li class="adm-paper card" animate:flip={{ duration: 250 }} out:fade={{ duration: 150 }}>
-						<div class="who">
-							<span>{s.by}</span><span class="adm-dot">{placeName(s.place)}</span><span class="adm-dot">{langEn(s.language)}</span
-							><span class="grow"></span><span class="adm-meta">{fmtDay(s.at)}</span>
-						</div>
-						<p class="sit" lang={s.language}>{s.situation}</p>
-						<dl>
-							<dt>Wanted to</dt>
-							<dd lang={s.language}>{s.purpose}</dd>
-							{#if s.mine}
-								<dt>Wrote</dt>
-								<dd class="mine" lang={s.language}>{s.mine}</dd>
-							{/if}
-						</dl>
+						<Suggestion {s} />
 						{#if declining === s.id}
 							<form
 								class="why"
@@ -112,7 +103,18 @@ const feedbackDone = (id: string, done: boolean) => markFeedbackDone({ id, done 
 									}}
 									>Set aside</Button
 								>
-								<Button onclick={() => use(s.id)}>Make a scenario</Button>
+								{#if s.place === "other"}
+									<div class="w-40">
+										<Select
+											aria-label="Where it happens"
+											placeholder="Place"
+											value={placeOf[s.id] ?? ""}
+											onValueChange={(p) => (placeOf[s.id] = p as ExchangePlace)}
+											items={EXCHANGE_PLACES.map((p) => ({ value: p, label: SITE_OF[p] }))}
+										/>
+									</div>
+								{/if}
+								<Button onclick={() => use(s.id)} disabled={s.place === "other" && !placeOf[s.id]}>Make a scenario</Button>
 							</div>
 						{/if}
 					</li>
@@ -140,9 +142,7 @@ const feedbackDone = (id: string, done: boolean) => markFeedbackDone({ id, done 
 							{#if s.status === "live"}
 								{@const sc = s.scenario}
 								{#if sc}
-									<a class="adm-tag ok" href="/admin/scenarios/{sc.id}">Became “{sc.title}”</a>
-								{:else}
-									<span class="adm-tag ok">Draft made</span>
+									<a class="adm-tag" class:ok={sc.published} href="/admin/scenarios/{sc.id}">{sc.published ? "Became" : "Draft"} “{sc.title}”</a>
 								{/if}
 							{:else}
 								<span class="adm-tag">Not used</span>
@@ -202,47 +202,6 @@ const feedbackDone = (id: string, done: boolean) => markFeedbackDone({ id, done 
 }
 .card {
 	padding: 16px 20px 18px;
-}
-.who {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	color: var(--muted);
-	font-size: 13px;
-}
-.grow {
-	flex: 1;
-}
-.sit {
-	margin: 8px 0 10px;
-	font-size: 15.5px;
-	line-height: 1.6;
-}
-dl {
-	display: grid;
-	grid-template-columns: 6rem minmax(0, 1fr);
-	gap: 4px 12px;
-	margin: 0;
-	font-size: 14px;
-	line-height: 1.55;
-}
-dt {
-	color: var(--muted);
-}
-dd {
-	margin: 0;
-}
-.mine {
-	font-style: italic;
-	color: var(--ink-2);
-}
-@container (max-width: 520px) {
-	dl {
-		grid-template-columns: minmax(0, 1fr);
-	}
-	dd + dt {
-		margin-top: 6px;
-	}
 }
 .acts {
 	display: flex;
