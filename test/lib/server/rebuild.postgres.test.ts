@@ -827,7 +827,14 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 		const h = await openRevision(learner, id);
 		if (!h) throw new Error("missing revision");
 		let release = () => {};
-		const waiting = act(id, h, "slow", {}, () => new Promise<object>((r) => (release = () => r({}))));
+		let calling = () => {};
+		const called = new Promise<void>((r) => (calling = r));
+		const waiting = act(id, h, "slow", {}, () => {
+			calling();
+			return new Promise<object>((r) => (release = () => r({})));
+		});
+		// The action has its turn and is waiting on the model (before that, it waits on the piece's queue and the key).
+		await called;
 		const post = (action: string, body?: object) =>
 			actionPost({ params: { id, action }, request: new Request("http://test", { method: "POST", body: JSON.stringify(body ?? {}) }) } as never);
 		const soon = <T>(p: Promise<T>) => Promise.race([p, new Promise<"waited">((r) => setTimeout(() => r("waited"), 500))]);
