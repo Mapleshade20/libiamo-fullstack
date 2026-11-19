@@ -1,5 +1,6 @@
 import { diffArrays } from "diff";
 
+import { spacesWords } from "#lib/i18n/langs.ts";
 import { words } from "#lib/text/words.ts";
 
 export const OPEN = "⟦";
@@ -101,8 +102,13 @@ export function align(original: string, rewrite: string, lang: string): { hunks:
 		const keepLead = space(ops[start]) && ops[start].kind === "del" && !/^\s/.test(raw);
 		const keepTail = space(ops[last]) && ops[last].kind === "del" && !/\s$/.test(raw);
 		const glued = (op: Op | undefined) => op && op.kind === "eq" && !space(op) && !op.open;
-		while (!space(ops[start]) && glued(ops[start - 1])) start--;
-		while (!space(ops[last]) && glued(ops[last + 1])) last++;
+		// In a language written without spaces the segmenter's words are the units already: growing to the next space
+		// would take in the whole paragraph (2026-11-18: a Chinese post's "走路了 → 走了" reached the labeller as the
+		// paragraph rewritten, and was judged a matter of taste).
+		if (spacesWords(lang)) {
+			while (!space(ops[start]) && glued(ops[start - 1])) start--;
+			while (!space(ops[last]) && glued(ops[last + 1])) last++;
+		}
 		if (ops.slice(start, last + 1).every((o) => o.kind === "eq")) {
 			k = end + 1;
 			continue;

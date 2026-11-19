@@ -1,0 +1,28 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "system",
+			"content": "You read Simplified Chinese (as used in mainland China) only. If this post is written to one particular person (an email, a letter, a direct message), you are that person (Chinese travel-lovers and locals who follow food and travel notes), reading what was written to you; otherwise you are a regular on Xiaohongshu (travel post)."
+		},
+		{
+			"role": "user",
+			"content": "大家好！我是美国人，在上海学中文已经一年了。上个周末我和朋友去杭州玩，在西湖边一走就是三个小时，风景美得让人舍不得停下来。\n\n但是我有个问题想请教大家：我在一个饭馆点了西湖醋鱼，服务员说这个菜很有名，可是我觉得我吃到的这盘酸得不对劲，应该是没做好吧，我不是很喜欢吃。这道菜本来就是这个味道吗？下次再去杭州，还有哪些杭州菜值得点？你们推荐一下呗，我想试试！谢谢！\n\nYou just read this post. Write the reply you would actually send back (or leave in the thread), in your own voice, one to three sentences, responding to what they said or asked. Reply with the reply only."
+		}
+	],
+	"result": {
+		"text": "你好！欢迎来杭州，还能在西湖边走三个小时，说明你是真的爱上这座城了。西湖醋鱼本来就是酸甜口的，醋和糖的比例讲究\"醋香而不冲\"，但你吃到的如果酸得发冲，那店里可能确实没调好。下次可以试试龙井虾仁、东坡肉、叫花鸡，或者在老字号楼外楼点一份，口味都比较温和，应该会更合你的胃口。",
+		"usage": {
+			"input": 381,
+			"output": 168,
+			"reasoning": 0,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 2125,
+		"costUsd": 0.0001221
+	},
+	"finish": "stop"
+}

@@ -1,0 +1,24 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "A learner's Simplified Chinese (as used in mainland China) draft went through a first pass that fixed its small errors. The text as it now reads, sentences numbered:\n[S1] 大家好！\n[S2] 我是美国人，在上海学中文已经一年了。\n[S3] 上个周末我和朋友去杭州玩，我们在西湖 边走 了三个小时，风景非常好看。\n\n[S4] 但是我有一个问题：我在一个饭馆点了西湖醋鱼，服务员说这个菜很有名，可是我觉得它太酸了，我不是很喜欢吃。\n[S5] 是不是我点得不对？\n[S6] 还有什么杭州菜你们推荐 我试试 吗？\n[S7] 谢谢！\n\nA tutor found these problems on the draft before the first pass. For each: the words it quoted, the first-pass changes near them (before → after), and the problem as written:\n1. quoted: \"风景非常好看\"\n   changes: \"旁边走路\" → \"边走\"\n   problem: A Chinese travel writer would show the scenery through its effect on the visitor, for example that it made them unwilling to leave. 风景非常好看 is a complete judgment with nothing behind it, so the praise is thin and the reader has nothing to picture.\n\nThe learner now sees only the text as it reads. For each problem: keep false when the first-pass changes already did what the problem asks, so a reader would no longer stumble there; keep true when it is still a problem in the text as it reads. Small corrections (grammar, spelling, a word swapped) only fix problems about those very words: a problem about what the text says or leaves out (a missing point, evidence, a reason), what a reader takes away, or how a sentence is built stays, keep true. For a kept problem: quote, the words of the text as it reads where a reader stumbles now, copied character for character; problem, the same problem said about the text as it reads, in English, at the same length: keep its reasoning and what a reader expects, but never mention an error the first pass fixed (a missing or wrong word, grammar, spelling) and never quote words that are no longer in the text. When nothing in it needs to change, repeat it as it was.\nReply with JSON only: {\"spots\":[{\"id\":1,\"keep\":true,\"quote\":\"\",\"problem\":\"\"}]}"
+		}
+	],
+	"result": {
+		"text": "{\"spots\":[{\"id\":1,\"keep\":true,\"quote\":\"风景非常好看\",\"problem\":\"A Chinese travel writer would show the scenery through its effect on the visitor, for example that it made them unwilling to leave. 风景非常好看 is a complete judgment with nothing behind it, so the praise is thin and the reader has nothing to picture.\"}]}",
+		"usage": {
+			"input": 761,
+			"output": 621,
+			"reasoning": 501,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 3890,
+		"costUsd": 0.0003866
+	},
+	"finish": "stop"
+}

@@ -6,6 +6,8 @@ export type AppLang = (typeof APP_LANGS)[number];
 export const LEARNABLE = ["en", "es", "fr", "de", "it", "pt", "ja", "ko", "zh-CN", "ru", "ar", "nl", "tr", "pl"] as const;
 export const SCENARIO_LANGS = ["en", "es", "fr", "ja"] as const;
 export const RTL_LANGS = ["ar", "fa"];
+/** Languages written without spaces between words (Intl.Segmenter finds their words). */
+export const UNSPACED_LANGS = ["zh-CN", "ja", "th"];
 
 export const isAppLang = (l: unknown): l is AppLang => APP_LANGS.includes(l as AppLang);
 export const hasScenarios = (l: string) => (SCENARIO_LANGS as readonly string[]).includes(l);
