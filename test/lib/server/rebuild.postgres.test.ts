@@ -418,17 +418,16 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 			.values({ userId: learner.id, language: "en", kind: "own", text: "A draft.", tutorLanguage: "zh-CN", state: "revising" })
 			.returning({ id: piece.id });
 		const step = (seq: number, action: string, body: unknown, response: unknown, ms = 500) => ({ pieceId: p.id, seq, action, body, response, ms });
-		await db
-			.insert(pieceStep)
-			.values([
-				step(0, "overview", {}, { stops: [{}, {}, {}] }),
-				step(1, "keep", { id: "s1" }, {}),
-				step(2, "grade", { id: "s2" }, { pass: false }),
-				step(3, "grade", { id: "s2" }, { pass: false }),
-				step(4, "grade", { id: "s2" }, { pass: false }, 9500),
-				step(5, "apply", { id: "s2", self: false }, {}),
-				step(6, "end", {}, { issues: [{}] }),
-			]);
+		await db.insert(pieceStep).values([
+			step(0, "overview", {}, { stops: [{}, {}, {}] }),
+			step(1, "keep", { id: "s1" }, {}),
+			step(2, "grade", { id: "s2" }, { pass: false }),
+			step(3, "grade", { id: "s2" }, { pass: false }),
+			step(4, "grade", { id: "s2" }, { pass: false }, 9500),
+			// What the page sent, as it sent it: a stray value reads as not the learner's own, and never fails the list.
+			step(5, "apply", { id: "s2", self: "maybe" }, {}),
+			step(6, "end", {}, { issues: [{}] }),
+		]);
 
 		const page = await users({ q: "LEARNER@" });
 		expect(page.total).toBe(1);
@@ -545,8 +544,10 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 			if (!s) throw new Error(`no ${language} setting`);
 			return s;
 		};
-		// Entering in English, then in Spanish: two pieces, each in its language; entering again finds each.
-		const en = await openExchange(u, await settingIn("en"));
+		// Entering in English twice at once (two tabs), then in Spanish: two pieces, each in its language; entering again finds each.
+		const inEn = await settingIn("en");
+		const [en, twice] = await Promise.all([openExchange(u, inEn), openExchange(u, inEn)]);
+		expect(twice).toEqual(en);
 		const es = await openExchange(u, await settingIn("es"));
 		expect(es.pieceId).not.toBe(en.pieceId);
 		expect(await openExchange(u, await settingIn("en"))).toEqual(en);
@@ -724,6 +725,15 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 			]);
 			expect(setup.scenario).toMatchObject({ id: "reddit-theory" });
 			expect(await resume(p.id)).toEqual(setup);
+		});
+
+		it("answers only the revision's own actions, and no such piece for an id that is not one", async () => {
+			const made = await post({ ...prefs, text: "A short draft." });
+			const act = (id: string, action: string) =>
+				actionPost({ params: { id, action }, request: new Request("http://test", { method: "POST", body: "{}" }) } as never);
+			expect((await act(made.json.id, "constructor")).status).toBe(404);
+			expect((await db.select().from(pieceStep).where(eq(pieceStep.pieceId, made.json.id))).map((x) => x.action)).toEqual(["create"]);
+			expect((await act("0".repeat(36), "start")).status).toBe(404);
 		});
 
 		it("refuses what the browser cannot hand over: an overlong draft, someone else's piece; ignores a conversation it sends", async () => {

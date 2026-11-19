@@ -13,8 +13,7 @@ import type { PiecesPage, PieceView, Shelf } from "./types.ts";
 
 /* The learner's pieces: the lists, one piece's page, and what they say about a piece afterwards. */
 
-const PIECE = /^[0-9a-f-]{36}$/;
-const pieceId = z.string().regex(PIECE);
+const pieceId = z.guid();
 
 /** What every page shows of the learner's pieces, per language (types.ts `Shelf`; the root layout's load gives it). */
 export const shelves = query(async (): Promise<Record<string, Shelf>> => shelvesOf(learner().id));
@@ -33,7 +32,10 @@ export const takeUpPiece = command(pieceId, async (id) => {
 });
 
 /** Any id a link may carry; one that is not a piece of theirs is simply none. */
-export const pieceById = query(z.string(), async (id): Promise<PieceView | null> => (PIECE.test(id) ? pieceOf(learner().id, id) : null));
+export const pieceById = query(
+	z.string(),
+	async (id): Promise<PieceView | null> => (pieceId.safeParse(id).success ? pieceOf(learner().id, id) : null),
+);
 
 const mine = (userId: string, id: string) => and(eq(piece.id, id), eq(piece.userId, userId));
 

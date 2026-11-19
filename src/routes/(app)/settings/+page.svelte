@@ -99,7 +99,7 @@ const backdropHelp = $derived(app.dark && backdrop === "painting" ? tx("painting
 
 onMount(() => {
 	document.title = `${tx("navSettings")} · ${tx("homeTitle")}`;
-	if (location.hash) document.querySelector(location.hash)?.scrollIntoView();
+	if (location.hash) document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView();
 });
 </script>
 

@@ -306,11 +306,17 @@ export async function openExchange(
 ): Promise<{ exchangeId: number; pieceId: string }> {
 	const startedAt = new Date();
 	return db.transaction(async (tx) => {
-		const [open] = await tx
-			.select({ exchangeId: exchange.id, pieceId: piece.id })
-			.from(piece)
-			.innerJoin(exchange, eq(exchange.pieceId, piece.id))
-			.where(and(eq(piece.userId, u.id), eq(piece.scenarioId, s.id), eq(piece.language, s.language), inArray(piece.state, ["writing", "revising"])));
+		const opened = async () =>
+			(
+				await tx
+					.select({ exchangeId: exchange.id, pieceId: piece.id })
+					.from(piece)
+					.innerJoin(exchange, eq(exchange.pieceId, piece.id))
+					.where(
+						and(eq(piece.userId, u.id), eq(piece.scenarioId, s.id), eq(piece.language, s.language), inArray(piece.state, ["writing", "revising"])),
+					)
+			)[0];
+		const open = await opened();
 		if (open) return open;
 		const [p] = await tx
 			.insert(piece)
@@ -326,7 +332,14 @@ export async function openExchange(
 				tutorLanguage: u.tutorLanguage === "target" ? s.language : (u.nativeLanguage ?? "en"),
 				state: "writing",
 			})
+			.onConflictDoNothing()
 			.returning({ id: piece.id });
+		// Entered twice at once (two tabs, a double click): the other made the piece, and both go on in it.
+		if (!p) {
+			const other = await opened();
+			if (!other) throw new Error("An unfinished piece of this scenario has no place.");
+			return other;
+		}
 		const [e] = await tx
 			.insert(exchange)
 			.values({

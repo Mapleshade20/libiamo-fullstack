@@ -529,10 +529,11 @@ if (!building) setInterval(() => putAwayIdle().catch((e) => console.error("idle 
 
 /**
  * A learner's revisions leave memory unwritten, before their account is deleted: a snapshot written after it would
- * refer to a piece that is gone. A step in flight finishes without writing (a retired revision never writes again).
+ * refer to a piece that is gone. A step in flight finishes without writing (a retired revision never writes again); a
+ * write already under way is waited for.
  */
-export function forgetLearner(userId: string) {
-	for (const [id, h] of held) if (h.userId === userId) void retire(id);
+export async function forgetLearner(userId: string) {
+	await Promise.all([...held].filter(([, h]) => h.userId === userId).map(([id]) => retire(id)));
 }
 
 /** Every snapshot written, for shutdown; one that fails is logged and does not stop the others. */

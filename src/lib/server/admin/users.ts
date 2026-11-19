@@ -150,6 +150,6 @@ export async function callsOf(userId: string, limit = 300): Promise<UserCall[]> 
 }
 
 export async function deleteUser(id: string) {
-	forgetLearner(id);
+	await forgetLearner(id);
 	await db.delete(user).where(eq(user.id, id));
 }

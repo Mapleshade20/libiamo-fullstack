@@ -190,8 +190,8 @@ function act(k: string) {
 	}
 	if (k === "add" && g?.lang && !app.prefs.learning.includes(g.lang)) {
 		app.prefs.learning.push(g.lang);
-		app.save();
-		toast(tx("setAdded", { lang: endonym(g.lang) }));
+		const lang = g.lang;
+		app.save().then((ok) => ok && toast(tx("setAdded", { lang: endonym(lang) })));
 	}
 	go(g?.lang && app.prefs.learning.includes(g.lang) ? g.lang : app.lang);
 }
@@ -245,7 +245,13 @@ async function onPaste(e: ClipboardEvent) {
 }
 let scripts: Promise<Record<string, string>> | null = null;
 async function copyScript(k: string) {
-	scripts ??= fetch("/api/capture-scripts").then((r) => r.json());
+	// A failed fetch is not kept: the next click asks again.
+	scripts ??= fetch("/api/capture-scripts")
+		.then((r) => (r.ok ? r.json() : Promise.reject(new Error(`capture scripts: ${r.status}`))))
+		.catch((e) => {
+			scripts = null;
+			throw e;
+		});
 	await navigator.clipboard.writeText((await scripts)[k]);
 	toast(tx("grabCopied"));
 }

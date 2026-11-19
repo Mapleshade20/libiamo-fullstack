@@ -1,5 +1,5 @@
 {
-  "id": "51b8b5a8-5867-4aa9-89f4-853b80a64102",
+  "id": "6fa86ebd-62d8-47ae-8f53-6a94c3ba7c55",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1085,7 +1085,23 @@
           "notNull": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "feedback_user_idx": {
+          "name": "feedback_user_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "feedback_user_id_user_id_fk": {
           "name": "feedback_user_id_user_id_fk",
