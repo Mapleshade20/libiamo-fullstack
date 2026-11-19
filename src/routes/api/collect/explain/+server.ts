@@ -1,4 +1,5 @@
 import { error } from "@sveltejs/kit";
+import { z } from "zod";
 import { LEARNABLE } from "#lib/constants.ts";
 import { collectInput } from "#lib/server/collect.ts";
 import { learner } from "#lib/server/guard.ts";
@@ -33,7 +34,7 @@ async function fill(u: ReturnType<typeof learner>, b: Record<string, unknown>, d
 	const { readingId, ids } = await fileCollected(
 		u,
 		{
-			id: typeof b.readingId === "string" && /^[0-9a-f-]{36}$/.test(b.readingId) ? b.readingId : undefined,
+			id: z.guid().safeParse(b.readingId).data,
 			text: d.passage,
 			language: d.lang,
 			place: typeof b.place === "string" ? b.place.slice(0, 40) : undefined,

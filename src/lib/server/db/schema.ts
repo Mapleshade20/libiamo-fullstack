@@ -383,7 +383,7 @@ export const feedback = pgTable(
 		createdAt: created(),
 		doneAt: at("done_at"),
 	},
-	(t) => [check("feedback_kind_check", oneOf(t.kind, FEEDBACK_KINDS))],
+	(t) => [check("feedback_kind_check", oneOf(t.kind, FEEDBACK_KINDS)), index("feedback_user_idx").on(t.userId)],
 );
 
 /* A notice for every learner above the greeting, written per interface language (`title`, `body` keyed by language),

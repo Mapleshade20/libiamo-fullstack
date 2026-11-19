@@ -516,6 +516,7 @@ CREATE INDEX "exchange_message_exchange_idx" ON "exchange_message" USING btree (
 CREATE INDEX "exchange_message_response_batch_idx" ON "exchange_message" USING btree ("response_batch_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "exchange_message_delivery_idx" ON "exchange_message" USING btree ("delivery_id");--> statement-breakpoint
 CREATE INDEX "exchange_message_unread_idx" ON "exchange_message" USING btree ("exchange_id","id") WHERE "exchange_message"."role" = 'assistant';--> statement-breakpoint
+CREATE INDEX "feedback_user_idx" ON "feedback" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "llm_call_piece_idx" ON "llm_call" USING btree ("piece_id");--> statement-breakpoint
 CREATE INDEX "llm_call_created_idx" ON "llm_call" USING btree ("created_at");--> statement-breakpoint
 CREATE INDEX "llm_call_user_created_idx" ON "llm_call" USING btree ("user_id","created_at");--> statement-breakpoint

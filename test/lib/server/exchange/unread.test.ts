@@ -133,9 +133,9 @@ describe("acknowledgeAssistantMessage", () => {
 		});
 		const inserts: Array<{ table: unknown; values: Record<string, unknown> }> = [];
 		(tx.insert as ReturnType<typeof vi.fn>).mockImplementation((table: unknown) => ({
-			values: async (values: Record<string, unknown>) => {
+			values: (values: Record<string, unknown>) => {
 				inserts.push({ table, values });
-				return [{ id: 99 }];
+				return { onConflictDoNothing: () => ({ returning: async () => [{ id: 99 }] }) };
 			},
 		}));
 
@@ -151,9 +151,9 @@ describe("acknowledgeAssistantMessage", () => {
 		tx.query.agentBatch.findFirst.mockResolvedValue({ id: 55 });
 		const inserts: Array<{ table: unknown; values: Record<string, unknown> }> = [];
 		(tx.insert as ReturnType<typeof vi.fn>).mockImplementation((table: unknown) => ({
-			values: async (values: Record<string, unknown>) => {
+			values: (values: Record<string, unknown>) => {
 				inserts.push({ table, values });
-				return [{ id: 99 }];
+				return { onConflictDoNothing: () => ({ returning: async () => [{ id: 99 }] }) };
 			},
 		}));
 

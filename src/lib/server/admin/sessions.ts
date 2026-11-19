@@ -207,7 +207,8 @@ export async function sessions(o: { limit?: number; ids?: string[] } = {}, now =
 				ms: pieceStep.ms,
 				at: pieceStep.at,
 				stop: sql<string | null>`${pieceStep.body}->>'id'`,
-				self: sql<boolean | null>`(${pieceStep.body}->>'self')::boolean`,
+				// The body is what the page sent: compared, never cast, so a stray value cannot fail the list.
+				self: sql<boolean | null>`${pieceStep.body}->'self' = 'true'::jsonb`,
 				pass: sql<boolean | null>`(${pieceStep.response}->>'pass')::boolean`,
 				issues: length(sql`${pieceStep.response}->'issues'`),
 				stops: length(sql`${pieceStep.response}->'stops'`),

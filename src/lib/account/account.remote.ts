@@ -239,7 +239,7 @@ export const cancelEmailChange = command(async () => {
 export const deleteAccount = command(z.object({ email: z.string().max(254) }), async ({ email }) => {
 	const u = learner();
 	if (email.trim().toLowerCase() !== u.email.toLowerCase()) error(400, "The address does not match.");
-	forgetLearner(u.id);
+	await forgetLearner(u.id);
 	await db.delete(user).where(eq(user.id, u.id));
 	logAuthEvent("auth.account_deleted", { userId: u.id, email: u.email, ip: clientIp(getRequestEvent().request.headers) });
 });

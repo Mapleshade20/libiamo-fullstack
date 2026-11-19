@@ -39,10 +39,11 @@ $effect(() => {
 		app.prefs.active = was.active;
 		app.prefs.feedback = was.feedback;
 	};
-	(load ? load() : Promise.resolve([] as Tape)).then((tape) => {
-		director.start(CHAPTERS, tape, { record: dev && asked === "record", at: Number(page.url.searchParams.get("at") ?? 0) });
-		starting = false;
-	});
+	(load ? load() : Promise.resolve([] as Tape))
+		.then((tape) => director.start(CHAPTERS, tape, { record: dev && asked === "record", at: Number(page.url.searchParams.get("at") ?? 0) }))
+		// A tape that does not load (a tab older than the last deployment) leaves the settings as they were: the next save sends them all.
+		.catch(() => Object.assign(app.prefs, was))
+		.finally(() => (starting = false));
 });
 </script>
 

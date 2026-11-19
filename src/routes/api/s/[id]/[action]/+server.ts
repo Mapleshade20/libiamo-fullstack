@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { learner } from "#lib/server/guard.ts";
 import { type Answer, keptAlive } from "#lib/server/kept-alive.ts";
 import { stopOf } from "#lib/server/llm/transport.ts";
@@ -45,11 +46,9 @@ const ACTIONS: Record<string, Action> = {
 	replay: (s, b) => s.replay(Number(b.turn), String(b.text ?? "")),
 };
 
-const UUID = /^[0-9a-f-]{36}$/;
-
 export async function POST({ params, request }) {
 	const u = learner();
-	const p = UUID.test(params.id) ? await pieceFor(u.id, params.id) : null;
+	const p = z.guid().safeParse(params.id).success ? await pieceFor(u.id, params.id) : null;
 	if (!p) return Response.json({ error: "No such piece." }, { status: 404 });
 	// Coming back to a finished piece is coming back to its page.
 	if (params.action === "resume" && p.state === "finished") return Response.json({ finished: true });
@@ -79,7 +78,8 @@ export async function POST({ params, request }) {
 		reloadRevision(h);
 		return Response.json({});
 	}
-	const fn = ACTIONS[params.action];
+	// Only the table's own actions: `constructor` would otherwise answer (and record) the revision itself, key and all.
+	const fn = Object.hasOwn(ACTIONS, params.action) ? ACTIONS[params.action] : undefined;
 	if (!fn) return Response.json({ error: "unknown action" }, { status: 404 });
 	const b = await request.json().catch(() => ({}));
 	// A step can wait minutes on the model: the answer is kept alive past Cloudflare's 100 seconds.

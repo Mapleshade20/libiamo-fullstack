@@ -32,7 +32,7 @@ export const DEFAULT_WORKER_SWEEP_INTERVAL_MS = 30_000;
 /**
  * A safety ceiling on generations in flight, not a queue: a generation only waits on the provider
  * and holds no database connection, so fairness comes from one generation per learner at a time
- * (see `claimDueBatch`), and every call is bounded by `LLM_REQUEST_TIMEOUT_MS`.
+ * (see `claimDueBatch`), and every call is bounded by the transport's timeout.
  */
 export const DEFAULT_WORKER_CONCURRENCY = 200;
 export const DEFAULT_WORKER_RETRY_BACKOFF_MS = 60_000;
@@ -337,14 +337,13 @@ export async function scheduleWorldMoment(
 		seed: Math.floor(Math.random() * 2 ** 31),
 	});
 	if (!participant) return false;
-	try {
-		await executor.insert(agentBatch).values({ exchangeId: session.id, kind: "world", status: "pending", dueAt, participant, inputMessageId: null });
-	} catch (error) {
-		// The partial unique index is the hard guard: a scheduling race is a no-op, not an error.
-		if ((error as { code?: string }).code === "23505") return false;
-		throw error;
-	}
-	return true;
+	// The partial unique index is the hard guard: a scheduling race is a no-op, not an error (nor an aborted transaction).
+	const made = await executor
+		.insert(agentBatch)
+		.values({ exchangeId: session.id, kind: "world", status: "pending", dueAt, participant, inputMessageId: null })
+		.onConflictDoNothing()
+		.returning({ id: agentBatch.id });
+	return made.length > 0;
 }
 
 /** Why a batch is generating: idle follow-ups tell the agent the learner went quiet and how many nudges remain. */

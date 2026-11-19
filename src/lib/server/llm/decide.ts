@@ -51,9 +51,9 @@ export async function decide(ai: Caller, state: Record<string, unknown>, questio
 	}
 	const answers = api === "openrouter" ? openRouterAnswers(r.body) : openAiAnswers(r.body);
 	const text = JSON.stringify(answers, null, 2);
-	cache?.put(key, { text, usage: r.usage, ms: r.ms, costUsd: r.costUsd, finish: null });
 	recordCall(record, { ...base, state: "done", output: text, usage: r.usage, costUsd: r.costUsd, ms: r.ms });
 	if (!Object.keys(answers).length) throw new LimitError("error", `${opts.tag} ${model}: no answers`);
+	cache?.put(key, { text, usage: r.usage, ms: r.ms, costUsd: r.costUsd, finish: null });
 	return answers;
 }
 

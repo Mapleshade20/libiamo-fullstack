@@ -20,8 +20,8 @@ import type { DueSummary, Note, NotebookGlance, NotebookPage, ReviewCard } from 
 
 /* The notebook and review, in a language the learner works in (the page says which: the one it speaks). */
 
-const UUID = /^[0-9a-f-]{36}$/;
-const noteId = z.string().regex(UUID);
+// Ids are UUIDs: anything else is no row, never a query the database refuses.
+const noteId = z.guid();
 const language = z.enum(LEARNABLE);
 
 /** A page of the list (lib/server/notebook/notes.ts `notebookPage`): the first without `after`. */
@@ -34,7 +34,7 @@ export const notebook = query(
 export const glance = query(language, async (lang): Promise<NotebookGlance> => notebookGlance(learner(), lang));
 
 /** Any id a link may carry; one that is not an entry of theirs is simply none. */
-export const noteById = query(z.string(), async (id): Promise<Note | null> => (UUID.test(id) ? noteOf(learner(), id) : null));
+export const noteById = query(z.string(), async (id): Promise<Note | null> => (noteId.safeParse(id).success ? noteOf(learner(), id) : null));
 
 /** What the shell shows: how many cards are due, and the first two. */
 export const due = query(language, async (lang): Promise<DueSummary> => dueOf(learner(), lang));
@@ -78,4 +78,4 @@ export const startReading = command(z.object({ passage: z.string().trim().min(1)
 );
 
 /** A reading of theirs, to collect from. */
-export const readingById = query(z.string(), async (id) => (UUID.test(id) ? readingOf(learner().id, id) : null));
+export const readingById = query(z.string(), async (id) => (noteId.safeParse(id).success ? readingOf(learner().id, id) : null));

@@ -144,7 +144,9 @@ onMount(() => {
 							aria-label={tx("setNative")}
 							value={native}
 							onValueChange={(v) => {
-								if (isAppLang(v)) native = v;
+								if (!isAppLang(v)) return;
+								native = v;
+								learning = learning.filter((l) => l !== v);
 							}}
 							items={APP_LANGS.map((l) => ({ value: l, label: endonym(l), description: l === native ? undefined : langName(l, native) }))}
 						/>

@@ -79,15 +79,19 @@ const bareStrings = (args: unknown[]): string[] => {
 	return out;
 };
 
+/** What an insert answers: its rows, also after `onConflictDoNothing` (a world moment's insert). */
+function inserted() {
+	const returning = vi.fn().mockResolvedValue([{ id: 999 }]);
+	return { returning, onConflictDoNothing: () => ({ returning }) };
+}
+
 describe("session service", () => {
 	beforeEach(() => {
 		vi.resetAllMocks();
 		mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => unknown) => callback(mockDb));
 		mockDb.query.agentBatch.findMany.mockResolvedValue([]);
 		mockDb.insert.mockImplementation(() => ({
-			values: vi.fn(() => ({
-				returning: vi.fn().mockResolvedValue([{ id: 999 }]),
-			})),
+			values: vi.fn(() => inserted()),
 		}));
 		mockDb.update.mockImplementation(() => ({
 			set: vi.fn(() => ({ where: vi.fn() })),
@@ -152,7 +156,7 @@ describe("session service", () => {
 						}),
 					}) as unknown as ReturnType<typeof mockDb.update>,
 			);
-			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 999 }]) });
+			const valuesMock = vi.fn().mockReturnValue(inserted());
 			mockDb.insert.mockImplementation(
 				() =>
 					({
@@ -179,7 +183,7 @@ describe("session service", () => {
 			});
 			const returning = vi.fn().mockResolvedValue([]);
 			mockDb.update.mockImplementation(() => ({ set: vi.fn(() => ({ where: vi.fn(() => ({ returning })) })) }));
-			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 999 }]) });
+			const valuesMock = vi.fn().mockReturnValue(inserted());
 			mockDb.insert.mockImplementation(
 				() =>
 					({
@@ -229,7 +233,7 @@ describe("session service", () => {
 						})),
 					}) as unknown as ReturnType<typeof mockDb.update>,
 			);
-			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 999 }]) });
+			const valuesMock = vi.fn().mockReturnValue(inserted());
 			mockDb.insert.mockImplementation(
 				() =>
 					({
@@ -273,7 +277,7 @@ describe("session service", () => {
 						})),
 					}) as unknown as ReturnType<typeof mockDb.update>,
 			);
-			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 999 }]) });
+			const valuesMock = vi.fn().mockReturnValue(inserted());
 			mockDb.insert.mockImplementation(
 				() =>
 					({
@@ -472,7 +476,7 @@ describe("session service", () => {
 				status: "delivery_pending",
 				inputVersion: 4,
 			});
-			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 999 }]) });
+			const valuesMock = vi.fn().mockReturnValue(inserted());
 			mockDb.insert.mockImplementation(
 				() =>
 					({
@@ -503,7 +507,7 @@ describe("session service", () => {
 				status: "delivery_pending",
 				inputVersion: 4,
 			});
-			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 999 }]) });
+			const valuesMock = vi.fn().mockReturnValue(inserted());
 			mockDb.insert.mockImplementation(
 				() =>
 					({
@@ -583,7 +587,7 @@ describe("session service", () => {
 					({
 						values: vi.fn((values: Record<string, unknown>) => {
 							inserts.push(values);
-							return { returning: vi.fn().mockResolvedValue([{ id: 999 }]) };
+							return inserted();
 						}),
 					}) as unknown as ReturnType<typeof mockDb.insert>,
 			);
@@ -638,7 +642,7 @@ describe("session service", () => {
 						})),
 					}) as unknown as ReturnType<typeof mockDb.update>,
 			);
-			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 999 }]) });
+			const valuesMock = vi.fn().mockReturnValue(inserted());
 			mockDb.insert.mockImplementation(() => ({ values: valuesMock }));
 
 			await submitMessage(123, "To: Maya\nSubject: Re: Hi\n\nActually one more thing", USER_ID, "m2");
@@ -711,7 +715,7 @@ describe("session service", () => {
 					({
 						values: vi.fn((values: Record<string, unknown>) => {
 							inserts.push(values);
-							return { returning: vi.fn().mockResolvedValue([{ id: 999 }]) };
+							return inserted();
 						}),
 					}) as unknown as ReturnType<typeof mockDb.insert>,
 			);
@@ -763,7 +767,7 @@ describe("session service", () => {
 					({
 						values: vi.fn((values: Record<string, unknown>) => {
 							inserts.push(values);
-							return { returning: vi.fn().mockResolvedValue([{ id: 999 }]) };
+							return inserted();
 						}),
 					}) as unknown as ReturnType<typeof mockDb.insert>,
 			);
@@ -810,7 +814,7 @@ describe("session service", () => {
 					({
 						values: vi.fn((values: Record<string, unknown>) => {
 							inserts.push(values);
-							return { returning: vi.fn().mockResolvedValue([{ id: 999 }]) };
+							return inserted();
 						}),
 					}) as unknown as ReturnType<typeof mockDb.insert>,
 			);
@@ -875,7 +879,7 @@ describe("session service", () => {
 					({
 						values: vi.fn((values: Record<string, unknown>) => {
 							inserts.push(values);
-							return { returning: vi.fn().mockResolvedValue([{ id: 999 }]) };
+							return inserted();
 						}),
 					}) as unknown as ReturnType<typeof mockDb.insert>,
 			);
@@ -925,7 +929,7 @@ describe("session service", () => {
 					({
 						values: vi.fn((values: Record<string, unknown>) => {
 							inserts.push(values);
-							return { returning: vi.fn().mockResolvedValue([{ id: 999 }]) };
+							return inserted();
 						}),
 					}) as unknown as ReturnType<typeof mockDb.insert>,
 			);
@@ -962,7 +966,7 @@ describe("session service", () => {
 			mockDb.update.mockImplementation(
 				() => ({ set: vi.fn(() => ({ where: vi.fn(() => ({ returning: vi.fn().mockResolvedValue([]) })) })) }) as never,
 			);
-			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 999 }]) });
+			const valuesMock = vi.fn().mockReturnValue(inserted());
 			mockDb.insert.mockImplementation(() => ({ values: valuesMock }) as never);
 
 			const result = await submitMessage(123, "Last", USER_ID, "m2", {

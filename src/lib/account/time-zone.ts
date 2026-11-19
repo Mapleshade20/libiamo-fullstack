@@ -27,7 +27,10 @@ export function followTimeZone(): () => void {
 		keepTimeZone(tz)
 			// The page was made in another zone either way: everything is asked for again.
 			.then(() => refreshAll())
-			.catch((e) => console.error("the time zone was not kept", e));
+			.catch((e) => {
+				asked = "";
+				console.error("the time zone was not kept", e);
+			});
 	};
 	check();
 	const visible = () => {

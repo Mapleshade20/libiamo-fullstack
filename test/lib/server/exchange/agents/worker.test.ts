@@ -94,6 +94,10 @@ const bareStrings = (value: unknown): Array<string | number> => {
 };
 
 type RecordedUpdate = { table: unknown; set: Record<string, unknown>; clause: unknown };
+/** What an insert answers, awaited as it is or after `onConflictDoNothing` (a world moment's insert: no rows, a conflict). */
+function inserted(rows: { id: number }[] = [{ id: 99 }]) {
+	return Object.assign(Promise.resolve(rows), { onConflictDoNothing: () => ({ returning: async () => rows }) });
+}
 type RecordedInsert = { table: unknown; values: Record<string, unknown> };
 
 /** Executor double for the follow-up scheduler: replays the session row and
@@ -112,8 +116,9 @@ function makeFollowUpExecutor(session: Record<string, unknown>) {
 			}),
 		}),
 		insert: (table: unknown) => ({
-			values: async (values: Record<string, unknown>) => {
+			values: (values: Record<string, unknown>) => {
 				inserts.push({ table, values });
+				return inserted();
 			},
 		}),
 	};
@@ -157,8 +162,9 @@ function makeRecordingTx(
 			}),
 		}),
 		insert: (table: unknown) => ({
-			values: async (values: Record<string, unknown>) => {
+			values: (values: Record<string, unknown>) => {
 				inserts.push({ table, values });
+				return inserted();
 			},
 		}),
 		query: {
@@ -221,7 +227,8 @@ function makeDeliveryTx(
 		insert: (table: unknown) => ({
 			values: (values: Record<string, unknown>) => {
 				operations.push({ kind: "insert", table, set: values });
-				return { onConflictDoNothing: async () => undefined, returning: async () => [{ id: 77 }] };
+				const returning = async () => [{ id: 77 }];
+				return { onConflictDoNothing: () => Object.assign(Promise.resolve(undefined), { returning }), returning };
 			},
 		}),
 		query: {
@@ -1193,9 +1200,9 @@ function makeWorldExecutor(options: { session?: Record<string, unknown> | null; 
 			}),
 		}),
 		insert: (table: unknown) => ({
-			values: async (values: Record<string, unknown>) => {
+			values: (values: Record<string, unknown>) => {
 				inserts.push({ table, values });
-				return [{ id: 99 }];
+				return inserted();
 			},
 		}),
 	};
@@ -1236,10 +1243,10 @@ describe("world moment scheduling", () => {
 		expect([...never.inserts, ...outstanding.inserts, ...spent.inserts, ...expiring.inserts]).toEqual([]);
 	});
 
-	it("returns false when insertion reports a duplicate", async () => {
+	it("returns false when the partial unique index already holds one", async () => {
 		const { executor } = makeWorldExecutor();
-		(executor.insert as unknown as (table: unknown) => { values: () => Promise<never> }) = () => ({
-			values: () => Promise.reject(Object.assign(new Error("dup"), { code: "23505" })),
+		(executor.insert as unknown as (table: unknown) => { values: () => ReturnType<typeof inserted> }) = () => ({
+			values: () => inserted([]),
 		});
 		await expect(scheduleWorldMoment(executor as never, { exchangeId: 5, now })).resolves.toBe(false);
 	});

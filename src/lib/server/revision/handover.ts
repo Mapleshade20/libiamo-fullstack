@@ -18,7 +18,6 @@ import type { Setup } from "#lib/session/types.ts";
  * translation's original.
  */
 
-const PIECE = /^[0-9a-f-]{36}$/;
 const learnable = (l: unknown): l is string => (LEARNABLE as readonly string[]).includes(l as string);
 
 export const StartBody = z.object({
@@ -30,7 +29,7 @@ export const StartBody = z.object({
 	learner: z.string().max(10).optional(),
 	feedback: z.enum(["native", "target"]).optional(),
 	lang: z.string().max(10).optional(),
-	pieceId: z.string().regex(PIECE).optional(),
+	pieceId: z.guid().optional(),
 });
 export type StartBody = z.infer<typeof StartBody>;
 
