@@ -303,7 +303,7 @@ def send_email(config, subject, body):
 			if separator and key.strip().startswith("SMTP_"):
 				e[key.strip()] = " ".join(shlex.split(value))
 	message = email.message.EmailMessage()
-	message["From"] = e["SMTP_FROM"]
+	message["From"] = e.get("SMTP_FROM") or e["SMTP_USER"]
 	message["To"] = ", ".join(recipients)
 	message["Subject"] = subject
 	message.set_content(body)

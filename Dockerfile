@@ -60,7 +60,7 @@ ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=3000
 # adapter-node otherwise caps request bodies at 512K.
-ENV BODY_SIZE_LIMIT=20M
+ENV BODY_SIZE_LIMIT=2M
 
 # The stock `node` user (uid/gid 1000) owns everything above.
 USER node

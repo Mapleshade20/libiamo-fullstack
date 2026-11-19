@@ -36,6 +36,8 @@ services:
 
     restart: unless-stopped
     init: true
+    # Shutdown waits for answers in flight (adapter-node: 30s), then writes every revision in memory.
+    stop_grace_period: 60s
 
     # Bind to loopback so only the host's reverse proxy can reach it.
     ports:
@@ -60,10 +62,10 @@ services:
       SMTP_FROM: "${SMTP_FROM:?SMTP_FROM is required}"
       SMTP_USER: "${SMTP_USER:?SMTP_USER is required}"
       SMTP_PASS: "${SMTP_PASS:?SMTP_PASS is required}"
-      # The service's own key, for the calls no learner makes (the composer's gate).
+      # The service's own key, for the calls no learner makes (translation sources).
       OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:-}"
       ADDRESS_HEADER: "${ADDRESS_HEADER:-}"
-      BODY_SIZE_LIMIT: "${BODY_SIZE_LIMIT:-20M}"
+      BODY_SIZE_LIMIT: "${BODY_SIZE_LIMIT:-2M}"
       RUN_MIGRATIONS: "${RUN_MIGRATIONS:-1}"
       DB_DEBUG: "${DB_DEBUG:-0}"
       DATABASE_POOL_MAX: "${DATABASE_POOL_MAX:-10}"

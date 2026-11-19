@@ -159,7 +159,7 @@ server {
 
     # ssl_certificate ... ;
 
-    client_max_body_size 20m;
+    client_max_body_size 2m;
 
     location / {
         proxy_pass http://127.0.0.1:3000;
@@ -402,8 +402,8 @@ database.
 | `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` | no | **secret** (`TURNSTILE_SECRET_KEY`). Cloudflare Turnstile on signing in, signing up, the confirmation mail and password resets, shown only when Cloudflare asks for a click. Both empty turns it off; setting only one refuses to start. |
 | `AUTH_AUDIT_LOG` | – | Default `0`. `1` prints one JSON line (`{"type":"auth-audit",...}`) per sign-up, address change (requested and completed), password change or reset, login-method link or unlink, and admin grant. Lines carry addresses and IPs. |
 | `ADDRESS_HEADER` | – | Header holding the visitor's address; see [Visitor address](#visitor-address). Empty: none. |
-| `OPENROUTER_API_KEY` | – | **secret.** The service's own key, for the calls no learner makes (the composer's gate). Learners' calls run on the key they saved. |
-| `BODY_SIZE_LIMIT` | – | Default `20M`; adapter-node's own default is only 512K. |
+| `OPENROUTER_API_KEY` | – | **secret.** The service's own key, for the calls no learner makes (translation sources). Learners' calls run on the key they saved. |
+| `BODY_SIZE_LIMIT` | – | Default `2M` (the largest request, a draft with a captured page, is under 1M); adapter-node's own default is only 512K. |
 | `TZ` | – | Default `Asia/Shanghai`. |
 | `DB_DEBUG` | – | `1` logs every query. Leave off in production. |
 

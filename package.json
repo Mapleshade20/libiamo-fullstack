@@ -41,7 +41,6 @@
 		"marked": "^18.2.0",
 		"nodemailer": "^10.5.0",
 		"openai": "^7.39.0",
-		"postgres": "^4.1.1",
 		"rough-notation": "^0.5.1",
 		"svelte": "~5.57.3",
 		"svelte-check": "^4.7.8",
@@ -62,6 +61,7 @@
 	"dependencies": {
 		"drizzle-kit": "^0.31.11",
 		"drizzle-orm": "^0.45.4",
-		"isomorphic-dompurify": "^4.7.0"
+		"isomorphic-dompurify": "^4.7.0",
+		"postgres": "^4.1.1"
 	}
 }
