@@ -11,6 +11,9 @@ export const AVATAR_COLORS = [
 	"bg-[#F59E0B]",
 ];
 
+/** A username as Reddit prints it; a scenario's people may be named with their `u/`. */
+export const handle = (name: string) => name.replace(/^u\//i, "");
+
 export function getAvatarColor(name: string): string {
 	let h = 0;
 	for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
