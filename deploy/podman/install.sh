@@ -24,9 +24,8 @@ command -v podman >/dev/null || die "podman is not installed"
 
 PODMAN_VERSION="$(podman --version | awk '{print $3}')"
 PODMAN_MAJOR="${PODMAN_VERSION%%.*}"
-PODMAN_MINOR="${PODMAN_VERSION#*.}"; PODMAN_MINOR="${PODMAN_MINOR%%.*}"
-if [ "$PODMAN_MAJOR" -lt 4 ] || { [ "$PODMAN_MAJOR" -eq 4 ] && [ "$PODMAN_MINOR" -lt 4 ]; }; then
-    die "podman $PODMAN_VERSION found, but quadlet needs >= 4.4.
+if [ "$PODMAN_MAJOR" -lt 5 ]; then
+    die "podman $PODMAN_VERSION found, but these units need >= 5.0.
      Install a newer podman, or use the compose path (docker-compose.yaml)."
 fi
 say "podman $PODMAN_VERSION"

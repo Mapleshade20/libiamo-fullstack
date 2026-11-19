@@ -511,6 +511,24 @@ decided on:
   hours (§5.7). `help_improve` off is as proposed: numbers without words, and the admin's session pages (phase 5) will
   not list that learner's pieces.
 
+**Phase 7, launch: released as `v1.0.0`** (2026-11-19); the production switch (§9) is still to do, and the user and
+friends test on production after it.
+
+- **Accepted** in a browser by a separate agent on the dev server and the production build: every signed-out page, an
+  account by hand (sign-up, the link, the welcome, a wrong then a right key, a password reset), own writing through
+  both passes with reloads, collecting, review, the week, Discord, iMessage and Reddit played to their replies and the
+  after page, a translation, a suggestion and feedback reaching the inbox, a scenario made from the suggestion, an
+  announcement, every admin page, the tour twice, phone width; `lab/patrol.mjs` clean on the build. About $0.04 of
+  calls. Fixed: Reddit printed `u/u/…` for a person named with their `u/`; the editor kept saying "Draft" after
+  Publish. Left for the testing round: AO3 and mail not played, real SMTP, Turnstile and OAuth (production only), and
+  small things (an announcement deleted without asking, the iMessage turn counter without a label, contractions split
+  oddly in the changes).
+- **Deployment.** The image built and booted on an empty database (migration, `/health`, an `ADMIN_EMAILS` admin,
+  SIGTERM). Debian 13's Podman (5.4) generates every unit; its Caddy (2.6) refuses the access-log fragment, which needs
+  2.8, so Caddy comes from its own repository. `DEPLOYMENT.md` gained what a new server needs, loading the content
+  document into production through a tunnel (`lab/seed.ts` with `DATABASE_URL`) and moving to another server.
+- From here the schema changes by new migrations only, one per branch (AGENTS.md).
+
 **Phase 6, first run: under way** (2026-11-16). Asked for by the user: no trace of the demo left, every page rendered
 on the server on real data.
 

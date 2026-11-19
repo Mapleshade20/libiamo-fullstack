@@ -8,7 +8,7 @@ simulated people, and translations of real texts.
 
 Every model call runs on the learner's own key (OpenRouter, DeepSeek, OpenAI or GLM).
 
-The application is being rebuilt from the product's demo; the plan, the data model and the state of the work are in
+Version 1.0 was rebuilt from the product's demo; its plan and data model are in
 [docs/design/2026-11-13-step-3-rebuild.md](./docs/design/2026-11-13-step-3-rebuild.md).
 
 ## Stack
@@ -58,7 +58,7 @@ podman compose --env-file .env.docker up -d
 ```
 
 The Podman installer also installs monitoring, local backup and restore-drill timers, and a sudo-managed Caddy logging
-integration. Either way the schema is created on first boot. See [DEPLOYMENT.md](./DEPLOYMENT.md) for the reverse
-proxy, updates and rollback, backups and every variable.
+integration. Either way the schema is created on first boot. See [DEPLOYMENT.md](./DEPLOYMENT.md) for a new server,
+loading the scenarios, the reverse proxy, updates and rollback, backups, moving to another server and every variable.
 
 Profile pictures are [Gravatar](https://gravatar.com)'s for the account's address.
