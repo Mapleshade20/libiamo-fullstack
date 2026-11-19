@@ -11,8 +11,8 @@ import { Assignment, sourceIdentity } from "./identity.ts";
 
 type SheetUser = { id: string; nativeLanguage?: string | null; tutorLanguage: string };
 type Writer = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
-const openFor = (userId: string, scenarioId: string) =>
-	and(eq(piece.userId, userId), eq(piece.scenarioId, scenarioId), inArray(piece.state, ["writing", "revising"]));
+const openFor = (userId: string, scenarioId: string, language: string) =>
+	and(eq(piece.userId, userId), eq(piece.scenarioId, scenarioId), eq(piece.language, language), inArray(piece.state, ["writing", "revising"]));
 export type SheetView = {
 	scenario: ScenarioView;
 	language: string;
@@ -80,9 +80,12 @@ async function sourceFor(w: Writer, scenarioId: string, language: string, native
 	});
 }
 
-/** Existing drafts keep their assignment, even after edits, withdrawal or a language switch. */
+/** A piece taken up again keeps its assignment, even after edits or withdrawal; each language has its own. */
 export async function sheetOf(u: SheetUser, scenarioId: string, language: string): Promise<SheetView | null> {
-	const [open] = await db.select().from(piece).where(openFor(u.id, scenarioId));
+	const [open] = await db
+		.select()
+		.from(piece)
+		.where(openFor(u.id, scenarioId, language));
 	const a = open ? Assignment.parse(open.assignment) : await sourceFor(db, scenarioId, language, u.nativeLanguage ?? "en");
 	if (!a) return null;
 	return {
@@ -105,7 +108,11 @@ export async function saveSheet(
 ) {
 	if (!(LEARNABLE as readonly string[]).includes(input.language)) return null;
 	return db.transaction(async (tx) => {
-		const [open] = await tx.select().from(piece).where(openFor(u.id, input.scenarioId)).for("update");
+		const [open] = await tx
+			.select()
+			.from(piece)
+			.where(openFor(u.id, input.scenarioId, input.language))
+			.for("update");
 		const a = open ? Assignment.parse(open.assignment) : await sourceFor(tx, input.scenarioId, input.language, u.nativeLanguage ?? "en");
 		if (!a || a.language !== input.language || a.sourceId !== input.sourceId || a.generation !== input.generation)
 			error(409, "The assignment changed. Reload it before saving.");

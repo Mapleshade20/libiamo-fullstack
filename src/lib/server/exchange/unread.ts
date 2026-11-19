@@ -124,6 +124,7 @@ export async function getUnreadInbox(userId: string): Promise<UnreadInboxItem[]>
 				exchangeId: exchange.id,
 				pieceId: exchange.pieceId,
 				scenarioId: exchange.scenarioId,
+				language: piece.language,
 				title: piece.title,
 				place: piece.place,
 				status: exchange.status,
@@ -135,7 +136,7 @@ export async function getUnreadInbox(userId: string): Promise<UnreadInboxItem[]>
 			.innerJoin(piece, eq(piece.id, exchange.pieceId))
 			// A piece gone past its revision has nothing left to read the replies in.
 			.where(and(eq(exchange.userId, userId), inArray(piece.state, ["writing", "revising"])))
-			.groupBy(exchange.id, piece.title, piece.place)
+			.groupBy(exchange.id, piece.title, piece.place, piece.language)
 			.orderBy(sql`max(${exchangeMessage.createdAt}) desc`)
 	);
 }

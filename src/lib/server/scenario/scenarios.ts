@@ -64,10 +64,10 @@ async function sourcesFor(language: string, native: string | null | undefined, i
 }
 
 /**
- * Where the learner is with each scenario (or the given ones): the newest piece being written or revised, and the newest
- * finished. Two rows a scenario at most, however often it was written.
+ * Where the learner is with each scenario (or the given ones) in a language: the piece being written or revised, and the
+ * newest finished. Each language is written on its own. Two rows a scenario at most, however often it was written.
  */
-async function progressOf(userId: string, ids?: string[]) {
+async function progressOf(userId: string, language: string, ids?: string[]) {
 	// Inlined, not bound: DISTINCT ON and ORDER BY must be the same expression, and two parameters are not.
 	const open = sql<boolean>`(${piece.state} <> 'finished')`;
 	const rows = await db
@@ -76,6 +76,7 @@ async function progressOf(userId: string, ids?: string[]) {
 		.where(
 			and(
 				eq(piece.userId, userId),
+				eq(piece.language, language),
 				isNotNull(piece.scenarioId),
 				ids ? inArray(piece.scenarioId, ids) : undefined,
 				inArray(piece.state, ["writing", "revising", "finished"]),
@@ -132,7 +133,7 @@ async function issuesWith(ids: Set<string>) {
 
 /** The library: the current issue, the rest of what is offered ranked for this learner, and the back issues. */
 export async function libraryOf(u: Reader, language: string, uiLang: string, now = new Date()): Promise<Library> {
-	const [all, progress] = await Promise.all([offered(u, language), progressOf(u.id)]);
+	const [all, progress] = await Promise.all([offered(u, language), progressOf(u.id, language)]);
 	const cards = new Map(all.map((o) => [o.row.id, cardOf(o, progress.get(o.row.id)?.state ?? "new")]));
 	const issues = (await issuesWith(new Set(cards.keys()))).filter((i) => i.scenarios.length && Date.parse(`${i.date}T12:00:00Z`) <= now.getTime());
 	const local = (l: unknown) => {
@@ -167,7 +168,7 @@ export async function shelfScenariosOf(u: Reader, language: string, now = new Da
 export async function scenarioViewOf(u: Reader, id: string, language: string): Promise<ScenarioView | null> {
 	const [o] = await offered(u, language, [id]);
 	if (!o) return null;
-	const p = (await progressOf(u.id, [id])).get(id);
+	const p = (await progressOf(u.id, language, [id])).get(id);
 	const card = cardOf(o, p?.state ?? "new");
 	const extra = { ...(p?.open ? { openPiece: p.open } : {}), ...(p?.written ? { writtenPiece: p.written } : {}) };
 	if (o.row.kind === "translation" && o.source) {

@@ -296,8 +296,8 @@ async function scheduleTakers(tx: SubmitTx, input: Parameters<typeof scheduleArr
 
 /**
  * Opens the exchange of a scenario: its piece (`writing`, the plan typed on the scenario page, which the page keeps on the
- * device until now, as its background) and the exchange, in one transaction. A learner has at most one unfinished piece of a scenario (a partial unique index), so entering
- * again returns the one already open.
+ * device until now, as its background) and the exchange, in one transaction. A learner has at most one unfinished piece
+ * of a scenario in a language (a partial unique index), so entering again returns the one already open.
  */
 export async function openExchange(
 	u: { id: string; tutorLanguage: string; nativeLanguage?: string | null },
@@ -310,7 +310,7 @@ export async function openExchange(
 			.select({ exchangeId: exchange.id, pieceId: piece.id })
 			.from(piece)
 			.innerJoin(exchange, eq(exchange.pieceId, piece.id))
-			.where(and(eq(piece.userId, u.id), eq(piece.scenarioId, s.id), inArray(piece.state, ["writing", "revising"])));
+			.where(and(eq(piece.userId, u.id), eq(piece.scenarioId, s.id), eq(piece.language, s.language), inArray(piece.state, ["writing", "revising"])));
 		if (open) return open;
 		const [p] = await tx
 			.insert(piece)

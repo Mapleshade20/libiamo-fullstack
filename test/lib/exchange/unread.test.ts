@@ -3,9 +3,9 @@ import { formatUnreadBadgeCount, unreadTargetHref } from "#lib/exchange/unread.t
 
 describe("unread helpers", () => {
 	it("leads to the place while the exchange goes on, and to the after page once it is over", () => {
-		expect(unreadTargetHref({ scenarioId: "ao3-fic", status: "in_progress" })).toBe("/scenario/ao3-fic/play");
-		expect(unreadTargetHref({ scenarioId: "ao3-fic", status: "completed" })).toBe("/scenario/ao3-fic/after");
-		expect(unreadTargetHref({ scenarioId: "ao3-fic", status: "abandoned" })).toBe("/scenario/ao3-fic/after");
+		expect(unreadTargetHref({ scenarioId: "ao3-fic", status: "in_progress", language: "es" })).toBe("/scenario/ao3-fic/play?lang=es");
+		expect(unreadTargetHref({ scenarioId: "ao3-fic", status: "completed", language: "en" })).toBe("/scenario/ao3-fic/after?lang=en");
+		expect(unreadTargetHref({ scenarioId: "ao3-fic", status: "abandoned", language: "zh-CN" })).toBe("/scenario/ao3-fic/after?lang=zh-CN");
 	});
 
 	it("caps the compact badge at nine", () => {

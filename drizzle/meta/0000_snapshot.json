@@ -1,5 +1,5 @@
 {
-  "id": "371ff20a-7339-4a84-8df9-7c52176b32e4",
+  "id": "51b8b5a8-5867-4aa9-89f4-853b80a64102",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1920,6 +1920,34 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "note_collected_unique": {
+          "name": "note_collected_unique",
+          "columns": [
+            {
+              "expression": "reading_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "coalesce(\"sentence\", '')",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "marked",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"note\".\"reading_id\" is not null and \"note\".\"deleted_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -2264,6 +2292,12 @@
             },
             {
               "expression": "scenario_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "language",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

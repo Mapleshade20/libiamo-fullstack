@@ -59,14 +59,15 @@ export type PlaceView = {
 
 export const placeOf = query(PlaceQuery, async ({ scenarioId, lang }): Promise<PlaceView | null> => {
 	const u = learner();
-	// The open piece of this scenario, or the latest one whose exchange is over (the after page reads it too).
+	// The open piece of this scenario in this language, whether its exchange is going on or over (the after page reads it too).
 	const [row] = await db
-		.select({ id: exchange.id, pieceId: exchange.pieceId, language: piece.language })
+		.select({ id: exchange.id, pieceId: exchange.pieceId })
 		.from(exchange)
 		.innerJoin(piece, eq(piece.id, exchange.pieceId))
-		.where(and(eq(exchange.userId, u.id), eq(exchange.scenarioId, scenarioId), inArray(piece.state, ["writing", "revising"])));
-	// An unfinished scenario keeps the language it was begun in, even after the account switches languages.
-	const s = await settingFor(scenarioId, row?.language ?? lang);
+		.where(
+			and(eq(exchange.userId, u.id), eq(exchange.scenarioId, scenarioId), eq(piece.language, lang), inArray(piece.state, ["writing", "revising"])),
+		);
+	const s = await settingFor(scenarioId, lang);
 	if (!s) return null;
 	let persisted: PersistedExchange | null = null;
 	let latestReplyId: number | null = null;
@@ -194,9 +195,9 @@ export const readInPlace = command(z.object({ exchangeId: z.number().int(), mess
 });
 
 /** The exchange once it is over, for the after page: the thread, and what the revision is handed. */
-export const afterPlace = query(z.string().max(60), async (scenarioId) => {
+export const afterPlace = query(PlaceQuery, async ({ scenarioId, lang }) => {
 	const u = learner();
-	return afterOf(u, scenarioId);
+	return afterOf(u, scenarioId, lang);
 });
 
 /** Replies the learner has not read, by exchange (the home page's "someone answered you"), and when the cast's next

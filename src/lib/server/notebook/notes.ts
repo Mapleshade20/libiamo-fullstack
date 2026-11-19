@@ -79,13 +79,39 @@ export async function addReading(userId: string, text: string, language: string)
 	return r.id;
 }
 
-/** One of the learner's readings, as the collect page opens it. */
-export async function readingOf(userId: string, id: string): Promise<{ id: string; passage: string; lang: string } | null> {
+/** A phrase already collected from a reading, as the collect page marks it again. */
+export type Kept = Omit<Collected, "span"> & { id: string };
+
+/** One of the learner's readings, as the collect page opens it, with what is still kept from it. */
+export async function readingOf(userId: string, id: string): Promise<{ id: string; passage: string; lang: string; kept: Kept[] } | null> {
 	const [r] = await db
 		.select({ id: reading.id, passage: reading.text, lang: reading.language })
 		.from(reading)
 		.where(and(eq(reading.id, id), eq(reading.userId, userId)));
-	return r ?? null;
+	if (!r) return null;
+	const rows = await db
+		.select({
+			id: note.id,
+			phrase: note.phrase,
+			meaning: note.meaning,
+			register: note.register,
+			why: note.why,
+			examples: note.examples,
+			marked: note.marked,
+			sentence: note.sentence,
+		})
+		.from(note)
+		.where(and(eq(note.readingId, id), eq(note.userId, userId), isNull(note.deletedAt)))
+		.orderBy(note.id);
+	const kept = rows.map(({ examples, ...n }) => ({
+		...n,
+		register: (n.register ?? "neutral") as Register,
+		why: n.why ?? "",
+		example: (examples as { t?: string }[])[0]?.t ?? "",
+		marked: n.marked ?? n.phrase,
+		sentence: n.sentence ?? "",
+	}));
+	return { ...r, kept };
 }
 
 export async function fileCollected(
@@ -109,31 +135,48 @@ export async function fileCollected(
 				.values({ userId: u.id, language: r.language, text: r.text, place: r.place || null })
 				.returning({ id: reading.id });
 		if (!items.length) return { readingId, ids: [] };
-		const rows = await tx
-			.insert(note)
-			.values(
-				items.map((it) => {
-					const card = newCard(now, zoneOf(u));
-					return {
-						userId: u.id,
-						language: r.language,
-						kind: "collected" as const,
-						readingId,
-						phrase: it.phrase,
-						meaning: it.meaning,
-						meaningLanguage: r.tutorLanguage,
-						register: it.register,
-						why: it.why || null,
-						examples: it.example ? [{ t: it.example, ...(it.span ? { span: it.span } : {}) }] : [],
-						sentence: it.sentence || null,
-						marked: it.marked,
-						fsrs: card,
-						due: new Date(card.dueAt),
-					};
-				}),
-			)
-			.returning({ id: note.id });
-		return { readingId, ids: rows.map((x) => x.id) };
+		// One at a time: a phrase already kept from the same words (another tab, an earlier visit) is not kept twice, and
+		// its entry's id comes back instead.
+		const ids: string[] = [];
+		for (const it of items) {
+			const card = newCard(now, zoneOf(u));
+			const [row] = await tx
+				.insert(note)
+				.values({
+					userId: u.id,
+					language: r.language,
+					kind: "collected" as const,
+					readingId,
+					phrase: it.phrase,
+					meaning: it.meaning,
+					meaningLanguage: r.tutorLanguage,
+					register: it.register,
+					why: it.why || null,
+					examples: it.example ? [{ t: it.example, ...(it.span ? { span: it.span } : {}) }] : [],
+					sentence: it.sentence || null,
+					marked: it.marked,
+					fsrs: card,
+					due: new Date(card.dueAt),
+				})
+				.onConflictDoNothing()
+				.returning({ id: note.id });
+			const [kept] = row
+				? [row]
+				: await tx
+						.select({ id: note.id })
+						.from(note)
+						.where(
+							and(
+								eq(note.readingId, readingId),
+								eq(note.marked, it.marked),
+								sql`coalesce(${note.sentence}, '') = ${it.sentence || ""}`,
+								isNull(note.deletedAt),
+							),
+						);
+			if (!kept) throw new Error("a collected phrase was neither kept nor found");
+			ids.push(kept.id);
+		}
+		return { readingId, ids };
 	});
 }
 

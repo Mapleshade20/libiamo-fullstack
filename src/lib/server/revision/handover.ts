@@ -56,7 +56,7 @@ export function ownDraft(b: StartBody): Handed {
  */
 export async function heldPiece(u: { id: string; name: string }, pieceId: string): Promise<Handed | null> {
 	const [p] = await db
-		.select({ kind: piece.kind, scenarioId: piece.scenarioId })
+		.select({ kind: piece.kind, scenarioId: piece.scenarioId, language: piece.language })
 		.from(piece)
 		.where(and(eq(piece.id, pieceId), eq(piece.userId, u.id), inArray(piece.state, ["writing", "revising"])));
 	if (!p?.scenarioId) return null;
@@ -71,7 +71,7 @@ export async function heldPiece(u: { id: string; name: string }, pieceId: string
 		};
 	}
 	if (p.kind !== "scenario") return null;
-	const a = await afterOf(u, p.scenarioId);
+	const a = await afterOf(u, p.scenarioId, p.language);
 	if (!a || a.pieceId !== pieceId || a.open) return null;
 	const h = a.handoff;
 	return {

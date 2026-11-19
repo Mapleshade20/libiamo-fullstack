@@ -526,10 +526,11 @@ CREATE INDEX "note_list_idx" ON "note" USING btree ("user_id","language","id") W
 CREATE INDEX "note_user_idx" ON "note" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "note_piece_idx" ON "note" USING btree ("piece_id");--> statement-breakpoint
 CREATE INDEX "note_reading_idx" ON "note" USING btree ("reading_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "note_collected_unique" ON "note" USING btree ("reading_id",coalesce("sentence", ''),"marked") WHERE "note"."reading_id" is not null and "note"."deleted_at" is null;--> statement-breakpoint
 CREATE INDEX "piece_user_idx" ON "piece" USING btree ("user_id","language","id");--> statement-breakpoint
 CREATE INDEX "piece_scenario_idx" ON "piece" USING btree ("scenario_id") WHERE "piece"."scenario_id" is not null;--> statement-breakpoint
 CREATE INDEX "piece_notes_retry_idx" ON "piece" USING btree ("notes_requested_at") WHERE "piece"."notes_requested_at" is not null;--> statement-breakpoint
-CREATE UNIQUE INDEX "piece_open_scenario_unique" ON "piece" USING btree ("user_id","scenario_id") WHERE "piece"."scenario_id" is not null and "piece"."state" in ('writing', 'revising');--> statement-breakpoint
+CREATE UNIQUE INDEX "piece_open_scenario_unique" ON "piece" USING btree ("user_id","scenario_id","language") WHERE "piece"."scenario_id" is not null and "piece"."state" in ('writing', 'revising');--> statement-breakpoint
 CREATE INDEX "reading_user_idx" ON "reading" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "review_log_note_idx" ON "review_log" USING btree ("note_id");--> statement-breakpoint
 CREATE INDEX "review_log_user_idx" ON "review_log" USING btree ("user_id");--> statement-breakpoint

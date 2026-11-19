@@ -1,3 +1,4 @@
+import { scenarioHref } from "#lib/scenario/href.ts";
 import { goto } from "$app/navigation";
 import type { Writing } from "./types.ts";
 
@@ -10,6 +11,6 @@ export function openPiece(w: Writing) {
 }
 
 export function reopen(w: Writing) {
-	if (w.phase === "writing" && w.scenarioId) return goto(`/scenario/${w.scenarioId}/${w.site === "Translate" ? "translate" : "play"}`);
+	if (w.phase === "writing" && w.scenarioId) return goto(scenarioHref(w.scenarioId, w.site === "Translate" ? "translate" : "play", w.lang));
 	return goto(`/live/${w.id}`);
 }

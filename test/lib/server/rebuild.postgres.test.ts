@@ -59,12 +59,14 @@ import {
 	user,
 	userKey,
 } from "#lib/server/db/schema.ts";
+import { afterOf } from "#lib/server/exchange/after.ts";
 import { AgentReplyWorker } from "#lib/server/exchange/agents/worker.ts";
-import { submitMessage } from "#lib/server/exchange/exchanges.ts";
+import { openExchange, submitMessage } from "#lib/server/exchange/exchanges.ts";
+import { settingFrom } from "#lib/server/exchange/setting.ts";
 import { Caller, type CallRecord, chat } from "#lib/server/llm/caller.ts";
 import { learnerCaller } from "#lib/server/llm/callers.ts";
 import { pruneCalls, writeRecord } from "#lib/server/llm/records.ts";
-import { NOTEBOOK_PAGE, notebookGlance, notebookPage, rateNote } from "#lib/server/notebook/notes.ts";
+import { fileCollected, NOTEBOOK_PAGE, notebookGlance, notebookPage, rateNote, readingOf } from "#lib/server/notebook/notes.ts";
 import { newCard } from "#lib/server/review/scheduler.ts";
 import {
 	abandon,
@@ -362,7 +364,7 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 		if (!sent) throw new Error("not sent");
 		expect((await db.select().from(piece).where(eq(piece.id, sent.id)))[0].background).toBe("Keep it short");
 		await db.update(piece).set({ state: "abandoned" }).where(eq(piece.id, sent.id));
-		expect(await takeUp(learner, sent.id)).toEqual({ to: "/scenario/menu/translate" });
+		expect(await takeUp(learner, sent.id)).toEqual({ to: "/scenario/menu/translate?lang=en" });
 		expect((await sheetOf(learner, "menu", "en"))?.draft).toBe("My soup");
 		// Not abandoned (any more): nothing to take up.
 		expect(await takeUp(learner, sent.id)).toBeNull();
@@ -511,7 +513,7 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 		await vi.waitFor(async () => expect(await db.select().from(llmCall)).toHaveLength(2));
 	});
 
-	it("pins a draft's source, original and language through imports, remakes, withdrawal and account language changes", async () => {
+	it("pins a draft's source and original through imports, remakes, withdrawal and a change of native language", async () => {
 		await importContent(db, content());
 		const sheet = await sheetOf(learner, "menu", "en");
 		expect(sheet).not.toBeNull();
@@ -520,14 +522,95 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 		if (!saved) throw new Error("missing draft");
 		await importContent(db, content("Cake", "蛋糕"));
 		await db.update(scenario).set({ status: "withdrawn" });
-		const reopened = await sheetOf({ ...learner, nativeLanguage: "ja" }, "menu", "es");
+		const reopened = await sheetOf({ ...learner, nativeLanguage: "ja" }, "menu", "en");
 		expect(reopened?.language).toBe("en");
+		// Each language is written on its own: Spanish has nothing open, and the scenario is no longer offered.
+		expect(await sheetOf(learner, "menu", "es")).toBeNull();
 		expect(reopened?.scenario.situation).toMatchObject({ source: "汤", sourceLang: "zh-CN" });
 		expect((await translationFor(learner.id, saved.id))?.translation).toMatchObject({ original: "Soup", source: "汤", target: "en" });
 		await expect(saveSheet(learner, { scenarioId: "menu", language: "es", ...sheet.binding, text: "Do not overwrite" })).rejects.toMatchObject({
 			status: 409,
 		});
 		expect((await db.select().from(piece))[0].text).toBe("My soup");
+	});
+
+	it("counts a scenario's progress in each language on its own, and keeps one unfinished piece per language", async () => {
+		const seed = JSON.parse(readFileSync("lab/seed/scenarios.json", "utf8"));
+		const thanks = seed.scenarios.find((x: { id: string }) => x.id === "imessage-thanks");
+		await importContent(db, { version: 1, scenarios: [{ ...thanks, versions: { en: thanks.versions.en, es: thanks.versions.en } }] });
+		const u = { ...learner, name: "Learner" };
+		const settingIn = async (language: string) => {
+			const [row] = await db.select().from(scenario).where(eq(scenario.id, "imessage-thanks"));
+			const s = settingFrom(row, language);
+			if (!s) throw new Error(`no ${language} setting`);
+			return s;
+		};
+		// Entering in English, then in Spanish: two pieces, each in its language; entering again finds each.
+		const en = await openExchange(u, await settingIn("en"));
+		const es = await openExchange(u, await settingIn("es"));
+		expect(es.pieceId).not.toBe(en.pieceId);
+		expect(await openExchange(u, await settingIn("en"))).toEqual(en);
+		const langs = new Map((await db.select({ id: piece.id, language: piece.language }).from(piece)).map((p) => [p.id, p.language]));
+		expect([langs.get(en.pieceId), langs.get(es.pieceId)]).toEqual(["en", "es"]);
+		// A second unfinished piece in one language is refused by the database itself.
+		await expect(
+			db.insert(piece).values({
+				userId: learner.id,
+				language: "en",
+				kind: "scenario",
+				scenarioId: "imessage-thanks",
+				text: "",
+				tutorLanguage: "zh-CN",
+				state: "writing",
+			}),
+		).rejects.toMatchObject({ cause: { code: "23505" } });
+		// Finished in English: written there, still open in Spanish.
+		await db.update(piece).set({ state: "finished", finishedAt: new Date() }).where(eq(piece.id, en.pieceId));
+		expect(await scenarioViewOf(learner, "imessage-thanks", "en")).toMatchObject({ state: "written", writtenPiece: en.pieceId });
+		const inSpanish = await scenarioViewOf(learner, "imessage-thanks", "es");
+		expect(inSpanish).toMatchObject({ state: "open", openPiece: es.pieceId });
+		expect(inSpanish).not.toHaveProperty("writtenPiece");
+		// The after page reads the exchange of the language asked for.
+		await db.update(exchange).set({ status: "completed", completedAt: new Date() });
+		expect((await afterOf(u, "imessage-thanks", "es"))?.pieceId).toBe(es.pieceId);
+		expect(await afterOf(u, "imessage-thanks", "en")).toBeNull();
+	});
+
+	it("marks again what was collected from a reading, and never keeps the same words twice", async () => {
+		const passage = "I walked home. It was late, so I took the long way round.";
+		const item = (marked: string, sentence: string) => ({
+			phrase: marked,
+			meaning: "m",
+			register: "neutral" as const,
+			why: "",
+			example: "",
+			marked,
+			sentence,
+		});
+		const r = { text: passage, language: "en", tutorLanguage: "zh-CN" };
+		const first = await fileCollected(learner, r, [item("the long way round", "It was late, so I took the long way round.")]);
+		// The same words again (another tab, a later visit) and a new phrase: one entry each, the first one's id again.
+		const again = await fileCollected(learner, { ...r, id: first.readingId }, [
+			item("the long way round", "It was late, so I took the long way round."),
+			item("walked home", "I walked home. "),
+		]);
+		expect(again.readingId).toBe(first.readingId);
+		expect(again.ids[0]).toBe(first.ids[0]);
+		expect(await db.select().from(note)).toHaveLength(2);
+		const opened = await readingOf(learner.id, first.readingId);
+		expect(opened?.kept.map((k) => [k.marked, k.sentence])).toEqual([
+			["the long way round", "It was late, so I took the long way round."],
+			["walked home", "I walked home. "],
+		]);
+		// Undone, it is no longer kept, and can be collected again as a new entry.
+		await db.update(note).set({ deletedAt: new Date() }).where(eq(note.id, first.ids[0]));
+		expect((await readingOf(learner.id, first.readingId))?.kept).toHaveLength(1);
+		const back = await fileCollected(learner, { ...r, id: first.readingId }, [
+			item("the long way round", "It was late, so I took the long way round."),
+		]);
+		expect(back.ids[0]).not.toBe(first.ids[0]);
+		// Another learner's reading is not theirs to open.
+		expect(await readingOf("other", first.readingId)).toBeNull();
 	});
 
 	it("refuses a first save if its displayed source was replaced", async () => {

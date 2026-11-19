@@ -10,6 +10,7 @@ import FocusBar from "#lib/components/shell/FocusBar.svelte";
 import { toast } from "#lib/components/shell/toast.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
 import { nameOf, tx } from "#lib/i18n/tx.ts";
+import { scenarioLang } from "#lib/scenario/href.ts";
 import { sendSheet, sheet } from "#lib/scenario/scenario.remote.ts";
 import { startPiece } from "#lib/session/start.ts";
 import type { Setup } from "#lib/session/types.ts";
@@ -28,7 +29,8 @@ import { page } from "$app/state";
  * only then is it a piece (with the plan typed on the scenario's page).
  */
 const id = $derived(page.params.id ?? "");
-const data = $derived(await sheet({ id, lang: app.lang }));
+const lang = $derived(scenarioLang(page.url, app.lang));
+const data = $derived(await sheet({ id, lang }));
 const scenario = $derived(data?.scenario);
 const s = $derived(scenario?.situation.kind === "translate" ? scenario.situation : undefined);
 // One line per item (a menu) or blank-line paragraphs (prose): the sheet follows the source.
@@ -57,7 +59,7 @@ let area: HTMLTextAreaElement | undefined = $state();
 let all = $state(false);
 
 const native = $derived(nameOf(s?.sourceLang ?? app.prefs.native));
-const target = $derived(nameOf(data?.language ?? app.lang));
+const target = $derived(nameOf(data?.language ?? lang));
 
 function track() {
 	if (!area) return;
@@ -153,7 +155,7 @@ $effect(() => {
 									{#if g.shown !== g.term}
 										<span class="shown">{g.shown}</span>
 									{/if}
-									<b lang={app.lang}>{g.term}</b>
+									<b lang={data?.language ?? lang}>{g.term}</b>
 								</button>
 							{/each}
 						</div>
@@ -166,7 +168,7 @@ $effect(() => {
 					bind:this={area}
 					bind:value={text}
 					use:autogrow={text}
-					lang={app.lang}
+					lang={data?.language ?? lang}
 					rows={Math.max(units.length * (byLine ? 1 : 3), 6)}
 					spellcheck="false"
 					placeholder={tx("trPh", { lang: target })}
