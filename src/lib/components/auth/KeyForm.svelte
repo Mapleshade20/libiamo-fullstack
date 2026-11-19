@@ -1,20 +1,32 @@
 <script lang="ts">
 import ExternalLink from "@lucide/svelte/icons/external-link";
+import { untrack } from "svelte";
 import { account, setKey } from "#lib/account/account.svelte.ts";
 import { shake } from "#lib/components/common/motion.ts";
 import Reveal from "#lib/components/common/Reveal.svelte";
 import Select from "#lib/components/common/Select.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
-import { PROVIDERS as BY_ID, RECOMMENDED, SETUPS } from "#lib/llm/providers.ts";
+import { PROVIDERS as BY_ID, recommendedFor, SETUPS } from "#lib/llm/providers.ts";
 
 /*
  * The learner's own AI key, which every call runs on (there is no trial). Four providers, the base URL following the
- * provider, and setups known to work, one press to fill provider and model; the first, Claude Haiku through
- * OpenRouter, is the one we recommend and the one a new key starts from. Once saved, the key shows as the setup it
+ * provider, and setups known to work, one press to fill provider and model; the one recommended for the languages
+ * learnt (lib/llm/providers.ts `recommendedFor`) comes first and is the one a new key starts from. Once saved, the key shows as the setup it
  * runs, with a way to replace it: the line folds away as the form opens in its place (and back on saving or
  * cancelling), never a cut. Used by the settings page and the welcome.
  */
-let { tx, onsaved }: { tx: (k: string, v?: Record<string, string | number>) => string; onsaved?: () => void } = $props();
+let {
+	tx,
+	languages,
+	onsaved,
+}: {
+	tx: (k: string, v?: Record<string, string | number>) => string;
+	/** The languages learnt, the one worked in first: what the recommendation is for. */
+	languages: readonly string[];
+	onsaved?: () => void;
+} = $props();
+const recommended = $derived(recommendedFor(languages));
+const setups = $derived([recommended, ...SETUPS.filter((s) => s !== recommended)]);
 
 const PROVIDERS = Object.entries(BY_ID).map(([value, p]) => ({ value, label: p.label, keys: p.keys }));
 const providerOf = (v: string) => PROVIDERS.find((p) => p.value === v);
@@ -36,8 +48,9 @@ function cancel() {
 	problem = null;
 	back();
 }
-let provider = $state(account.me.key?.provider ?? RECOMMENDED.provider);
-let model = $state(account.me.key?.model ?? RECOMMENDED.model);
+// A new key starts from the setup recommended when the form opens (the languages are chosen before it).
+let provider = $state(account.me.key?.provider ?? untrack(() => recommended.provider));
+let model = $state(account.me.key?.model ?? untrack(() => recommended.model));
 let key = $state("");
 let keyInput: HTMLInputElement | undefined = $state();
 function usePreset(p: (typeof SETUPS)[number]) {
@@ -59,7 +72,7 @@ async function save(e: SubmitEvent) {
 	pending = true;
 	problem = null;
 	try {
-		problem = await setKey(provider, model.trim() || RECOMMENDED.model, key.trim());
+		problem = await setKey(provider, model.trim() || recommended.model, key.trim());
 	} catch {
 		problem = { problem: "error" };
 	}
@@ -94,7 +107,7 @@ async function save(e: SubmitEvent) {
 		<!-- biome-ignore lint/a11y/useSemanticElements: a row of toggle buttons, not form fields -->
 		<div class="full presets" role="group" aria-label={tx("setPresets")}>
 			<span class="presets-l">{tx("setPresets")}</span>
-			{#each SETUPS as p, i (p.provider + p.model)}
+			{#each setups as p, i (p.provider + p.model)}
 				<button type="button" class="preset" aria-pressed={provider === p.provider && model === p.model} onclick={() => usePreset(p)}>
 					{p.name}<small>{providerOf(p.provider)?.label}{i === 0 ? ` · ${tx("setRecommended")}` : ""}</small>
 				</button>
@@ -125,7 +138,7 @@ async function save(e: SubmitEvent) {
 				<p class="err" id="api-key-err" role="alert">
 					{tx(problem.problem, {
 						provider: providerOf(provider)?.label ?? provider,
-						model: model.trim() || RECOMMENDED.model,
+						model: model.trim() || recommended.model,
 						detail: problem.detail ?? "",
 					})}
 				</p>

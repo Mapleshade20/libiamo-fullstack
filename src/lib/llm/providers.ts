@@ -69,18 +69,35 @@ export const PROVIDERS: Record<KeyProvider, Provider> = {
 };
 
 /**
- * Setups known to work, one press to fill the key form. The first is the one recommended and the one a new key starts
- * from: everything was tuned on Claude Haiku through OpenRouter. `grader` is how grading asks (GPT Luna judged better
- * told the checks one way, the others the other).
+ * Setups known to work, one press to fill the key form. Everything was tuned on Claude Haiku through OpenRouter, the
+ * setup recommended unless a language learnt has its own (`RECOMMENDED_FOR`). `grader` is how grading asks (GPT Luna
+ * judged better told the checks one way, the others the other).
  */
 export type Setup = { name: string; provider: KeyProvider; model: string; grader?: "g2" | "g3" };
 export const SETUPS: Setup[] = [
 	{ name: "Claude Haiku", provider: "openrouter", model: "~anthropic/claude-haiku-latest" },
+	// Through OpenRouter, the gate keeps its Decisions API (a DeepSeek key has none, and its thresholds are per model).
+	{ name: "DeepSeek Flash", provider: "openrouter", model: "~deepseek/deepseek-flash-latest" },
 	{ name: "GPT Luna", provider: "openrouter", model: "~openai/gpt-luna-latest", grader: "g2" },
 	{ name: "DeepSeek Flash", provider: "deepseek", model: "deepseek-flash" },
 	{ name: "GPT Luna", provider: "openai", model: "gpt-6-luna", grader: "g2" },
 ];
-export const RECOMMENDED = SETUPS[0];
+const setup = (provider: KeyProvider, model: string) => SETUPS.find((s) => s.provider === provider && s.model === model) as Setup;
+export const RECOMMENDED = setup("openrouter", "~anthropic/claude-haiku-latest");
+/**
+ * Languages learnt that a setup other than the default serves better. Chinese: Haiku took "走路了三个小时" (a duration
+ * inside a verb-object compound) for a matter of taste, one time in two, and never named the rule; DeepSeek Flash
+ * flagged it every time (2026-11-18).
+ */
+export const RECOMMENDED_FOR: Partial<Record<string, Setup>> = {
+	"zh-CN": setup("openrouter", "~deepseek/deepseek-flash-latest"),
+};
+/**
+ * The setup recommended to a learner, from the languages they learn in the order they matter (the one worked in first):
+ * the first with a setup of its own decides, else the default. One key serves every language.
+ */
+export const recommendedFor = (languages: readonly string[]): Setup =>
+	languages.map((l) => RECOMMENDED_FOR[l]).find((s) => s !== undefined) ?? RECOMMENDED;
 /** How grading asks for a model: as its setup says, else as for Haiku. */
 export const graderFor = (provider: string, model: string) => SETUPS.find((s) => s.provider === provider && s.model === model)?.grader ?? "g3";
 

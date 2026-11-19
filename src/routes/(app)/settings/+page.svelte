@@ -263,7 +263,7 @@ onMount(() => {
 		<h2 id="set-ai">{tx("setAi")}</h2>
 		<div class="card">
 			{#snippet keyCtl()}
-				<KeyForm {tx} onsaved={() => toast(tx("setKeySaved"))} />
+				<KeyForm {tx} languages={[app.prefs.active, ...app.prefs.learning]} onsaved={() => toast(tx("setKeySaved"))} />
 			{/snippet}
 			{@render row(tx("setKey"), tx("setKeyHelp"), keyCtl, true)}
 			{#snippet deciderCtl()}

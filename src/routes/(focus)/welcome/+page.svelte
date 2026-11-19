@@ -190,7 +190,7 @@ onMount(() => {
 				{:else if step === KEY}
 					<h1><MarkedLine text={tx("welKey")} /></h1>
 					<p class="lede">{tx("welKeyLede")}</p>
-					<div class="ctl"><KeyForm {tx} onsaved={next} /></div>
+					<div class="ctl"><KeyForm {tx} languages={learning} onsaved={next} /></div>
 				{:else}
 					<h1><MarkedLine text={tx("welReady")} type="highlight" /></h1>
 					<p class="lede">{tx("welReadyLede")}</p>
