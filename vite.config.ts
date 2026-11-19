@@ -3,9 +3,11 @@ import adapter from "@sveltejs/adapter-node";
 import { sveltekit } from "@sveltejs/kit/vite";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vitest/config";
+import { i18nStrings } from "./scripts/vite-i18n.ts";
 
 export default defineConfig(({ command }) => ({
 	plugins: [
+		i18nStrings(),
 		tailwindcss(),
 		sveltekit({
 			// Remote functions (query/command/form) carry the app's data; they need Svelte's async mode. Both are

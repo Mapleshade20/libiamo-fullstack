@@ -6,8 +6,8 @@
 
 /** Pages for someone signed out; a signed-in visitor to the first two goes in instead. */
 const SIGNED_OUT = ["/sign-in", "/sign-up", "/verify", "/forgot-password"];
-/** Paths that answer anyone: Better Auth, the probe, the interface strings the signed-out pages speak, crawlers' files. */
-const OPEN = ["/api/auth/", "/health", "/api/i18n/", "/robots.txt", "/sitemap.xml"];
+/** Paths that answer anyone: Better Auth, the probe, crawlers' files. */
+const OPEN = ["/api/auth/", "/health", "/robots.txt", "/sitemap.xml"];
 /** The pages anyone may read, signed in, signed out or not set up yet (routes/(public)). */
 const DOCUMENTS = ["/about", "/terms", "/privacy", "/changelog"];
 
