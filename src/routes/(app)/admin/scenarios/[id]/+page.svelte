@@ -194,6 +194,7 @@ async function save(publish: boolean) {
 		problem = r.error;
 		return;
 	}
+	if (publish) d.status = "published";
 	toast(publish ? (translate ? "Published: sources are being made for each learner language" : "Published") : "Saved");
 	if (isNew) goto(`/admin/scenarios/${draft.id}`, { replace: true });
 }

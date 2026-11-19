@@ -11,7 +11,7 @@ import type { ThreadComment } from "#lib/exchange/comment-thread.ts";
 import { t as translate } from "#lib/i18n/index.svelte.ts";
 import CommentEditor from "./CommentEditor.svelte";
 import CommentTree from "./CommentTree.svelte";
-import { getAvatarColor } from "./format.ts";
+import { getAvatarColor, handle } from "./format.ts";
 import type { RedditText } from "./i18n.ts";
 
 // Reddit's thread line colours cycle with depth.
@@ -64,10 +64,10 @@ const isLearner = $derived(comment.message?.role === "user");
 					class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white {getAvatarColor(comment.author)}"
 					aria-hidden="true"
 				>
-					{comment.author.charAt(0).toUpperCase()}
+					{handle(comment.author).charAt(0).toUpperCase()}
 				</span>
 			{/if}
-			<span class="font-bold text-[#0079D3]">{comment.author}</span>
+			<span class="font-bold text-[#0079D3]">{handle(comment.author)}</span>
 			<span class="text-[#878A8C]" aria-hidden="true">•</span>
 			<span class="text-[#878A8C]">{comment.timestamp || translate(language, "exEarlier")}</span>
 			<button

@@ -8,7 +8,7 @@ import MessageSquare from "@lucide/svelte/icons/message-square";
 import MoreHorizontal from "@lucide/svelte/icons/more-horizontal";
 import Share2 from "@lucide/svelte/icons/share-2";
 import MarkdownRenderer from "#lib/components/common/MarkdownRenderer.svelte";
-import { getAvatarColor } from "./format.ts";
+import { getAvatarColor, handle } from "./format.ts";
 import type { RedditText } from "./i18n.ts";
 import type { RedditPost } from "./types.ts";
 
@@ -54,7 +54,7 @@ const subredditColor = $derived(getAvatarColor(post.subreddit));
 				<button type="button" class="font-bold text-[#1C1C1C] hover:underline" onclick={onMockAction}>r/{post.subreddit}</button>
 				<span>•</span>
 				<span>{t.posted}</span>
-				<button type="button" class="hover:underline" onclick={onMockAction}>u/{post.author}</button>
+				<button type="button" class="hover:underline" onclick={onMockAction}>u/{handle(post.author)}</button>
 				{#if post.timestamp}
 					<span>• {post.timestamp}</span>
 				{/if}
