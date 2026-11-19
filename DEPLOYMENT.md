@@ -390,6 +390,7 @@ database.
 |---|---|---|
 | `ORIGIN` | yes | Public origin, no trailing path. Must match the real URL: Better Auth accepts requests only from it and builds mail links from it. |
 | `DATABASE_URL` | yes | **secret.** Host is the container name under quadlet, `database` under compose. |
+| `DATABASE_POOL_MAX` | – | Default `10`: the most connections the server holds open. Keep it below Postgres's `max_connections` (100 by default). |
 | `POSTGRES_DB` / `POSTGRES_USER` | – | Default `libiamo`. Read only at cluster creation. |
 | `POSTGRES_PASSWORD` | yes | **secret.** Must match `DATABASE_URL`. |
 | `RUN_MIGRATIONS` | – | Default `1`: the entrypoint migrates on every start. `0` to migrate out of band. |

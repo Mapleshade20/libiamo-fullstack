@@ -66,6 +66,7 @@ services:
       BODY_SIZE_LIMIT: "${BODY_SIZE_LIMIT:-20M}"
       RUN_MIGRATIONS: "${RUN_MIGRATIONS:-1}"
       DB_DEBUG: "${DB_DEBUG:-0}"
+      DATABASE_POOL_MAX: "${DATABASE_POOL_MAX:-10}"
 
     depends_on:
       database:
