@@ -59,7 +59,7 @@ export async function learnerCaller(scope: LearnerScope): Promise<Caller> {
 }
 
 /**
- * The service's own OpenRouter key, for the calls no learner makes (translation sources and name tables, Scene Lab).
+ * The service's own OpenRouter key, for the calls no learner makes (translation sources).
  * Recorded with no learner and with their text; without the key every call stops with "nokey".
  */
 export function serviceCaller(model: string = RECOMMENDED.model): Caller {

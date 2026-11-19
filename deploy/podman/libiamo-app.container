@@ -21,6 +21,8 @@ Network=libiamo.network
 PublishPort=127.0.0.1:3000:3000
 
 EnvironmentFile=%h/.config/libiamo/app.env
+# Shutdown waits for answers in flight (adapter-node: 30s), then writes every revision in memory; under systemd's 90s.
+StopTimeout=60
 
 # Enables `podman auto-update` to pull a newer digest for this tag and restart.
 # Only meaningful with a moving tag such as :latest; drop it when pinning a

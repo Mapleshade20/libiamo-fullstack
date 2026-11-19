@@ -17,6 +17,9 @@ importers:
       isomorphic-dompurify:
         specifier: ^4.7.0
         version: 4.7.0(@noble/hashes@2.4.0)
+      postgres:
+        specifier: ^4.1.1
+        version: 4.1.1
     devDependencies:
       '@biomejs/biome':
         specifier: 2.6.7
@@ -78,9 +81,6 @@ importers:
       openai:
         specifier: ^7.39.0
         version: 7.55.0(undici@8.12.4)(zod@4.6.7)
-      postgres:
-        specifier: ^4.1.1
-        version: 4.1.1
       rough-notation:
         specifier: ^0.5.1
         version: 0.5.1
