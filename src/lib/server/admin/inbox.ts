@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "#lib/server/db/index.ts";
 import { feedback, scenario, suggestion, user } from "#lib/server/db/schema.ts";
 
@@ -9,11 +9,12 @@ export type InboxSuggestion = {
 	place: string;
 	language: string;
 	situation: string;
+	who: string | null;
 	purpose: string;
 	mine: string | null;
 	status: "pending" | "live" | "unused";
 	reason: string | null;
-	scenario: { id: string; title: string } | null;
+	scenario: { id: string; title: string; published: boolean } | null;
 	at: string;
 };
 export type InboxFeedback = {
@@ -30,7 +31,7 @@ export type InboxFeedback = {
 export async function inbox(): Promise<{ suggestions: InboxSuggestion[]; feedback: InboxFeedback[] }> {
 	const [sug, fb] = await Promise.all([
 		db
-			.select({ s: suggestion, by: user.name, versions: scenario.versions })
+			.select({ s: suggestion, by: user.name, versions: scenario.versions, published: sql<boolean>`${scenario.status} = 'published'` })
 			.from(suggestion)
 			.innerJoin(user, eq(user.id, suggestion.userId))
 			.leftJoin(scenario, eq(scenario.id, suggestion.scenarioId))
@@ -38,22 +39,10 @@ export async function inbox(): Promise<{ suggestions: InboxSuggestion[]; feedbac
 		db.select({ f: feedback, by: user.name }).from(feedback).innerJoin(user, eq(user.id, feedback.userId)).orderBy(desc(feedback.createdAt)),
 	]);
 	return {
-		suggestions: sug.map(({ s, by, versions }) => {
+		suggestions: sug.map(({ s, by, versions, published }) => {
 			const v = versions as Record<string, { title?: string }> | null;
 			const title = v ? (v[s.language]?.title ?? Object.values(v)[0]?.title ?? "") : "";
-			return {
-				id: s.id,
-				by,
-				place: s.place,
-				language: s.language,
-				situation: s.situation,
-				purpose: s.purpose,
-				mine: s.mine,
-				status: s.status as InboxSuggestion["status"],
-				reason: s.reason,
-				scenario: s.scenarioId ? { id: s.scenarioId, title } : null,
-				at: s.createdAt.toISOString(),
-			};
+			return { ...viewOf(s, by), scenario: s.scenarioId ? { id: s.scenarioId, title, published: !!published } : null };
 		}),
 		feedback: fb.map(({ f, by }) => ({
 			id: f.id,
@@ -68,6 +57,30 @@ export async function inbox(): Promise<{ suggestions: InboxSuggestion[]; feedbac
 	};
 }
 
+const viewOf = (s: typeof suggestion.$inferSelect, by: string): Omit<InboxSuggestion, "scenario"> => ({
+	id: s.id,
+	by,
+	place: s.place,
+	language: s.language,
+	situation: s.situation,
+	who: s.who,
+	purpose: s.purpose,
+	mine: s.mine,
+	status: s.status as InboxSuggestion["status"],
+	reason: s.reason,
+	at: s.createdAt.toISOString(),
+});
+
+/** The suggestion a scenario was made from, for its editor. */
+export async function suggestionFor(scenarioId: string) {
+	const [row] = await db
+		.select({ s: suggestion, by: user.name })
+		.from(suggestion)
+		.innerJoin(user, eq(user.id, suggestion.userId))
+		.where(eq(suggestion.scenarioId, scenarioId));
+	return row ? viewOf(row.s, row.by) : null;
+}
+
 /** Sets a waiting suggestion aside with a line the learner reads. */
 export async function setAside(id: string, reason: string) {
 	await db
@@ -76,19 +89,9 @@ export async function setAside(id: string, reason: string) {
 		.where(and(eq(suggestion.id, id), eq(suggestion.status, "pending")));
 }
 
-/** Marks a suggestion as made into a scenario. */
-export async function markLive(id: string, scenarioId: string) {
-	await db.update(suggestion).set({ status: "live", scenarioId, reason: null, resolvedAt: new Date() }).where(eq(suggestion.id, id));
-}
-
 export async function markFeedback(id: string, done: boolean) {
 	await db
 		.update(feedback)
 		.set({ doneAt: done ? new Date() : null })
 		.where(eq(feedback.id, id));
-}
-
-export async function suggestionById(id: string) {
-	const [row] = await db.select().from(suggestion).where(eq(suggestion.id, id));
-	return row ?? null;
 }

@@ -377,7 +377,7 @@ CREATE TABLE "suggestion" (
 	"place" text NOT NULL,
 	"language" text NOT NULL,
 	"situation" text NOT NULL,
-	"capture" jsonb,
+	"who" text,
 	"purpose" text NOT NULL,
 	"mine" text,
 	"status" text DEFAULT 'pending' NOT NULL,

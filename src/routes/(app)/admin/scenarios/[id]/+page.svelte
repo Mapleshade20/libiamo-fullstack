@@ -11,12 +11,13 @@ import RotateCcw from "@lucide/svelte/icons/rotate-ccw";
 import Trash2 from "@lucide/svelte/icons/trash-2";
 import Undo2 from "@lucide/svelte/icons/undo-2";
 import X from "@lucide/svelte/icons/x";
-import { type CaptureCut, mergePeople } from "#lib/admin/capture.ts";
+import { type CaptureCut, mergePeople, parseCapture } from "#lib/admin/capture.ts";
 import { type FlatComment, flattenComments, isThreaded, nestComments } from "#lib/admin/opening-form.ts";
 import { fmtDay, langEn } from "#lib/admin/records.ts";
 import { confirm, deleteOne, remake, saveOne, scenarioOne, withdrawOne } from "#lib/admin/scenarios.remote.ts";
 import CaptureImport from "#lib/components/admin/CaptureImport.svelte";
 import OpeningEditor from "#lib/components/admin/OpeningEditor.svelte";
+import Suggestion from "#lib/components/admin/Suggestion.svelte";
 import Accordion from "#lib/components/common/Accordion.svelte";
 import Checkbox from "#lib/components/common/Checkbox.svelte";
 import FloatingPanel from "#lib/components/common/FloatingPanel.svelte";
@@ -105,7 +106,7 @@ $effect.pre(() => {
 	shown = key;
 	if (isNew) take(blank());
 	else if (loaded) {
-		const { publishedAt: _p, written: _w, sources: _s, works: _k, ...draft } = loaded;
+		const { publishedAt: _p, written: _w, sources: _s, works: _k, from: _f, ...draft } = loaded;
 		take(draft as Draft);
 	}
 });
@@ -121,6 +122,10 @@ const SITES = (["ao3", "reddit", "email", "discord", "imessage", "translation"] 
 	label: p === "translation" ? "Translation" : SITE_OF[p],
 }));
 let importing = $state(false);
+let pasted = $state("");
+const from = $derived(loaded?.from ?? null);
+/** A suggestion's capture of this scenario's place, to cut the opening from. */
+const suggested = $derived(from && parseCapture(from.situation)?.platform === d.place ? from.situation : null);
 let menu = $state(false);
 let jsonOpen = $state(false);
 let json = $state("");
@@ -361,8 +366,30 @@ const sourceAct = (fn: typeof remake, sourceId: string, generation: string) =>
 	{#if problem}
 		<p class="adm-paper pad problem" role="alert">{problem}</p>
 	{/if}
+	{#if from}
+		<section class="adm-section first" aria-label="The learner's suggestion">
+			<div class="adm-paper pad">
+				<Accordion variant="plain" title="Made from a learner's suggestion" open={d.status === "draft"}>
+					<Suggestion s={from} />
+					{#if suggested}
+						<div class="from-acts">
+							<Button
+								variant="secondary"
+								size="sm"
+								onclick={() => {
+									pasted = suggested;
+									importing = true;
+								}}
+								><ClipboardPaste aria-hidden="true" />Cut the opening from its capture</Button
+							>
+						</div>
+					{/if}
+				</Accordion>
+			</div>
+		</section>
+	{/if}
 
-	<section class="adm-section first" aria-labelledby="h-place">
+	<section class="adm-section" class:first={!from} aria-labelledby="h-place">
 		<h2 id="h-place">Place</h2>
 		<div class="adm-paper pad adm-grid place" class:tr={translate}>
 			<div class="adm-field">
@@ -731,6 +758,7 @@ const sourceAct = (fn: typeof remake, sourceId: string, generation: string) =>
 	place={d.place as ExchangePlace}
 	{lang}
 	people={ev?.people ?? []}
+	bind:pasted
 	onimport={importCapture}
 />
 
@@ -808,6 +836,11 @@ const sourceAct = (fn: typeof remake, sourceId: string, generation: string) =>
 }
 .adm-section.first {
 	margin-top: 8px;
+}
+.from-acts {
+	display: flex;
+	justify-content: flex-end;
+	margin-top: 12px;
 }
 .place {
 	grid-template-columns: 12rem 7rem 14rem 8rem;

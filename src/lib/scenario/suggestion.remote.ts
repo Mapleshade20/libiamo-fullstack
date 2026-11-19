@@ -12,6 +12,7 @@ export const suggest = command(
 		place: z.enum(SUGGESTION_PLACES),
 		language: z.string().max(10),
 		situation: z.string().trim().min(1).max(60_000),
+		who: z.string().trim().max(160).optional(),
 		purpose: z.string().trim().min(1).max(160),
 		mine: z.string().trim().max(20_000).optional(),
 	}),

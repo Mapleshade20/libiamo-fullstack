@@ -339,9 +339,10 @@ export const issueScenario = pgTable(
 	(t) => [primaryKey({ columns: [t.issueId, t.scenarioId] })],
 );
 
-/* A situation a learner suggests for a scenario (the shelf's "+"): where it was, what was there (text, or a page
-   capture), what they wanted to do, what they wrote. The admin makes a scenario of it or sets it aside with a reason
-   the learner reads. */
+/* A situation a learner suggests for a scenario (the shelf's "+"): where it was, what happened (pasted text, a page
+   capture, or their own words), whom they were writing to, what they wanted to do, what they wrote. The admin makes a
+   draft scenario of it (`live`, with `scenario_id`; the learner sees it so once that scenario is published) or sets it
+   aside with a reason the learner reads. */
 export const suggestion = pgTable(
 	"suggestion",
 	{
@@ -352,7 +353,7 @@ export const suggestion = pgTable(
 		place: text("place").notNull(),
 		language: text("language").notNull(),
 		situation: text("situation").notNull(),
-		capture: jsonb("capture"),
+		who: text("who"),
 		purpose: text("purpose").notNull(),
 		mine: text("mine"),
 		status: text("status").notNull().default("pending"),

@@ -7,6 +7,7 @@ import PenLine from "@lucide/svelte/icons/pen-line";
 import { onDestroy, onMount, tick } from "svelte";
 import { app } from "#lib/account/app.svelte.ts";
 import { leaveIfSignedOut } from "#lib/client/signed-out.ts";
+import CaptureScripts from "#lib/components/common/CaptureScripts.svelte";
 import LimitNotice from "#lib/components/common/LimitNotice.svelte";
 import { autogrow, reducedMotion, shake } from "#lib/components/common/motion.ts";
 import Notice from "#lib/components/common/Notice.svelte";
@@ -243,18 +244,6 @@ async function onPaste(e: ClipboardEvent) {
 	draft.ctx = true;
 	toast(tx("srcMoved"));
 }
-let scripts: Promise<Record<string, string>> | null = null;
-async function copyScript(k: string) {
-	// A failed fetch is not kept: the next click asks again.
-	scripts ??= fetch("/api/capture-scripts")
-		.then((r) => (r.ok ? r.json() : Promise.reject(new Error(`capture scripts: ${r.status}`))))
-		.catch((e) => {
-			scripts = null;
-			throw e;
-		});
-	await navigator.clipboard.writeText((await scripts)[k]);
-	toast(tx("grabCopied"));
-}
 
 onMount(() => {
 	const onKey = (e: KeyboardEvent) => {
@@ -352,20 +341,7 @@ onMount(() => {
 					{tx("grabLink")}
 				</button>
 			</div>
-			<Reveal open={draft.grab}>
-				<div class="grab" id="grab">
-					<p>{tx("grabHow")}</p>
-					<div class="row">
-						{#each [
-							["ao3", "AO3"],
-							["reddit", "Reddit"],
-							["discord", "Discord"],
-						] as [k, site] (k)}
-							<Button variant="secondary" size="sm" onclick={() => copyScript(k)}>{tx("grabCopy", { site })}</Button>
-						{/each}
-					</div>
-				</div>
-			</Reveal>
+			<Reveal open={draft.grab}><CaptureScripts id="grab" /></Reveal>
 			<textarea
 				id="src"
 				rows="2"
@@ -587,22 +563,6 @@ onMount(() => {
 	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 	font-size: 12.5px;
 	max-height: 9.5em;
-}
-.grab {
-	margin: 0 0 8px;
-	padding: 10px 12px;
-	border-radius: 6px;
-	background: var(--well);
-	font-size: 13px;
-	color: var(--ink-2);
-}
-.grab p {
-	margin: 0 0 8px;
-}
-.grab .row {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 6px;
 }
 .status {
 	margin: 6px 2px 0;

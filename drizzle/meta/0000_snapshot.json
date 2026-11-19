@@ -1,5 +1,5 @@
 {
-  "id": "6fa86ebd-62d8-47ae-8f53-6a94c3ba7c55",
+  "id": "f3f55ccc-addf-4ba3-8e8a-2222aa62eebe",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -3370,9 +3370,9 @@
           "primaryKey": false,
           "notNull": true
         },
-        "capture": {
-          "name": "capture",
-          "type": "jsonb",
+        "who": {
+          "name": "who",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },

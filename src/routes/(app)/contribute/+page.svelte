@@ -1,8 +1,10 @@
 <script lang="ts">
 import { fly } from "svelte/transition";
 import { app } from "#lib/account/app.svelte.ts";
+import CaptureScripts from "#lib/components/common/CaptureScripts.svelte";
 import { autogrow, shake } from "#lib/components/common/motion.ts";
 import Notice from "#lib/components/common/Notice.svelte";
+import Reveal from "#lib/components/common/Reveal.svelte";
 import Select from "#lib/components/common/Select.svelte";
 import EmptyState from "#lib/components/shell/EmptyState.svelte";
 import { toast } from "#lib/components/shell/toast.svelte.ts";
@@ -16,10 +18,12 @@ import { sourceStatus } from "#lib/writing/source-status.ts";
 
 /*
  * Suggesting a situation (the shelf's "+" card): something real the learner had to write, or saw someone write, that
- * could become a scenario. Short on purpose: where it was, what was there (pasted text, or a page captured with the
- * same scripts as the composer's context, so the admin can cut it the way they cut their own captures), what they
- * wanted to do, and what they wrote, if they did. An admin curates it before anyone practises on it, changing names
- * and removing anything personal; the page says so. At most five wait for review at a time; one set aside says why.
+ * could become a scenario. Short on purpose: where it was, what happened (pasted text, their own words, or a page
+ * captured with the composer's scripts, which the admin cuts the way they cut their own captures), whom they were
+ * writing to, what they wanted to do, and what they wrote, if they did. Only what happened and what they wanted are
+ * asked for; the hints say what helps for the place. An admin curates it before anyone practises on it, changing names
+ * and removing anything personal; the page says so. At most five wait for review at a time; one set aside says why,
+ * one that became a scenario leads to it.
  */
 const LIMIT = 5;
 const placeName = (p: SuggestionPlace) => (p === "other" ? tx("ctElsewhere") : SITE_OF[p]);
@@ -30,6 +34,9 @@ let place = $state<SuggestionPlace>("reddit");
 let sending = $state(false);
 let lang = $state(app.lang);
 let situation = $state("");
+let who = $state("");
+let grab = $state(false);
+const capturable = $derived(place === "ao3" || place === "reddit" || place === "discord");
 let purpose = $state("");
 let mine = $state("");
 let sent = $state(false);
@@ -54,6 +61,7 @@ async function submit(e: SubmitEvent) {
 		place,
 		language: lang,
 		situation: situation.trim(),
+		who: who.trim() || undefined,
 		purpose: purpose.trim(),
 		mine: mine.trim() || undefined,
 	}).catch(() => null);
@@ -61,7 +69,7 @@ async function submit(e: SubmitEvent) {
 	// Refused at the limit, the page shows the limit (the list has been refreshed); a failure keeps what was typed.
 	if (!r) return toast(tx("auSomethingWrong"));
 	if (!r.ok) return;
-	situation = purpose = mine = "";
+	situation = who = purpose = mine = "";
 	sent = true;
 	scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
 }
@@ -96,17 +104,26 @@ $effect(() => {
 					<Select aria-label={tx("ctLang")} bind:value={lang} items={app.prefs.learning.map((l) => ({ value: l, label: endonym(l) }))} />
 				</div>
 			</div>
-			<label class="field">
-				<span class="name">{tx("ctSituation")}</span>
-				<span class="help">{tx("ctSituationHelp")}</span>
+			<div class="field">
+				<div class="name-row">
+					<label class="name" for="ct-sit">{tx("ctSituation")}</label>
+					{#if capturable}
+						<button type="button" class="text-link" aria-expanded={grab} aria-controls="ct-grab" onclick={() => (grab = !grab)}>
+							{tx("grabLink")}
+						</button>
+					{/if}
+				</div>
+				<span class="help" id="ct-sit-help">{tx(`ctSit_${place}`)}</span>
+				<Reveal open={grab && capturable}><CaptureScripts id="ct-grab" /></Reveal>
 				<textarea
+					id="ct-sit"
 					bind:this={sitEl}
 					bind:value={situation}
 					rows="5"
 					{lang}
 					spellcheck="false"
 					aria-invalid={errors.situation || undefined}
-					aria-describedby="ct-sit-err"
+					aria-describedby="ct-sit-help ct-sit-err"
 					use:autogrow={situation}
 				></textarea>
 				{#if errors.situation}
@@ -114,6 +131,10 @@ $effect(() => {
 				{:else if status.line}
 					<span class="status" aria-live="polite">{status.line}</span>
 				{/if}
+			</div>
+			<label class="field">
+				<span class="name">{tx("ctWho")}</span>
+				<input bind:value={who} class="input" placeholder={tx("ctWhoPh")} maxlength="160" {lang}>
 			</label>
 			<label class="field">
 				<span class="name">{tx("ctPurpose")}</span>
@@ -149,7 +170,11 @@ $effect(() => {
 				{#each list as s (s.id)}
 					<div class="row">
 						<div class="main">
-							<div class="title">{s.purpose}</div>
+							{#if s.scenarioId}
+								<a class="title" href="/scenario/{s.scenarioId}">{s.purpose}</a>
+							{:else}
+								<div class="title">{s.purpose}</div>
+							{/if}
 							<p class="sub">{placeName(s.place)} · {endonym(s.language)} · {fmt(s.at)}</p>
 							{#if s.status === "unused" && s.reason}
 								<p class="sub why">{s.reason}</p>
@@ -187,6 +212,12 @@ $effect(() => {
 .name {
 	font-size: 14px;
 	font-weight: 500;
+}
+.name-row {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 12px;
 }
 .help,
 .status,

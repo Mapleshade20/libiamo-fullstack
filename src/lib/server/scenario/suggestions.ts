@@ -1,11 +1,13 @@
 import { and, count, desc, eq } from "drizzle-orm";
 import type { SuggestionPlace } from "#lib/constants.ts";
+import { live, type Version } from "#lib/scenario/versions.ts";
 import { db } from "#lib/server/db/index.ts";
-import { suggestion, user } from "#lib/server/db/schema.ts";
+import { scenario, suggestion, user } from "#lib/server/db/schema.ts";
 
 /*
- * Situations learners suggest for scenarios (the shelf's "+"). At most five wait for review at a time. The admin makes a
- * draft scenario of one, or sets it aside with a reason the learner reads on the same page.
+ * Situations learners suggest for scenarios (the shelf's "+"). At most five wait for review at a time; one the admin has
+ * made a draft of no longer counts, but the learner sees it waiting until that scenario is offered in its language. The
+ * admin may also set one aside with a reason the learner reads on the same page.
  */
 export const PENDING_LIMIT = 5;
 
@@ -16,6 +18,8 @@ export type MySuggestion = {
 	purpose: string;
 	status: "pending" | "live" | "unused";
 	reason: string | null;
+	/** The scenario it became, once learners are offered it. */
+	scenarioId: string | null;
 	at: number;
 };
 
@@ -29,22 +33,25 @@ export async function suggestionsOf(userId: string): Promise<MySuggestion[]> {
 			status: suggestion.status,
 			reason: suggestion.reason,
 			createdAt: suggestion.createdAt,
+			scenarioId: suggestion.scenarioId,
+			scenarioStatus: scenario.status,
+			versions: scenario.versions,
 		})
 		.from(suggestion)
+		.leftJoin(scenario, eq(scenario.id, suggestion.scenarioId))
 		.where(eq(suggestion.userId, userId))
 		.orderBy(desc(suggestion.createdAt));
-	return rows.map((r) => ({
-		...r,
-		place: r.place as SuggestionPlace,
-		status: r.status as MySuggestion["status"],
-		at: r.createdAt.getTime(),
-	}));
+	return rows.map(({ scenarioStatus, versions, createdAt, ...r }) => {
+		const offered = scenarioStatus === "published" && live((versions as Record<string, Version> | null)?.[r.language]);
+		const status = r.status === "live" && !offered ? "pending" : (r.status as MySuggestion["status"]);
+		return { ...r, place: r.place as SuggestionPlace, status, scenarioId: status === "live" ? r.scenarioId : null, at: createdAt.getTime() };
+	});
 }
 
 /** Files a suggestion; false when five are already waiting. */
 export async function suggest(
 	userId: string,
-	input: { place: SuggestionPlace; language: string; situation: string; purpose: string; mine?: string },
+	input: { place: SuggestionPlace; language: string; situation: string; who?: string; purpose: string; mine?: string },
 ): Promise<boolean> {
 	return db.transaction(async (tx) => {
 		// The learner's row is the lock: two suggestions sent at once cannot both slip under the limit.
@@ -54,7 +61,7 @@ export async function suggest(
 			.from(suggestion)
 			.where(and(eq(suggestion.userId, userId), eq(suggestion.status, "pending")));
 		if (n >= PENDING_LIMIT) return false;
-		await tx.insert(suggestion).values({ userId, ...input, mine: input.mine || null });
+		await tx.insert(suggestion).values({ userId, ...input, who: input.who || null, mine: input.mine || null });
 		return true;
 	});
 }

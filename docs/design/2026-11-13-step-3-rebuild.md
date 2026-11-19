@@ -117,7 +117,7 @@ Weeks in a row and "met your aim" are derived on read.
 | `name_rendering` | `work_id`, `locale`, `term`, `kind` (`name`/`term`), `rendering`, `status` (`pending`/`confirmed`), `origin`, `url`, `why`, `candidates jsonb`; pk `(work_id, locale, term)` |
 | `issue` | `id text`, `date`, `title` Local, `line` Local, `tone`, `deep`, timestamps |
 | `issue_scenario` | `issue_id`, `scenario_id`, `position`; pk `(issue_id, scenario_id)` |
-| `suggestion` | `id`, `user_id`, `place`, `language`, `situation`, `capture jsonb`, `purpose`, `mine`, `status` (`pending`/`live`/`unused`), `reason`, `scenario_id`, `created_at`, `resolved_at` |
+| `suggestion` | `id`, `user_id`, `place`, `language`, `situation`, `who`, `purpose`, `mine`, `status` (`pending`/`live`/`unused`), `reason`, `scenario_id`, `created_at`, `resolved_at` |
 | `feedback` | `id`, `user_id`, `kind` (`idea`/`bug`/`other`), `text`, `page`, `browser`, `created_at`, `done_at` |
 | `announcement` | `id`, `title` Local, `body` Local, `published_at`, `expires_at`, `created_by`, `created_at` |
 | `announcement_read` | `user_id`, `announcement_id`, `read_at` |
