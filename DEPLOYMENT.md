@@ -182,9 +182,21 @@ Two things follow for the proxy in front:
   (a 524; the free plan cannot raise it). The spaces keep long answers inside
   it. To check after a deployment, send a revision step that takes longer than
   20 seconds through the public host with `curl -N` and watch the spaces arrive.
-  Leave off the features that inject a script into pages (Rocket Loader, Web
-  Analytics' automatic snippet, email obfuscation): the app's
-  Content-Security-Policy refuses them.
+  What Cloudflare may add to pages:
+  - **Web Analytics** (automatic setup): on. Cloudflare gives its beacon the
+    page's nonce, the policy lists its script, and it reports to the site's own
+    `/cdn-cgi/rum`.
+  - **Speed Brain**: on or off, it does no harm (it only prefetches a page on
+    pointer-down; the app navigates by itself).
+  - **Rocket Loader**: off; it rewrites the app's scripts.
+  - **Email Address Obfuscation**: off everywhere but the public pages, with a
+    configuration rule (Rules → Configuration Rules: when `http.host eq
+    "libiamo.net" and not http.request.uri.path in {"/about" "/terms" "/privacy"
+    "/changelog"}`, set Email Obfuscation off). It rewrites an address the
+    server rendered from data (settings, the admin's pages), the page then
+    fails to hydrate and is drawn again in the browser, and its decoder throws.
+    The public pages' addresses are fixed text, which it handles; bots see
+    only those pages.
 - **The proxy must pass the spaces on as they come.** Caddy does by default
   (checked with `encode gzip zstd`). nginx buffers responses, but honours the
   app's `X-Accel-Buffering: no` on these answers.
@@ -547,8 +559,10 @@ on a long model call, or held back the spaces a long answer sends while it waits
 browser buffers responses.
 
 **A page is missing a script, a frame or a picture, and the console says "Content
-Security Policy".** The app allows only its own origin, Turnstile and Gravatar
-(`vite.config.ts`, `csp`). A proxy or CDN feature that injects its own script
-(Cloudflare's Rocket Loader, Web Analytics' automatic snippet, email
-obfuscation) is refused: turn it off, or add its source there and to the
-privacy policy.
+Security Policy".** The app allows only its own origin, Turnstile, Gravatar and
+Cloudflare's Web Analytics beacon (`vite.config.ts`, `csp`). A proxy or CDN
+feature that injects another script is refused: turn it off, or add its source
+there and to the privacy policy.
+
+**The console shows `hydration_mismatch` on a page with an email address in it.**
+Cloudflare's email obfuscation rewrote the page (§3): turn it off for that path.

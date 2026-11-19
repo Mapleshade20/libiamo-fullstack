@@ -26,8 +26,9 @@ export default defineConfig(({ command }) => ({
 			},
 			adapter: adapter(),
 			/*
-			 * What a page may load: the app's own origin, Turnstile (its script and frame, on the signed-out pages) and the
-			 * learner's Gravatar picture. Kit adds a nonce to every script it writes and to app.html's
+			 * What a page may load: the app's own origin, Turnstile (its script and frame, on the signed-out pages), the
+			 * learner's Gravatar picture and the beacon Cloudflare's Web Analytics adds to each page (it reports to the site's
+			 * own /cdn-cgi/rum). Kit adds a nonce to every script it writes and to app.html's
 			 * (`%sveltekit.nonce%`). Styles stay 'unsafe-inline': Svelte writes style attributes and its transitions insert
 			 * style rules. A new third party goes here, and into the privacy policy, or the browser refuses it.
 			 */
@@ -35,7 +36,7 @@ export default defineConfig(({ command }) => ({
 				mode: "auto",
 				directives: {
 					"default-src": ["self"],
-					"script-src": ["self", "https://challenges.cloudflare.com"],
+					"script-src": ["self", "https://challenges.cloudflare.com", "https://static.cloudflareinsights.com"],
 					"style-src": ["self", "unsafe-inline"],
 					"img-src": ["self", "data:", "https://gravatar.com", "https://*.gravatar.com"],
 					"font-src": ["self"],

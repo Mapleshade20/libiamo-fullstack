@@ -81,7 +81,10 @@
 			Gravatar: your browser asks Gravatar for the picture of a SHA-256 hash of your email address, to show it if you have one. Libiamo's server does
 			not contact Gravatar.
 		</li>
-		<li>Cloudflare Turnstile, which checks that a person is signing up, signing in or resetting a password.</li>
+		<li>
+			Cloudflare, which Libiamo is served through: Cloudflare Turnstile checks that a person is signing up, signing in or resetting a password, and
+			Cloudflare Web Analytics counts visits to each page, without cookies.
+		</li>
 		<li>The mail, hosting and database providers that run Libiamo.</li>
 		<li>Authorities or others when the law requires it, or to protect people, the service or legal rights.</li>
 	</ul>
