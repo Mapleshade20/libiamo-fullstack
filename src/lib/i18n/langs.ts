@@ -1,4 +1,4 @@
-import { APP_LANGS, type AppLang, RTL_LANGS } from "#lib/constants.ts";
+import { APP_LANGS, type AppLang, RTL_LANGS, UNSPACED_LANGS } from "#lib/constants.ts";
 
 /** The interface language a browser asks for (its languages, most wanted first). Chinese is Simplified only: zh-TW,
  *  zh-HK and zh-Hant do not pick it. */
@@ -18,3 +18,5 @@ export function appLangOf(tags: readonly string[]): AppLang {
 /** `<html lang>` for a language code. */
 export const htmlLang = (l: string) => (l === "zh-CN" ? "zh-Hans" : l);
 export const dirOf = (l: string) => (RTL_LANGS.includes(l) ? "rtl" : "ltr");
+/** Whether a language puts spaces between its words (Chinese, Japanese and Thai do not). */
+export const spacesWords = (l: string) => !UNSPACED_LANGS.includes(l);

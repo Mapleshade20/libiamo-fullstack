@@ -1,0 +1,24 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "medium",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "The writer's note about it, in their words: A post on Xiaohongshu after my weekend in Hangzhou.\nA learner of Simplified Chinese (as used in mainland China) is rewriting part of a post for Xiaohongshu (travel post):\n<<<\n大家好！我是美国人，在上海学中文已经一年了。上个周末我和朋友去杭州玩，在西湖边一走就是三个小时，风景美得让人舍不得停下来。\n\n但是我有个问题想请教大家：我在一个饭馆点了西湖醋鱼，服务员说这个菜很有名，可是我觉得它太酸了，我不是很喜欢吃。是不是我点得不对？还有什么杭州菜你们推荐我试一试吗？谢谢！\n>>>\nThe part: \"但是我有个问题想请教大家：我在一个饭馆点了西湖醋鱼，服务员说这个菜很有名，可是我觉得它太酸了，我不是很喜欢吃。\"\nWhat is wrong with it: 太…了 is a flat verdict, and with 西湖醋鱼, a famous Hangzhou dish, a local reader may hear the dish itself judged as wrong, not just unsuited to the writer. Stated this way, the criticism is much harsher than the writer seems to intend.\nWhat they mean (confirmed by them): The dish was wrong or badly cooked.\nA version that works (never show it or any stretch of it): \"但是我有个问题想请教大家：我在一个饭馆点了西湖醋鱼，服务员说这个菜很有名，可是我觉得我吃到的这盘酸得不对劲，应该是没做好吧，我不是很喜欢吃。\"\nWords they already have as hints: 吃到, 不对劲, 对味, 火候, 做法, 没做好\nTheir last try: \"太酸了\"\nWhat the tutor told them about it: Your 太酸了。 is a flat verdict, so readers will take it as you calling 西湖醋鱼 itself too sour, not that the plate you were served came out wrong. The waiter's praise also has no contrast set against it, so the \"but\" you meant is gone.\nThey are stuck. Write two hints that help them build it themselves, never giving them the wording:\n- plan: in English, one or two short sentences, as their tutor: how a fluent writer builds this part: what comes first, what follows, how the parts connect (contrast, cause, addition) and where the emphasis goes. Start from their try: what to keep and what to build differently. Name no Simplified Chinese (as used in mainland China) word except the hint words above (none from the working version), no letter counts, no fill-in blanks. It is about the words of this part, never the content they talk about (\"first the interactions between them, then…\" plans a story, not the sentence). When the part is a word or two (left in English, or a missing word), say what kind of word goes there and how it sits in the sentence.\n- example: one short Simplified Chinese (as used in mainland China) sentence a fluent writer would actually write (grammatical and natural on its own), about an everyday topic unrelated to the post (different people, things and events), built the same way as the working version: the same pattern and the same connecting words, none of its other content words. Put [square brackets] around the few words it shares with the working version as they are (the frame they can borrow, at most four), never around the words that change.\nThe writer may write to you in any language; whatever they write in, everything you write for them is in English.\nReply with JSON only: {\"plan\":\"\",\"example\":\"\"}"
+		}
+	],
+	"result": {
+		"text": "{\"plan\":\"Keep your contrast with the waiter's praise, but put the \\\"but\\\" before your opinion so the two stand side by side. Then describe the plate you were served as going wrong, and give that as the reason you didn't enjoy it, so the fault lies with that plate and not with the dish itself. Finish with your own preference, stated lightly.\",\"example\":\"同学说这家书店的咖啡很好喝，[可是我觉得]我买的这杯[不对劲]，[应该是][没做好]吧。\"}",
+		"usage": {
+			"input": 1155,
+			"output": 2206,
+			"reasoning": 2037,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 11109,
+		"costUsd": 0.0012185
+	},
+	"finish": "stop"
+}

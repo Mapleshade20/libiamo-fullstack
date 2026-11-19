@@ -1,0 +1,24 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "A learner of Simplified Chinese (as used in mainland China) is rewriting part of a post. The sentence they are working towards, for you only (never quote it or give it away): \"我有个问题想请教大家\". Gloss each hint word in the sense it has in that sentence, not its most common sense (\"alone\" in \"the clouds alone explain it\" means \"only\", not \"by oneself\").\n\nTheir hint words, exactly 4: \"请教\", \"问问\", \"疑问\", \"大家\". \"a / b\" is a choice between two words.\n\nFor each of these hint words and no others, in this order: piece: the hint word as given. gloss: in English, what it means here and how it is used, in one or two short sentences (the kind of word, what it goes with, register if it matters; for a choice, how the two differ). example: one short, natural Simplified Chinese (as used in mainland China) sentence that uses it in the same sense, about everyday life and on a topic unrelated to the post (different people, events and subject), so it shows the word without giving away the sentence they are building.\nReply with JSON only: {\"notes\":[{\"piece\":\"\",\"gloss\":\"\",\"example\":\"\"}]}"
+		}
+	],
+	"result": {
+		"text": "{\"notes\":[{\"piece\":\"请教\",\"gloss\":\"A verb meaning to ask someone more knowledgeable for advice or explanation. It takes a person as its object and is polite, somewhat humble, and used for seeking guidance rather than casual questions.\",\"example\":\"我想请教一下王老师，这道题应该怎么做。\"},{\"piece\":\"问问\",\"gloss\":\"A casual, informal verb meaning to ask someone about something to find out information. It is the reduplicated form of 问 and sounds lighter and less formal than 请教, with no sense of deference.\",\"example\":\"你去问问妈妈，晚饭想吃什么。\"},{\"piece\":\"疑问\",\"gloss\":\"A noun meaning a question or doubt that one is unsure about and wants answered. It is used with verbs like 有 (have), 提出 (raise), or 解答 (answer), and is narrower than the general word 问题.\",\"example\":\"看完说明书，他心里还有些疑问，就打电话去客服问清楚。\"},{\"piece\":\"大家\",\"gloss\":\"A pronoun meaning everyone or all of the people in a group, including the speaker or addressed group as a whole. It is neutral in register and is often used to address a group of people collectively.\",\"example\":\"今天下雨，大家都带着伞去上班了。\"}]}",
+		"usage": {
+			"input": 368,
+			"output": 1140,
+			"reasoning": 716,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 6641,
+		"costUsd": 0.0006068
+	},
+	"finish": "stop"
+}

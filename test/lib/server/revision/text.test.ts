@@ -266,3 +266,17 @@ test("changes one word apart that add or drop a word are one change; two swapped
 	assert.deepEqual(ch("When it can be fixed?", "When can it be fixed?"), ["it can → can it"]);
 	assert.deepEqual(ch("She have the apple.", "She has the apples."), ["have → has", "apple. → apples."]);
 });
+
+test("a change in a language written without spaces is the words changed, not the whole paragraph", () => {
+	const ch = (o: string, r: string, lang: string) => align(o, r, lang).hunks.map((h) => `${h.before} → ${h.after}`);
+	const zh = "上个周末我和朋友去杭州玩，我们在西湖旁边走路了三个小时，风景非常好看。\n\n还有什么杭州菜你们推荐我试一试吗？谢谢！";
+	const fixed = "上个周末我和朋友去杭州玩，我们在西湖边走了三个小时，风景非常好看。\n\n还有什么杭州菜你们推荐我试试吗？谢谢！";
+	const changes = ch(zh, fixed, "zh-CN");
+	assert.equal(changes.length, 2);
+	for (const c of changes) assert.ok(c.length < 30, c);
+	assert.ok(changes[0].includes("走路") && !changes[0].includes("杭州玩"), changes[0]);
+	assert.ok(changes[1].includes("试一试") && !changes[1].includes("杭州菜"), changes[1]);
+	const ja = ch("昨日は友達と公園に行きましたです。とても楽しかった。", "昨日は友達と公園に行きました。とても楽しかった。", "ja");
+	assert.deepEqual(ja.length, 1);
+	assert.ok(!ja[0].includes("昨日") && !ja[0].includes("楽しかった"), ja[0]);
+});
