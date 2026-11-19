@@ -1,11 +1,10 @@
 import { me } from "#lib/account/account.remote.ts";
 import { pageSetup } from "#lib/server/account/page.ts";
 import { picturesOf } from "#lib/server/backdrop/today.ts";
-import { dictsFor } from "#lib/server/i18n.ts";
 import { shelves } from "#lib/writing/writing.remote.ts";
 import { ORIGIN } from "$app/env/private";
 
-/* Who is signed in, their pieces, and the strings the page speaks, once per page load (lib/account/account.svelte.ts,
+/* Who is signed in, their pieces, and the languages the page speaks, once per page load (lib/account/account.svelte.ts,
    lib/writing/writing.svelte.ts keep them up to date after). */
 export async function load(event) {
 	const setup = pageSetup(event);
@@ -26,7 +25,8 @@ export async function load(event) {
 		clock: { now, timeZone },
 		/** The day's print and painting behind the home page and the scene card (the learner picks which in settings). */
 		pictures: who?.onboarded ? picturesOf(now, timeZone) : null,
-		// The signed-out pages and the welcome speak the first language; the app, the one worked in and the tutor's.
-		dicts: who?.onboarded ? dictsFor(setup.lang, tutor) : dictsFor(setup.firstLang),
+		// The languages the page speaks (+layout.ts loads their strings): the signed-out pages and the welcome the first
+		// language; the app, the one worked in and the tutor's. English always, as the fallback.
+		langs: [...new Set(["en", ...(who?.onboarded ? [setup.lang, tutor] : [setup.firstLang])])],
 	};
 }

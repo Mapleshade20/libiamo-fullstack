@@ -34,9 +34,9 @@ test("nothing off the tape reaches the network; what is not a model call goes th
 	playTape(tape, { pace: 0 });
 	const r = await post("/api/collect/explain", "{}");
 	assert.equal(r.status, 503);
-	assert.equal(await (await g.window.fetch("/api/i18n/en")).text(), "real");
+	assert.equal(await (await g.window.fetch("/health")).text(), "real");
 	stopTape();
-	assert.deepEqual(reached, ["/api/i18n/en"]);
+	assert.deepEqual(reached, ["/health"]);
 });
 
 test("accidental remote queries and writes fail closed; replaying a chapter resets consumed responses", async () => {

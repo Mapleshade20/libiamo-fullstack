@@ -30,11 +30,10 @@ const RULES: [string, Access, Access, Access, Access][] = [
 	["/admin", to("/sign-in"), to("/welcome"), { status: 404 }, go],
 	["/admin/users/u1", to("/sign-in"), to("/welcome"), { status: 404 }, go],
 	["/administrator", to("/sign-in"), to("/welcome"), go, go],
-	// Endpoints answer 401, never a redirect; Better Auth, the probe and the strings answer anyone.
+	// Endpoints answer 401, never a redirect; Better Auth and the probe answer anyone.
 	["/api/s", { status: 401 }, go, go, go],
 	["/api/collect/explain", { status: 401 }, go, go, go],
 	["/api/auth/sign-in/email", go, go, go, go],
-	["/api/i18n/en", go, go, go, go],
 	["/health", go, go, go, go],
 	["/robots.txt", go, go, go, go],
 	// Remote functions check the learner themselves.
