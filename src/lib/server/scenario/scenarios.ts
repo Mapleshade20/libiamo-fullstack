@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import type { ExchangePlace, Place, ScenarioKind } from "#lib/constants.ts";
 import { situationOf } from "#lib/exchange/opening.ts";
 import type { IssueCard, Library, ScenarioCard, ScenarioProgress, ScenarioView, Situation } from "#lib/scenario/types.ts";
@@ -16,18 +16,31 @@ import { isCurrent, rank, shelfOf } from "./rank.ts";
  */
 export type Reader = { id: string; nativeLanguage?: string | null };
 
-type Row = typeof scenario.$inferSelect;
-type Source = Pick<typeof scenarioSource.$inferSelect, "id" | "title" | "text" | "glossary" | "native" | "inputHash">;
+type Source = Pick<typeof scenarioSource.$inferSelect, "id" | "title" | "native" | "inputHash">;
 const READY = ["checked", "confirmed"];
 
-async function published(ids?: string[]) {
+/**
+ * Published scenarios with their version in one language only: a list reads as much as its cards need, not every
+ * language's version of every scenario.
+ */
+async function published(language: string, ids?: string[]) {
 	return db
-		.select()
+		.select({
+			id: scenario.id,
+			kind: scenario.kind,
+			place: scenario.place,
+			minutes: scenario.minutes,
+			workId: scenario.workId,
+			publishedAt: scenario.publishedAt,
+			createdAt: scenario.createdAt,
+			version: sql<ExchangeVersion | TranslationVersion | null>`${scenario.versions} -> ${language}::text`,
+		})
 		.from(scenario)
 		.where(and(eq(scenario.status, "published"), ids ? inArray(scenario.id, ids) : undefined));
 }
+type Row = Awaited<ReturnType<typeof published>>[number];
 
-/** The sources learners of this language with this native language can translate from, by scenario. */
+/** The sources learners of this language with this native language can translate from, by scenario (without their text). */
 async function sourcesFor(language: string, native: string | null | undefined, ids: string[]) {
 	if (!native || !ids.length) return new Map<string, Source>();
 	const rows = await db
@@ -35,30 +48,46 @@ async function sourcesFor(language: string, native: string | null | undefined, i
 			scenarioId: scenarioSource.scenarioId,
 			id: scenarioSource.id,
 			title: scenarioSource.title,
-			text: scenarioSource.text,
-			glossary: scenarioSource.glossary,
 			native: scenarioSource.native,
-			state: scenarioSource.state,
 			inputHash: scenarioSource.inputHash,
 		})
 		.from(scenarioSource)
-		.where(and(eq(scenarioSource.language, language), eq(scenarioSource.native, native), inArray(scenarioSource.scenarioId, ids)));
-	return new Map(rows.filter((r) => READY.includes(r.state)).map((r) => [r.scenarioId, r]));
+		.where(
+			and(
+				eq(scenarioSource.language, language),
+				eq(scenarioSource.native, native),
+				inArray(scenarioSource.scenarioId, ids),
+				inArray(scenarioSource.state, READY),
+			),
+		);
+	return new Map(rows.map((r) => [r.scenarioId, r]));
 }
 
-/** Where the learner is with each scenario: a piece being written or revised, or one finished. */
-async function progressOf(userId: string) {
+/**
+ * Where the learner is with each scenario (or the given ones): the newest piece being written or revised, and the newest
+ * finished. Two rows a scenario at most, however often it was written.
+ */
+async function progressOf(userId: string, ids?: string[]) {
+	// Inlined, not bound: DISTINCT ON and ORDER BY must be the same expression, and two parameters are not.
+	const open = sql<boolean>`(${piece.state} <> 'finished')`;
 	const rows = await db
-		.select({ scenarioId: piece.scenarioId, id: piece.id, state: piece.state })
+		.selectDistinctOn([piece.scenarioId, open], { scenarioId: piece.scenarioId, id: piece.id, open })
 		.from(piece)
-		.where(and(eq(piece.userId, userId), isNotNull(piece.scenarioId)))
-		.orderBy(desc(piece.createdAt));
+		.where(
+			and(
+				eq(piece.userId, userId),
+				isNotNull(piece.scenarioId),
+				ids ? inArray(piece.scenarioId, ids) : undefined,
+				inArray(piece.state, ["writing", "revising", "finished"]),
+			),
+		)
+		.orderBy(piece.scenarioId, open, desc(piece.createdAt));
 	const out = new Map<string, { state: ScenarioProgress; open?: string; written?: string }>();
 	for (const r of rows) {
 		const p = out.get(r.scenarioId as string) ?? { state: "new" as ScenarioProgress };
-		if ((r.state === "writing" || r.state === "revising") && !p.open) p.open = r.id;
-		if (r.state === "finished" && !p.written) p.written = r.id;
-		p.state = p.open ? "open" : p.written ? "written" : "new";
+		if (r.open) p.open = r.id;
+		else p.written = r.id;
+		p.state = p.open ? "open" : "written";
 		out.set(r.scenarioId as string, p);
 	}
 	return out;
@@ -66,14 +95,14 @@ async function progressOf(userId: string) {
 
 type Offered = { row: Row; version: ExchangeVersion | TranslationVersion; source?: Source };
 async function offered(u: Reader, language: string, ids?: string[]): Promise<Offered[]> {
-	const rows = await published(ids);
+	const rows = await published(language, ids);
 	const sources = await sourcesFor(
 		language,
 		u.nativeLanguage,
 		rows.filter((r) => r.kind === "translation").map((r) => r.id),
 	);
 	return rows.flatMap((row) => {
-		const version = (row.versions as Record<string, ExchangeVersion | TranslationVersion>)[language];
+		const version = row.version ?? undefined;
 		if (!live(version)) return [];
 		if (row.kind !== "translation") return [{ row, version }];
 		const source = sources.get(row.id);
@@ -138,17 +167,22 @@ export async function shelfScenariosOf(u: Reader, language: string, now = new Da
 export async function scenarioViewOf(u: Reader, id: string, language: string): Promise<ScenarioView | null> {
 	const [o] = await offered(u, language, [id]);
 	if (!o) return null;
-	const p = (await progressOf(u.id)).get(id);
+	const p = (await progressOf(u.id, [id])).get(id);
 	const card = cardOf(o, p?.state ?? "new");
 	const extra = { ...(p?.open ? { openPiece: p.open } : {}), ...(p?.written ? { writtenPiece: p.written } : {}) };
 	if (o.row.kind === "translation" && o.source) {
 		const v = o.version as TranslationVersion;
+		const [full] = await db
+			.select({ text: scenarioSource.text, glossary: scenarioSource.glossary })
+			.from(scenarioSource)
+			.where(eq(scenarioSource.id, o.source.id));
+		if (!full) return null;
 		const situation: Situation = {
 			kind: "translate",
 			brief: o.source.title,
-			source: o.source.text,
+			source: full.text,
 			sourceLang: o.source.native,
-			glossary: o.source.glossary as Extract<Situation, { kind: "translate" }>["glossary"],
+			glossary: full.glossary as Extract<Situation, { kind: "translate" }>["glossary"],
 			where: v.where,
 			readers: v.readers,
 		};

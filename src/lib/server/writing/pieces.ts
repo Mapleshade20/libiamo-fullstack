@@ -1,7 +1,8 @@
 import { and, asc, desc, eq, inArray, isNull, lt, lte, ne, type SQL, sql } from "drizzle-orm";
+import { unionAll } from "drizzle-orm/pg-core";
 import { db } from "#lib/server/db/index.ts";
 import { exchange, exchangeMessage, piece } from "#lib/server/db/schema.ts";
-import { ASK_AGAIN_MS, pickFollowUp, WRITE_AGAIN_MS } from "#lib/writing/follow-up.ts";
+import { ASK_AGAIN_MS, type Due, pickFollowUp, WRITE_AGAIN_MS } from "#lib/writing/follow-up.ts";
 import type { Learned, Leftover, PieceItem, PiecesPage, PieceView, Posted, Shelf } from "#lib/writing/types.ts";
 
 /* The learner's pieces as the pages read them: the lists, and one piece's page. */
@@ -52,44 +53,70 @@ const RECENT = 6;
 
 /**
  * The shelf of every language the learner has written in (types.ts `Shelf`): what every page shows, the same size
- * however much they have written. Each part is one query bounded by its limit; the follow-up's candidates are the newest
- * due piece of each kind per language (lib/writing/follow-up.ts).
+ * however much they have written. One query, each part bounded by its limit and tagged with its name: the unfinished,
+ * the most recent per language (each carrying its language's count of finished pieces), and the follow-up's candidates,
+ * the newest due piece of each kind per language (lib/writing/follow-up.ts).
  */
 export async function shelvesOf(userId: string, now = new Date()): Promise<Record<string, Shelf>> {
 	const mine = eq(piece.userId, userId);
 	const finished = and(mine, eq(piece.state, "finished"));
+	const part = (name: string) => sql<string>`${name}::text`.as("part");
+	const none = sql<number | null>`null::int`.as("finished");
 	const ranked = db
-		.select({ ...listed, n: sql<number>`row_number() over (partition by ${piece.language} order by ${piece.id} desc)`.as("n") })
+		.select({
+			...listed,
+			n: sql<number>`row_number() over (partition by ${piece.language} order by ${piece.id} desc)`.as("n"),
+			finished: sql<number>`(count(*) filter (where ${piece.state} = 'finished') over (partition by ${piece.language}))::int`.as("finished"),
+		})
 		.from(piece)
 		.where(and(mine, ne(piece.state, "abandoned")))
 		.as("ranked");
-	const newestDue = (where: SQL | undefined) =>
-		db.selectDistinctOn([piece.language], listed).from(piece).where(where).orderBy(piece.language, desc(piece.id));
-	const [open, recent, unasked, notYet, again, counts] = await Promise.all([
+	const recent = Object.fromEntries(Object.keys(listed).map((k) => [k, ranked[k as keyof typeof listed]])) as {
+		[K in keyof typeof listed]: (typeof ranked)[K];
+	};
+	const newestDue = (name: keyof Due, where: SQL | undefined) =>
 		db
-			.select(listed)
+			.selectDistinctOn([piece.language], { part: part(name), ...listed, finished: none })
+			.from(piece)
+			.where(where)
+			.orderBy(piece.language, desc(piece.id));
+	const rows = await unionAll(
+		db
+			.select({ part: part("open"), ...listed, finished: none })
 			.from(piece)
 			.where(and(mine, inArray(piece.state, ["writing", "revising"])))
 			.orderBy(desc(piece.id))
 			.limit(OPEN_LIMIT),
-		db.select().from(ranked).where(lte(ranked.n, RECENT)).orderBy(desc(ranked.id)),
-		newestDue(and(finished, isNull(piece.scenarioId), isNull(piece.posted))),
-		newestDue(and(finished, isNull(piece.scenarioId), eq(piece.posted, "not_yet"), lte(piece.askedAt, new Date(now.getTime() - ASK_AGAIN_MS)))),
-		newestDue(and(finished, isNull(piece.againAt), lte(piece.finishedAt, new Date(now.getTime() - WRITE_AGAIN_MS)))),
-		db.select({ language: piece.language, n: sql<number>`count(*)::int` }).from(piece).where(finished).groupBy(piece.language),
-	]);
+		db
+			.select({ part: part("recent"), ...recent, finished: ranked.finished })
+			.from(ranked)
+			.where(lte(ranked.n, RECENT)),
+		newestDue("unasked", and(finished, isNull(piece.scenarioId), isNull(piece.posted))),
+		newestDue(
+			"notYet",
+			and(finished, isNull(piece.scenarioId), eq(piece.posted, "not_yet"), lte(piece.askedAt, new Date(now.getTime() - ASK_AGAIN_MS))),
+		),
+		newestDue("again", and(finished, isNull(piece.againAt), lte(piece.finishedAt, new Date(now.getTime() - WRITE_AGAIN_MS)))),
+	);
 	const shelves: Record<string, Shelf> = {};
 	const of = (language: string) => {
 		shelves[language] ??= { open: [], recent: [], finished: 0 };
 		return shelves[language];
 	};
-	for (const r of open) of(r.language).open.push(itemOf(r));
-	for (const { n: _, ...r } of recent) of(r.language).recent.push(itemOf(r));
-	for (const c of counts) of(c.language).finished = c.n;
-	const byLanguage = (rows: Listed[]) => new Map(rows.map((r) => [r.language, itemOf(r)]));
-	const [u, y, a] = [byLanguage(unasked), byLanguage(notYet), byLanguage(again)];
+	const due: Record<string, Due> = {};
+	// Newest first within each part, as the shelf shows them.
+	for (const { part: p, finished: count, ...r } of rows.sort((a, b) => (a.id < b.id ? 1 : -1))) {
+		if (p === "open") of(r.language).open.push(itemOf(r));
+		else if (p === "recent") {
+			of(r.language).recent.push(itemOf(r));
+			of(r.language).finished = count ?? 0;
+		} else {
+			due[r.language] ??= {};
+			due[r.language][p as keyof Due] = itemOf(r);
+		}
+	}
 	for (const language of Object.keys(shelves)) {
-		const followUp = pickFollowUp({ unasked: u.get(language), notYet: y.get(language), again: a.get(language) });
+		const followUp = pickFollowUp(due[language] ?? {});
 		if (followUp) shelves[language].followUp = followUp;
 	}
 	return shelves;

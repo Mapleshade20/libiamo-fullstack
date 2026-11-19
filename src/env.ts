@@ -13,6 +13,14 @@ const list = (value: string | undefined) =>
 export const variables = defineEnvVars({
 	DATABASE_URL: { description: "Postgres connection string, e.g. postgres://libiamo:secret@127.0.0.1:5432/libiamo" },
 	DB_DEBUG: { description: "Log every query (1/true/yes/on).", schema: flag },
+	DATABASE_POOL_MAX: {
+		description: "Connections the server keeps to Postgres at most (default 10); keep it under the server's max_connections.",
+		schema: (value) => {
+			const n = Number(value?.trim() || 10);
+			if (!Number.isInteger(n) || n < 1) throw new Error("DATABASE_POOL_MAX must be a whole number of connections");
+			return n;
+		},
+	},
 
 	ORIGIN: { description: "The public origin, e.g. https://libiamo.net; adapter-node and Better Auth build URLs from it." },
 	ADDRESS_HEADER: { description: "The header the reverse proxy puts the visitor's address in (adapter-node trusts it too).", schema: optional },
