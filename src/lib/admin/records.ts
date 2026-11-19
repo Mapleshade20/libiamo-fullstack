@@ -70,7 +70,7 @@ export type RecordedStep = {
 	at: number;
 	label: string;
 	/** What the learner saw: the tutor, the reader, themselves, a card (pass 1's, the scene) or the buttons offered. */
-	lines: { who: "me" | "tutor" | "reader" | "card" | "choices"; text: string }[];
+	lines: { who: "me" | "tutor" | "reader" | "card"; text: string }[];
 	calls: number[];
 	/** Seconds the learner waited for this step. */
 	wait?: number;

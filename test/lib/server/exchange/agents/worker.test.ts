@@ -271,17 +271,12 @@ describe("agent reply worker scheduling", () => {
 		expect(shouldDeliverIntoEndedSession({ status: "in_progress", completionReason: null }, "delivery_pending")).toBe(true);
 		expect(shouldDeliverIntoEndedSession(null, "delivery_pending")).toBe(false);
 		expect(shouldDeliverIntoEndedSession({ status: "completed", completionReason: "max_turns" }, "delivery_pending")).toBe(true);
-		// the feedback page can flip a max_turns session to "evaluated" while a spared
-		// batch is still generating; the reply must still be delivered (QA race)
-		expect(shouldDeliverIntoEndedSession({ status: "evaluated", completionReason: "max_turns" }, "delivery_pending")).toBe(true);
-		expect(hasEndedByMaxTurns({ status: "evaluated", completionReason: "user_requested" })).toBe(false);
+		expect(hasEndedByMaxTurns({ status: "completed", completionReason: "user_requested" })).toBe(false);
 		expect(shouldDeliverIntoEndedSession({ status: "completed", completionReason: "max_turns" }, "pending")).toBe(false);
 		expect(shouldDeliverIntoEndedSession({ status: "completed", completionReason: "user_requested" }, "delivery_pending")).toBe(false);
 		expect(shouldDeliverIntoEndedSession({ status: "completed", completionReason: "max_age" }, "delivery_pending")).toBe(false);
-		// the abuse-terminating batch keeps its parting reply after the session ends,
-		// including when the feedback page has already flipped it to evaluated
+		// the abuse-terminating batch keeps its parting reply after the session ends
 		expect(shouldDeliverIntoEndedSession({ status: "completed", completionReason: "terminated_abuse" }, "delivery_pending")).toBe(true);
-		expect(shouldDeliverIntoEndedSession({ status: "evaluated", completionReason: "terminated_abuse" }, "delivery_pending")).toBe(true);
 		expect(shouldDeliverIntoEndedSession({ status: "abandoned", completionReason: "terminated_abuse" }, "delivery_pending")).toBe(true);
 		expect(shouldDeliverIntoEndedSession({ status: "completed", completionReason: "terminated_abuse" }, "pending")).toBe(false);
 		// ambient activity ends with the learner's turn, whatever ended the session —
@@ -983,6 +978,29 @@ describe("agent reply worker scheduling", () => {
 		for (const release of releases) release();
 		await stopping;
 		expect(stopped).toBe(true);
+	});
+
+	it("delivers on every scan but ends expired places and takes back leases only once per sweep interval", async () => {
+		vi.useFakeTimers();
+		const worker = new AgentReplyWorker({ scanIntervalMs: 10, sweepIntervalMs: 100 });
+		const internals = worker as unknown as Record<
+			"expireSessions" | "reclaimExpiredLeases" | "deliverDueMessages" | "claimDueBatch",
+			ReturnType<typeof vi.fn>
+		>;
+		internals.expireSessions = vi.fn().mockResolvedValue(undefined);
+		internals.reclaimExpiredLeases = vi.fn().mockResolvedValue(undefined);
+		internals.deliverDueMessages = vi.fn().mockResolvedValue(undefined);
+		internals.claimDueBatch = vi.fn().mockResolvedValue(null);
+
+		worker.start();
+		await vi.advanceTimersByTimeAsync(55);
+		expect(internals.deliverDueMessages.mock.calls.length).toBeGreaterThanOrEqual(5);
+		expect(internals.expireSessions).toHaveBeenCalledTimes(1);
+		expect(internals.reclaimExpiredLeases).toHaveBeenCalledTimes(1);
+		await vi.advanceTimersByTimeAsync(100);
+		expect(internals.expireSessions).toHaveBeenCalledTimes(2);
+		expect(internals.reclaimExpiredLeases).toHaveBeenCalledTimes(2);
+		await worker.stop();
 	});
 });
 

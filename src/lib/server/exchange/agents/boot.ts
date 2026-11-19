@@ -1,4 +1,5 @@
 import { AgentReplyWorker } from "#lib/server/exchange/agents/worker.ts";
+import { abandonStale } from "#lib/server/revision/store.ts";
 import { building } from "$app/env";
 
 type BootRecord = { worker: AgentReplyWorker; bootTag: symbol };
@@ -25,7 +26,7 @@ export function ensureAgentReplyWorker(): void {
 	const existing = globalThis.__agentReplyWorker;
 	if (existing?.bootTag === bootTag) return;
 	if (existing) void existing.worker.stop();
-	const worker = new AgentReplyWorker();
+	const worker = new AgentReplyWorker({ onExpired: () => abandonStale() });
 	worker.start();
 	globalThis.__agentReplyWorker = { worker, bootTag };
 }

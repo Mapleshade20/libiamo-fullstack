@@ -27,21 +27,6 @@ export const SEP = "* * *";
 export const own = (m: Msg) => m.text.replace(/^To:.*\n/m, "").trim();
 export const turns = (c: Case) => c.transcript.filter((m) => m.learner);
 
-export function draftOf(c: Case, text = turns(c).map(own).join(`\n\n${SEP}\n\n`)): Draft {
-	return {
-		id: c.id,
-		text,
-		target: c.lang as Draft["target"],
-		learner: "zh-CN",
-		level: "",
-		scene: {
-			platform: `${c.scene.platform} (${c.scene.where})`,
-			audience: c.scene.cast.map((p) => `${p.name}, ${p.who}`).join("; "),
-			purpose: `${c.scene.you}. Goals: ${c.scene.goals.join("; ")}`,
-		},
-	};
-}
-
 /**
  * Everything in order, the learner's turns numbered as they stand in the draft. `mine` replaces a turn's text (the
  * pass-1 version, numbered sentences); `upTo` stops after the given turn.
@@ -85,7 +70,7 @@ export function replyTo(c: Case, n: number): Msg | undefined {
  * Pass 1 over the exchange: each turn written natively as it would have been said then, and the draft fixed against it.
  * `rewrite` resolves first (pass 2's analysis compares with its native version while the labels are written).
  */
-export function pass1Exchange(c: Case, ai: Caller, d: Draft = draftOf(c), given?: Rewrite) {
+export function pass1Exchange(c: Case, ai: Caller, d: Draft, given?: Rewrite) {
 	const block = `${draftBlock(d)}\n\nThe draft is the writer's turns in a conversation that has already happened, in order, separated by lines "${SEP}". Here is the whole exchange, so you know what each turn answers and what the others said in between (their messages are context, not part of the draft):\n<<<\n${exchange(c)}\n>>>`;
 	const system = `You are a ${LANG_NAMES[d.target]} writing tutor going over what a learner wrote in an online conversation, so they can say it better next time.\n\n${DRAFT_CONVENTIONS(d)}\n\n${ROUTING}\n\n${VOICE(d)}`;
 	const user = `${block}\n\nWork in two steps.\n\nStep 1. Under the heading "### NATIVE", write each of the writer's turns as a fluent ${LANG_NAMES[d.target]} speaker of this community would have written it at that moment, saying what the writer wanted to say there, in their voice and at their length, knowing only what had been said up to that turn. Keep the "${SEP}" lines between turns.\n\nStep 2. Under the heading "### PASS 1", write out the draft after pass 1. Use your native version to notice everything in the draft that is not how it would naturally be said, then fix every pass-1 problem in place. ${MARK_RULES} Keep the "${SEP}" lines exactly.\n\nReply with the two sections only.`;

@@ -25,6 +25,11 @@ import { type Stop, stopOf } from "#lib/server/llm/transport.ts";
 export const DEFAULT_WORKER_SCAN_INTERVAL_MS = 1_000;
 export const DEFAULT_WORKER_LEASE_MS = 30_000;
 /**
+ * How often the scheduler ends expired exchanges and takes back expired leases. Neither is urgent (an exchange lives
+ * 48 hours, a lease 30 seconds), and each is an UPDATE: every scan would write twice a second with nothing to do.
+ */
+export const DEFAULT_WORKER_SWEEP_INTERVAL_MS = 30_000;
+/**
  * A safety ceiling on generations in flight, not a queue: a generation only waits on the provider
  * and holds no database connection, so fairness comes from one generation per learner at a time
  * (see `claimDueBatch`), and every call is bounded by `LLM_REQUEST_TIMEOUT_MS`.
@@ -72,9 +77,7 @@ export function shouldRetryGeneration(generationCount: number): boolean {
  * intention of answering the burst when the limit cut things off.
  */
 export function hasEndedByMaxTurns(session: { status: string; completionReason: string | null } | null | undefined): boolean {
-	// "evaluated" is the same lifecycle one step on: the feedback page can flip the
-	// status while a spared batch is still generating, and the reply must land anyway.
-	return (session?.status === "completed" || session?.status === "evaluated") && session.completionReason === "max_turns";
+	return session?.status === "completed" && session.completionReason === "max_turns";
 }
 
 /**
@@ -92,13 +95,9 @@ export function shouldDeliverIntoEndedSession(
 	if (kind === "world") return false;
 	if (batchStatus !== "delivery_pending") return false;
 	if (hasEndedByMaxTurns(session)) return true;
-	// The abuse-terminating batch's own parting reply still lands (even if the
-	// feedback page already flipped the session to evaluated): the agent ended
+	// The abuse-terminating batch's own parting reply still lands: the agent ended
 	// the session while composing that final message for the learner.
-	return (
-		(session?.status === "completed" || session?.status === "evaluated" || session?.status === "abandoned") &&
-		session.completionReason === "terminated_abuse"
-	);
+	return (session?.status === "completed" || session?.status === "abandoned") && session.completionReason === "terminated_abuse";
 }
 
 function safeError(error: unknown): string {
@@ -359,6 +358,9 @@ export type AgentReplyWorkerOptions = {
 	workerId?: string;
 	leaseMs?: number;
 	scanIntervalMs?: number;
+	sweepIntervalMs?: number;
+	/** After exchanges expire: the server abandons the pieces whose learner said nothing (`abandonStale`). */
+	onExpired?: () => Promise<unknown>;
 	concurrency?: number;
 	retryBackoffMs?: number;
 };
@@ -384,6 +386,9 @@ export class AgentReplyWorker {
 	private readonly workerId: string;
 	private readonly leaseMs: number;
 	private readonly scanIntervalMs: number;
+	private readonly sweepIntervalMs: number;
+	private lastSweep = Number.NEGATIVE_INFINITY;
+	private readonly onExpired: (() => Promise<unknown>) | undefined;
 	private readonly concurrency: number;
 	private readonly retryBackoffMs: number;
 	private timer: ReturnType<typeof setInterval> | undefined;
@@ -395,6 +400,8 @@ export class AgentReplyWorker {
 		this.workerId = options.workerId ?? `agent-replies-${randomUUID()}`;
 		this.leaseMs = options.leaseMs ?? DEFAULT_WORKER_LEASE_MS;
 		this.scanIntervalMs = options.scanIntervalMs ?? DEFAULT_WORKER_SCAN_INTERVAL_MS;
+		this.sweepIntervalMs = options.sweepIntervalMs ?? DEFAULT_WORKER_SWEEP_INTERVAL_MS;
+		this.onExpired = options.onExpired;
 		this.concurrency = options.concurrency ?? DEFAULT_WORKER_CONCURRENCY;
 		this.retryBackoffMs = options.retryBackoffMs ?? DEFAULT_WORKER_RETRY_BACKOFF_MS;
 	}
@@ -447,8 +454,11 @@ export class AgentReplyWorker {
 	}
 
 	private async runScheduledTick(now: WorkerNow = new Date()): Promise<void> {
-		await this.expireSessions(now);
-		await this.reclaimExpiredLeases(now);
+		if (now.getTime() - this.lastSweep >= this.sweepIntervalMs) {
+			this.lastSweep = now.getTime();
+			await this.expireSessions(now);
+			await this.reclaimExpiredLeases(now);
+		}
 		await this.deliverDueMessages(now);
 
 		while (!this.stopping && this.activeGenerations.size < this.concurrency) {
@@ -510,6 +520,9 @@ export class AgentReplyWorker {
 					),
 				);
 		}
+		// A place that closed with nothing of the learner's in it leaves nothing to go over: its piece goes now, not at
+		// the next half-hourly sweep, so the after page never offers to go over it.
+		await this.onExpired?.().catch((error) => console.error("abandoning after expiry failed", error));
 	}
 
 	private async reclaimExpiredLeases(now: WorkerNow): Promise<void> {
@@ -627,9 +640,8 @@ export class AgentReplyWorker {
 					)
 				: null;
 
-		// A pre-migration reply batch carries no participant: draw it here, at claim, where the
-		// old single-active-batch invariant makes the draw race-free, and from this claim on the
-		// batch follows the new contract.
+		// The turn limit's farewell batch is queued without a participant: draw it here, at claim,
+		// and keep it on the batch so a retry speaks as the same person.
 		let participant = batch.participant;
 		if (isAsyncSurface(task.ui) && batch.kind === "reply" && participant === null) {
 			const { entries, refs } = buildSceneTranscript({ ui: task.ui, openingState: task.openingState, messages: history, learnerName, scene });
@@ -818,6 +830,9 @@ export class AgentReplyWorker {
 		// tries and three minutes of "typing".
 		const stop = stopIn(error);
 		const retry = stop === "error" && shouldRetryGeneration(batch.generationCount);
+		// The batch keeps the error for the admin; the log is where an operator sees the provider failing.
+		if (stop === "error") console.error(`agent batch ${batch.id} failed${retry ? ", will retry" : ""}`, error);
+		else console.warn(`agent batch ${batch.id}: the learner's key is ${stop === "nokey" ? "missing" : "refused"}`);
 		try {
 			await db.transaction(async (tx) => {
 				// The failure settlement writes message flags from sibling batches: lock the session

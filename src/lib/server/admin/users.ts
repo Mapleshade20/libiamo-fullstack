@@ -111,7 +111,24 @@ export async function users(o: { q?: string; offset?: number; ids?: string[] } =
 /** A learner's calls, newest first (at most `limit`), with the piece each was for. */
 export async function callsOf(userId: string, limit = 300): Promise<UserCall[]> {
 	const rows = await db
-		.select({ c: llmCall, title: piece.title })
+		// The numbers and the error only: a call's messages and output are the bulk of its row.
+		.select({
+			c: {
+				id: llmCall.id,
+				createdAt: llmCall.createdAt,
+				tag: llmCall.tag,
+				purpose: llmCall.purpose,
+				model: llmCall.model,
+				state: llmCall.state,
+				promptTokens: llmCall.promptTokens,
+				completionTokens: llmCall.completionTokens,
+				costUsd: llmCall.costUsd,
+				latencyMs: llmCall.latencyMs,
+				pieceId: llmCall.pieceId,
+				error: llmCall.error,
+			},
+			title: piece.title,
+		})
 		.from(llmCall)
 		.leftJoin(piece, eq(piece.id, llmCall.pieceId))
 		.where(eq(llmCall.userId, userId))

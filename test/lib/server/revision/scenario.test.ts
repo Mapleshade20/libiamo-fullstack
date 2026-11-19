@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { type Case, draftOf, exchange, replyTo, SEP, turnAt } from "#lib/server/revision/scenario/exchange.ts";
+import { type Case, exchange, replyTo, SEP, turnAt } from "#lib/server/revision/scenario/exchange.ts";
 import { turnSentences } from "#lib/server/revision/scenario/pass2.ts";
 
 const c: Case = {
@@ -19,11 +19,12 @@ const c: Case = {
 	],
 };
 
-test("the draft is the learner's turns between separator lines, the To line dropped and the subject kept", () => {
-	const d = draftOf(c);
-	assert.equal(d.text, `Subject: heating\n\nIt is broken. You must fix it.\n\n${SEP}\n\nSorry. Any morning works.`);
-	assert.equal(turnAt(d.text, d.text.indexOf("You must")), 1);
-	assert.equal(turnAt(d.text, d.text.indexOf("Any morning")), 2);
+// The learner's turns between separator lines, as the after page hands them to the revision (server/exchange/after.ts).
+const text = `Subject: heating\n\nIt is broken. You must fix it.\n\n${SEP}\n\nSorry. Any morning works.`;
+
+test("a place in the draft is in the turn its separator lines enclose", () => {
+	assert.equal(turnAt(text, text.indexOf("You must")), 1);
+	assert.equal(turnAt(text, text.indexOf("Any morning")), 2);
 });
 
 test("a turn's reply is the message that answers it, else the next one from someone else", () => {
@@ -39,7 +40,7 @@ test("the exchange can stop before a turn, so nothing said later reaches it", ()
 });
 
 test("sentences by turn keep the numbering of the whole text, the separator taking a number of its own", () => {
-	const by = turnSentences(draftOf(c).text, "en");
+	const by = turnSentences(text, "en");
 	assert.deepEqual(
 		by.map((t) => t.turn),
 		[1, 2],

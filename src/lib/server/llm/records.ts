@@ -31,7 +31,13 @@ export async function writeRecord(scope: RecordScope, r: CallRecord) {
 						.digest("hex")
 						.slice(0, 32)
 				: null;
-		if (system && promptHash) await tx.insert(llmPrompt).values({ hash: promptHash, userId: scope.userId, text: system }).onConflictDoNothing();
+		// Upserted, not ignored on conflict: the row stays locked until the call naming it commits, so `pruneCalls` passes
+		// over it rather than deleting a prompt that is about to be referenced again.
+		if (system && promptHash)
+			await tx
+				.insert(llmPrompt)
+				.values({ hash: promptHash, userId: scope.userId, text: system })
+				.onConflictDoUpdate({ target: llmPrompt.hash, set: { hash: sql`excluded.hash` } });
 		await tx.insert(llmCall).values({
 			userId: scope.userId,
 			pieceId: scope.pieceId ?? null,
@@ -70,6 +76,18 @@ export async function pruneCalls(now = new Date()) {
 		.delete(llmCall)
 		.where(and(lt(llmCall.createdAt, before), not(held)))
 		.returning({ id: llmCall.id });
-	await db.delete(llmPrompt).where(sql`not exists (select 1 from ${llmCall} where ${llmCall.promptHash} = ${llmPrompt.hash})`);
+	// A prompt a record is being written with is locked (`writeRecord`) and skipped. One whose record committed between
+	// this statement's start and its lock still looks unreferenced and fails the foreign key: the next round takes it.
+	try {
+		await db.execute(sql`
+			delete from ${llmPrompt} where ${llmPrompt.hash} in (
+				select p.hash from ${llmPrompt} p
+				where not exists (select 1 from ${llmCall} where ${llmCall.promptHash} = p.hash)
+				for update skip locked
+			)`);
+	} catch (e) {
+		const code = (e as { code?: string; cause?: { code?: string } }).cause?.code ?? (e as { code?: string }).code;
+		if (code !== "23503") throw e;
+	}
 	return gone.length;
 }

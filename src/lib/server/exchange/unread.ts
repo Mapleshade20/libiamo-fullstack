@@ -142,7 +142,7 @@ export async function getUnreadInbox(userId: string): Promise<UnreadInboxItem[]>
 
 /**
  * When the next agent reply work for any of the user's sessions falls due: the only way an unread
- * reply can appear without the reader acting. Null when nothing is outstanding, so the Hall can
+ * reply can appear without the reader acting. Null when nothing is outstanding, so the inbox can
  * stop polling altogether. One statement, so a generation committing mid-poll cannot hide live
  * work from both halves.
  */

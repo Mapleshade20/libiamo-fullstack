@@ -155,12 +155,6 @@ const caseOf = (n: number) => cases.find((c) => c.id === n);
 								{#each s.lines as l, i (i)}
 									{#if l.who === "card"}
 										<p class="card-line">{l.text}</p>
-									{:else if l.who === "choices"}
-										<ul class="pills" aria-label="Buttons offered">
-											{#each l.text.split(" | ") as p}
-												<li class="pill">{p}</li>
-											{/each}
-										</ul>
 									{:else}
 										<Speaker
 											who={who[l.who]}
@@ -407,20 +401,6 @@ const caseOf = (n: number) => cases.find((c) => c.id === n);
 	color: var(--ink-2);
 	font-size: 13.5px;
 	white-space: pre-line;
-}
-.pills {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 6px;
-	margin: -2px 0 12px 38px;
-}
-.pill {
-	padding: 3px 10px;
-	border-radius: 6px;
-	border: 1px solid var(--edge);
-	background: var(--raised-face);
-	box-shadow: var(--raised-shadow);
-	font-size: 13px;
 }
 .chips {
 	display: flex;

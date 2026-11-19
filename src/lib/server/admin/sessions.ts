@@ -61,8 +61,20 @@ export function readStep(s: Pick<Step, "action" | "body" | "response">): Pick<Re
 		}
 		case "overviewReply":
 			return { label: "Pass 2 begins", lines: text(b.said) ? [{ who: "me", text: text(b.said) }] : [] };
-		case "material":
-			return { label: `Stop${stop}`, lines: [] };
+		case "material": {
+			// The stop as it opened: the reader's reaction, what the tutor asked for, and the version it holds up.
+			const meant = Array.isArray(b.meanings) ? b.meanings.filter((m: unknown) => typeof m === "string") : [];
+			return {
+				label: `Stop${stop}${meant.length ? " · another reading" : ""}`,
+				lines: [
+					...(meant.length ? [{ who: "me" as const, text: `I meant: ${meant.join("; ")}` }] : []),
+					...(text(r.reader) ? [{ who: "reader" as const, text: text(r.reader) }] : []),
+					...(text(r.prompt) ? [{ who: "tutor" as const, text: text(r.prompt) }] : []),
+					// The reference's brackets mark its key words for the learner's page.
+					...(text(r.ref) ? [{ who: "card" as const, text: [text(r.ref).replace(/[[\]]/g, ""), text(r.construct)].filter(Boolean).join("\n") }] : []),
+				],
+			};
+		}
 		case "hint":
 			return { label: `Stop${stop} · hint`, lines: [{ who: "tutor", text: [text(r.plan), text(r.example)].filter(Boolean).join("\n\n") }] };
 		case "pieces":
