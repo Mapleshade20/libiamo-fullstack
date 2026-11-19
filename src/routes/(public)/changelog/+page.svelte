@@ -5,7 +5,7 @@
 </p>
 
 <section aria-labelledby="v1">
-	<h2 id="v1">1.0 · The new Libiamo <span class="when">(not released yet)</span></h2>
+	<h2 id="v1">1.0 · The new Libiamo <span class="when">(November 2026)</span></h2>
 	<p>Libiamo was rebuilt around the writing you actually do.</p>
 	<ul>
 		<li>
@@ -21,6 +21,7 @@
 			review, scheduled by FSRS.
 		</li>
 		<li>A week counts by its days: learn something and clear your reviews to fill a day's glass.</li>
+		<li>Wrote somewhere a scenario could be? Suggest it, with the conversation it was in, and it may become one.</li>
 		<li>
 			Libiamo runs on your own AI key (we recommend Claude Haiku through OpenRouter), so there is no trial and no quota. Your picture is your
 			Gravatar.
@@ -30,7 +31,10 @@
 
 <section aria-labelledby="older">
 	<h2 id="older">Before 1.0</h2>
-	<p>Versions 0.3 and 0.4 were a different app, built around daily quests and practice conversations; their notes are not kept here.</p>
+	<p>
+		Versions 0.3 and 0.4 were a different app, built around daily quests and practice conversations; their notes are not kept here. Their accounts
+		were not carried over to 1.0: sign up again to use it.
+	</p>
 </section>
 
 <style>

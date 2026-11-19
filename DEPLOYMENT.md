@@ -34,14 +34,27 @@ loopback.
 
 ### Requirements
 
-Podman **>= 4.4** (quadlet).
+- Linux with systemd, a deployment user (not root) with sudo, and subordinate ids
+  for it in `/etc/subuid` and `/etc/subgid` (`adduser` writes them).
+- Podman **>= 5.0** (the units were checked on 5.4, Debian 13's, and 5.6). Older
+  Debian releases ship an older one; use Compose there or a newer Podman.
+- Caddy **>= 2.8** in front, for the access-log integration (`ops/`). Debian 13's
+  own package is 2.6 and is refused at validation: install Caddy from its
+  repository (caddyserver.com/docs/install). nginx works too, without the
+  integration (see the operations README).
+- Python 3.9+ and `openssl` (the installer and the operation jobs).
+
+On a fresh Debian 13 server, as root:
 
 ```sh
-podman --version
+apt install podman uidmap dbus-user-session python3 openssl
+# Caddy from caddyserver.com/docs/install (its apt repository), then its site
+# block for the app (§3).
+adduser deploy && usermod -aG sudo deploy
 ```
 
-Also check that `conmon` was built with journald support if you want to change
-`LogDriver`; see [Troubleshooting](#8-troubleshooting).
+Then log in as that user over SSH (not `su`/`sudo -u`: `systemctl --user` needs
+the user's own login session).
 
 ### Install
 
@@ -75,6 +88,35 @@ existing Caddy site. Configure private email recipients in
 an isolated restore drill. See [deployment operations](deploy/podman/ops/README.md)
 for prerequisites, limits, commands, migration and external-monitoring gaps.
 Do not copy only the quadlet files: copy the whole deployment directory.
+
+### Loading the content
+
+A new database has no scenarios. They travel as one content document
+(`lab/seed/scenarios.json`: works, name tables, scenarios with their checked
+sources, issues), loaded from a checkout on your workstation. The database
+publishes no port, so open one on the server's loopback for the length of the
+load and reach it through SSH:
+
+```sh
+# On the server
+podman run -d --rm --name libiamo-db-tunnel --network libiamo \
+  -p 127.0.0.1:5433:5432 docker.io/alpine/socat \
+  tcp-listen:5432,fork,reuseaddr tcp:libiamo-db:5432
+grep POSTGRES_PASSWORD ~/.config/libiamo/db.env
+
+# On the workstation, in the repository
+ssh -N -L 5433:127.0.0.1:5433 user@server &
+DATABASE_URL=postgres://libiamo:<password>@127.0.0.1:5433/libiamo \
+  node --experimental-transform-types lab/seed.ts
+kill %1
+
+# On the server
+podman stop libiamo-db-tunnel
+```
+
+The load replaces what has the same ids and touches nothing else, so it can be
+run again after the document changes; edits made in the admin's editor to those
+scenarios are replaced with it.
 
 ### Operating
 
@@ -362,15 +404,20 @@ podman compose --env-file .env.docker exec -T database \
   pg_dump -U libiamo -d libiamo --format=custom > "libiamo-$(date +%F-%H%M).dump"
 ```
 
-Restore:
+Restore (stop the app first, so nothing writes while the tables are replaced):
 
 ```sh
+systemctl --user stop libiamo-app
 podman exec -i libiamo-db pg_restore -U libiamo -d libiamo --clean --if-exists \
   < libiamo-2026-08-30-1200.dump
 ```
 
 The dump includes `drizzle.__drizzle_migrations`, so restoring does not re-run
 migrations.
+
+```sh
+systemctl --user start libiamo-app
+```
 
 Data lives in the `libiamo-db-data` volume (quadlet) or `libiamo_database-data`
 (compose). Removing that volume — or running `compose down -v` — destroys the
@@ -381,6 +428,43 @@ database.
 > `/var/lib/postgresql`, *not* the pre-18 `/var/lib/postgresql/data`. Both setups
 > here mount the correct path. If you adapt another project's config, check this —
 > mounting the old path silently starts an empty cluster.
+
+### Moving to another server
+
+The learners' saved keys are encrypted under `BETTER_AUTH_SECRET`: the new server
+must run with the old `app.env`, or every saved key is unreadable and everyone is
+signed out. Run the same image version on both (`podman image inspect
+libiamo-app --format '{{.Id}}'` on the old one; pin that tag in the new unit if
+`latest` has moved since).
+
+1. Prepare the new server (§1, Requirements) and its Caddy site, with the DNS
+   still pointing at the old one.
+2. Copy `~/.config/libiamo/{app.env,db.env,ops.json}` from the old server to the
+   same place on the new one (mode 600, directory 700), and `deploy/podman/` to
+   `~/libiamo-deploy`. Then run `bash ~/libiamo-deploy/install.sh`: it keeps the
+   copied files and starts the stack on an empty database.
+3. On the old server, stop the app so nothing more is written, and take the last
+   dump:
+   ```sh
+   systemctl --user stop libiamo-app
+   podman exec libiamo-db pg_dump -U libiamo -d libiamo --format=custom > last.dump
+   ```
+4. Copy `last.dump` over and restore it on the new server as above (stop the app,
+   `pg_restore`, start the app). Check `/health` and sign in through
+   `curl --resolve <host>:443:<new address>` or a hosts entry.
+5. Point the DNS (or the Cloudflare Tunnel) at the new server. OAuth callbacks,
+   `ORIGIN` and mail settings stay as they are.
+6. On the new server take a backup and run a restore drill (the operations
+   README). On the old one, stop the timers and the stack so it neither answers
+   nor sends alerts, and keep its volume until the new server has run for a
+   while:
+   ```sh
+   systemctl --user disable --now libiamo-backup.timer libiamo-monitor.timer libiamo-restore-check.timer
+   systemctl --user stop libiamo-app libiamo-db
+   # Quadlet units cannot be disabled; move them away so a reboot does not start them.
+   mkdir -p ~/libiamo-retired && mv ~/.config/containers/systemd/libiamo* ~/libiamo-retired/
+   systemctl --user daemon-reload
+   ```
 
 ---
 
@@ -425,10 +509,14 @@ entrypoint aborts rather than serve against a stale schema. Check that Postgres
 is up and `DATABASE_URL` is right — in a pod the host is `127.0.0.1`, under
 compose it is `database`.
 
+**`systemctl --user` says "Failed to connect to bus".** The shell is not the
+user's own login session (`su`, `sudo -u`), or `dbus-user-session` is missing.
+Log in as the deployment user over SSH.
+
 **`systemctl --user` units vanish after logout.** Lingering is not enabled:
 `sudo loginctl enable-linger $USER`.
 
-**Quadlet units are not generated.** Needs Podman >= 4.4, and unit files must sit
+**Quadlet units are not generated.** Needs Podman >= 5.0, and unit files must sit
 in `~/.config/containers/systemd/`. Inspect what is produced with
 `podman-system-generator --user --dryrun` (under `/usr/lib/systemd/` or
 `/usr/local/lib/systemd/`).
