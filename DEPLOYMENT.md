@@ -91,6 +91,12 @@ Do not copy only the quadlet files: copy the whole deployment directory.
 
 ### Loading the content
 
+Only for a new deployment with no database to carry over. Moving to another
+server restores the last dump instead (§6), which brings the scenarios with it;
+do not load the document into a database that already has content. The document
+holds scenarios not yet reviewed for production: trim it to the ones that are
+before loading it.
+
 A new database has no scenarios. They travel as one content document
 (`lab/seed/scenarios.json`: works, name tables, scenarios with their checked
 sources, issues), loaded from a checkout on your workstation. The database
