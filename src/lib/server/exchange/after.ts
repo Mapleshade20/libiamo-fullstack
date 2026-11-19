@@ -46,7 +46,8 @@ function whereOf(s: Setting): string {
 	return SITE_OF[s.ui];
 }
 
-export async function afterOf(u: { id: string; name: string }, scenarioId: string): Promise<AfterView | null> {
+/** The exchange of the learner's unfinished piece of a scenario in a language. */
+export async function afterOf(u: { id: string; name: string }, scenarioId: string, language: string): Promise<AfterView | null> {
 	const [row] = await db
 		.select({
 			exchangeId: exchange.id,
@@ -59,7 +60,14 @@ export async function afterOf(u: { id: string; name: string }, scenarioId: strin
 		.from(exchange)
 		.innerJoin(piece, eq(piece.id, exchange.pieceId))
 		.innerJoin(scenario, eq(scenario.id, exchange.scenarioId))
-		.where(and(eq(exchange.userId, u.id), eq(exchange.scenarioId, scenarioId), inArray(piece.state, ["writing", "revising"])))
+		.where(
+			and(
+				eq(exchange.userId, u.id),
+				eq(exchange.scenarioId, scenarioId),
+				eq(piece.language, language),
+				inArray(piece.state, ["writing", "revising"]),
+			),
+		)
 		.orderBy(desc(exchange.startedAt))
 		.limit(1);
 	if (!row) return null;

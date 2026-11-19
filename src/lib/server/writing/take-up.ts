@@ -1,4 +1,5 @@
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import { scenarioHref } from "#lib/scenario/href.ts";
 import { db } from "#lib/server/db/index.ts";
 import { exchange, exchangeMessage, piece } from "#lib/server/db/schema.ts";
 import { LANGS, type Lang, normLang } from "#lib/server/revision/draft.ts";
@@ -63,6 +64,7 @@ export async function takeUp(u: Learner, pieceId: string): Promise<{ to: string 
 					and(
 						eq(piece.userId, u.id),
 						eq(piece.scenarioId, p.scenarioId as string),
+						eq(piece.language, p.language),
 						inArray(piece.state, ["writing", "revising"]),
 						ne(piece.id, p.id),
 					),
@@ -83,5 +85,5 @@ export async function takeUp(u: Learner, pieceId: string): Promise<{ to: string 
 			throw e;
 		});
 	if (!back) return fresh;
-	return { to: `/scenario/${p.scenarioId}/${p.kind === "translation" ? "translate" : "after"}` };
+	return { to: scenarioHref(p.scenarioId as string, p.kind === "translation" ? "translate" : "after", p.language) };
 }

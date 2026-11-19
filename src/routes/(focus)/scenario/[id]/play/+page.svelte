@@ -22,6 +22,7 @@ import { keyFailureIn } from "#lib/exchange/messages.ts";
 import { loadLang } from "#lib/i18n/index.svelte.ts";
 import { tx } from "#lib/i18n/tx.ts";
 import { keyStop } from "#lib/llm/stops.ts";
+import { scenarioHref, scenarioLang } from "#lib/scenario/href.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
 
@@ -39,7 +40,7 @@ const SURFACES: Record<ExchangePlace, Component<SurfaceProps>> = {
 };
 
 const id = $derived(page.params.id ?? "");
-const where = $derived({ scenarioId: id, lang: app.lang });
+const where = $derived({ scenarioId: id, lang: scenarioLang(page.url, app.lang) });
 // Read without awaiting: the page polls this query while the cast composes, and an awaited refresh is an async batch
 // that a click landing at the same moment rebases (sveltejs/svelte#18895 leaves the place's effects unrun).
 const place = $derived(placeOf(where));
@@ -89,7 +90,7 @@ const stopped = $derived(keyStop() ?? keyFailureIn(view?.persisted?.messages ?? 
 const picture = loadedPicture(() => account.me.picture);
 // An exchange already over is read on the after page.
 $effect(() => {
-	if (view?.persisted && view.persisted.status !== "in_progress") goto(`/scenario/${id}/after`, { replace: true });
+	if (view?.persisted && view.persisted.status !== "in_progress") goto(scenarioHref(id, "after", where.lang), { replace: true });
 });
 $effect(() => {
 	document.title = `${view?.title ?? ""} · ${tx("homeTitle")}`;

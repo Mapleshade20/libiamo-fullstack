@@ -473,8 +473,9 @@ export const piece = pgTable(
 		// Who has written in a scenario (its written count, whether where it happens is fixed).
 		index("piece_scenario_idx").on(t.scenarioId).where(sql`${t.scenarioId} is not null`),
 		index("piece_notes_retry_idx").on(t.notesRequestedAt).where(sql`${t.notesRequestedAt} is not null`),
+		// One unfinished piece of a scenario per language: each language is written on its own.
 		uniqueIndex("piece_open_scenario_unique")
-			.on(t.userId, t.scenarioId)
+			.on(t.userId, t.scenarioId, t.language)
 			.where(sql`${t.scenarioId} is not null and ${t.state} in ('writing', 'revising')`),
 	],
 );
@@ -723,6 +724,11 @@ export const note = pgTable(
 		index("note_piece_idx").on(t.pieceId),
 		// Deleting a reading (with its account) sets this to null.
 		index("note_reading_idx").on(t.readingId),
+		// A phrase is collected once from the same words of the same sentence of a reading, whatever tab or visit it was
+		// highlighted in; undone, it can be collected again.
+		uniqueIndex("note_collected_unique")
+			.on(t.readingId, sql`coalesce(${t.sentence}, '')`, t.marked)
+			.where(sql`${t.readingId} is not null and ${t.deletedAt} is null`),
 	],
 );
 

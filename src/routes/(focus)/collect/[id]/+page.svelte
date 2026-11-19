@@ -3,6 +3,7 @@ import X from "@lucide/svelte/icons/x";
 import { onDestroy, onMount, tick } from "svelte";
 import { fly, slide } from "svelte/transition";
 import { app } from "#lib/account/app.svelte.ts";
+import { refreshQuery } from "#lib/client/refresh.ts";
 import LimitNotice from "#lib/components/common/LimitNotice.svelte";
 import { reducedMotion } from "#lib/components/common/motion.ts";
 import FocusBar from "#lib/components/shell/FocusBar.svelte";
@@ -28,7 +29,12 @@ import { page } from "$app/state";
 const currentChapter = captureTourState();
 let disposed = false;
 const active = () => !disposed && currentChapter();
-const found = sandboxed() ? tourReading(page.params.id ?? "") : await readingById(page.params.id ?? "");
+// What is kept from the reading changes on this page (collecting is an endpoint): an answer the browser still holds
+// from an earlier visit is asked again before the page marks what was kept.
+const asked = sandboxed() ? null : readingById(page.params.id ?? "");
+if (asked?.ready) await refreshQuery(asked);
+const mine = asked ? await asked : null;
+const found = asked ? mine : tourReading(page.params.id ?? "");
 const SETUP = found ? { passage: found.passage, lang: found.lang, native: app.prefs.native, feedback: app.prefs.feedback } : null;
 onMount(() => {
 	if (!SETUP) goto("/", { replace: true });
@@ -60,19 +66,41 @@ const passage = SETUP?.passage ?? "";
 const segs = [...new Intl.Segmenter(SETUP?.lang ?? "en", { granularity: "word" }).segment(passage)];
 const SENTENCES = [...new Intl.Segmenter(SETUP?.lang ?? "en", { granularity: "sentence" }).segment(passage)];
 type Item = { phrase: string; meaning: string; why: string; register: string; example: string };
-/** `id`: the notebook entry its phrase is kept as. */
+/** `id`: the notebook entry its phrase is kept as. `earlier`: kept before this visit. */
 type Mark = {
 	n: number;
 	a: number;
 	b: number;
 	data: Item | null;
 	id?: string;
+	earlier?: boolean;
 	busy: boolean;
 	failed: boolean;
 	thread: { q: string; a: string | null }[];
 };
-let marks = $state<Mark[]>([]);
 let nextN = 1;
+/** The word that holds a character of the passage. */
+const segAt = (c: number) => segs.findIndex((s) => c >= s.index && c < s.index + s.segment.length);
+/**
+ * What was kept from this reading before, marked again where it was: its words in its sentence (the passage is kept as
+ * it was, so both are found as they were sent). One that cannot be found, or overlaps one already marked, stays in the
+ * notebook unmarked.
+ */
+function markedBefore(): Mark[] {
+	const out: Mark[] = [];
+	for (const k of mine?.kept ?? []) {
+		const from = k.sentence ? passage.indexOf(k.sentence) : 0;
+		if (from < 0) continue;
+		const at = passage.indexOf(k.marked, from);
+		if (at < 0 || (k.sentence && at + k.marked.length > from + k.sentence.length)) continue;
+		const [a, b] = [segAt(at), segAt(at + k.marked.length - 1)];
+		if (a < 0 || b < 0 || out.some((m) => m.b >= a && m.a <= b)) continue;
+		const data = { phrase: k.phrase, meaning: k.meaning, why: k.why, register: k.register, example: k.example };
+		out.push({ n: nextN++, a, b, data, id: k.id, earlier: true, busy: false, failed: false, thread: [] });
+	}
+	return out;
+}
+let marks = $state<Mark[]>(markedBefore());
 let openN = $state<number | null>(null);
 let preview = $state<[number, number] | null>(null);
 const sorted = $derived([...marks].sort((x, y) => x.a - y.a));
@@ -95,7 +123,8 @@ const batch = `${Date.now()}`;
 const readingId = sandboxed() ? undefined : found?.id;
 const forget = (ids: (string | undefined)[]) => {
 	if (!active()) return;
-	const gone = ids.filter((x): x is string => !!x);
+	// An entry a mark still holds stays: collecting the same words again answers with the entry already kept.
+	const gone = ids.filter((x): x is string => !!x && !marks.some((m) => m.id === x));
 	if (gone.length && !sandboxed()) removeNotes(gone).catch(() => {});
 };
 function sentenceOf(m: Mark) {
@@ -204,10 +233,11 @@ function addRange(a: number, b: number) {
 		b = Math.max(b, m.b);
 	}
 	const keep = touching[0];
-	forget(touching.map((m) => m.id));
+	const replaced = touching.map((m) => m.id);
 	marks = marks.filter((m) => !touching.includes(m) || m === keep);
-	if (keep) Object.assign(keep, { a, b, data: null, id: undefined, busy: false, failed: false });
+	if (keep) Object.assign(keep, { a, b, data: null, id: undefined, earlier: false, busy: false, failed: false });
 	else marks.push({ n: nextN++, a, b, data: null, busy: false, failed: false, thread: [] });
+	forget(replaced);
 	openN = keep?.n ?? nextN - 1;
 	queueFill();
 }
@@ -246,8 +276,8 @@ async function up(e: PointerEvent) {
 	addRange(d.from, d.to);
 }
 function drop(m: Mark) {
-	forget([m.id]);
 	marks = marks.filter((x) => x.n !== m.n);
+	forget([m.id]);
 	store();
 	toast(ui("colRemoved", { phrase: m.data?.phrase ?? textOf(m) }));
 }
@@ -278,7 +308,7 @@ async function askAbout(m: Mark, q: string) {
 const asking = $state<Record<number, string>>({});
 
 function done() {
-	const n = marks.filter((m) => m.data).length;
+	const n = marks.filter((m) => m.data && !m.earlier).length;
 	// Said on the home page, in its language (the interface's, not the tutor's).
 	if (n) sessionStorage.setItem("homeToast", JSON.stringify(["colSaved", { n }]));
 	goto("/");

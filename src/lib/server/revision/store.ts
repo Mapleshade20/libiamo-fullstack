@@ -102,12 +102,19 @@ export async function startRevision(
 	meta: { language?: string; kind: "own" | "scenario" | "translation"; scenarioId?: string; title?: string; place?: string; pieceId?: string },
 ): Promise<string> {
 	let id = meta.pieceId;
-	// A scenario has at most one unfinished piece per learner: starting it again goes on in that one.
+	// A scenario has at most one unfinished piece per learner and language: starting it again goes on in that one.
 	if (!id && meta.scenarioId) {
 		const [open] = await db
 			.select({ id: piece.id })
 			.from(piece)
-			.where(and(eq(piece.userId, user.id), eq(piece.scenarioId, meta.scenarioId), inArray(piece.state, ["writing", "revising"])));
+			.where(
+				and(
+					eq(piece.userId, user.id),
+					eq(piece.scenarioId, meta.scenarioId),
+					eq(piece.language, meta.language ?? user.activeLanguage ?? "en"),
+					inArray(piece.state, ["writing", "revising"]),
+				),
+			);
 		id = open?.id;
 	}
 	let language = meta.language;

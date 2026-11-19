@@ -8,6 +8,7 @@ import { toast } from "#lib/components/shell/toast.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
 import { afterPlace, readInPlace } from "#lib/exchange/exchange.remote.ts";
 import { tx } from "#lib/i18n/tx.ts";
+import { scenarioHref, scenarioLang } from "#lib/scenario/href.ts";
 import { startPiece } from "#lib/session/start.ts";
 import type { Setup } from "#lib/session/types.ts";
 import { siteOf } from "#lib/writing/sites.ts";
@@ -22,13 +23,14 @@ import { page } from "$app/state";
  * sheet (../translate) and goes from there into the revision.
  */
 const id = $derived(page.params.id ?? "");
-const after = $derived(await afterPlace(id));
+const lang = $derived(scenarioLang(page.url, app.lang));
+const after = $derived(await afterPlace({ scenarioId: id, lang }));
 const st = $derived(siteOf(after?.site));
 const chat = $derived(after?.place === "discord" || after?.place === "imessage");
 // Nothing to look back on yet: the exchange goes on in its place (or was never begun).
 $effect(() => {
 	if (!after) goto(`/scenario/${id}`, { replace: true });
-	else if (after.open) goto(`/scenario/${id}/play`, { replace: true });
+	else if (after.open) goto(scenarioHref(id, "play", lang), { replace: true });
 });
 
 // The thread shows every reply: they are read now (the home page stops announcing them).
