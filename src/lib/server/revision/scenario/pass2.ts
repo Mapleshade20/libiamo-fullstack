@@ -3,7 +3,7 @@
 // answered, so each turn is first judged by how it landed, and a turn that landed off because of its wording must get
 // a spot there.
 import { z } from "zod";
-import { type Caller, chat, chatJson, extractJson } from "#lib/server/llm/caller.ts";
+import { type Caller, chatJson } from "#lib/server/llm/caller.ts";
 import { type Draft, fbName, LANG_NAMES, levelLine, noteLines } from "#lib/server/revision/draft.ts";
 import { AnalysisSchema, leftLine, SCAN_RULE, type Sentence, SHAPE_V6, sentences, TASK_V6 } from "#lib/server/revision/pass2/analyze.ts";
 import { type Case, exchange, SEP } from "#lib/server/revision/scenario/exchange.ts";
@@ -75,28 +75,13 @@ export async function analyzeExchange(
 		: SHAPE_V6;
 	const system = `You are a ${T} writing tutor. You help writers say what they mean, for the people who read them.`;
 	const user = `${intro}\n\n${task}${landed}\n\nReply with JSON only. ${SCAN_RULE}\n${shape}`;
-	const res = await chat(
+	const { value, calls } = await chatJson(
 		[
 			{ role: "system", content: system },
 			{ role: "user", content: user },
-		],
-		{ ai, sample: 0, tag: evidence ? "q2/e" : "q2/p" },
-	);
-	let raw: unknown = null;
-	try {
-		raw = extractJson(res.text);
-	} catch {}
-	const parsed = ExchangeAnalysis.safeParse(raw);
-	if (parsed.success) return { analysis: parsed.data, calls: [res], byTurn };
-	const fixed = await chatJson(
-		[
-			{ role: "system", content: system },
-			{ role: "user", content: user },
-			{ role: "assistant", content: res.text },
-			{ role: "user", content: `The JSON did not validate:\n${parsed.error.message}\nReply with the corrected JSON only.` },
 		],
 		ExchangeAnalysis,
-		{ ai, sample: 0, tag: "q2/repair" },
+		{ ai, sample: 0, tag: evidence ? "q2/e" : "q2/p" },
 	);
-	return { analysis: fixed.value, calls: [res, ...fixed.calls], byTurn };
+	return { analysis: value, calls, byTurn };
 }
