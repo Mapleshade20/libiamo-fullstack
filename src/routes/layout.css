@@ -504,6 +504,14 @@ html[data-side="in"]::view-transition-new(side) {
 	font-weight: 400;
 	line-height: 1.5;
 }
+/* What a click does, under what the thing is: quieter, so the two never read as one sentence. */
+.tip-hint {
+	display: block;
+	margin-top: 2px;
+	color: var(--muted);
+	font-size: 11.5px;
+	font-weight: 400;
+}
 .tip-pill[data-side="top"] {
 	transform: translateY(-2px);
 }
