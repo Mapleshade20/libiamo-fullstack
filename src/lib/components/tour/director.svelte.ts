@@ -53,6 +53,9 @@ class Director {
 	/** What the starter undoes when the tour ends (a language swapped in for it). */
 	onEnd: (() => void) | null = null;
 	private run = 0;
+	/** The run whose chapter is playing: steps belong to it, so a chapter left before it began (or between two steps)
+	 *  stops at its next step instead of taking the next run's token and acting on the page after the tour. */
+	private live = -1;
 	private resume: (() => void) | null = null;
 	private captionN = 0;
 	private focusEls: Element[] = [];
@@ -131,6 +134,8 @@ class Director {
 			this.switching = false;
 			await settled();
 			await sleep(450);
+			if (run !== this.run) return;
+			this.live = run;
 			try {
 				await c.run(this);
 			} catch (e) {
@@ -174,6 +179,7 @@ class Director {
 		if (run !== this.run) throw new Stopped();
 	}
 	private token() {
+		if (this.live !== this.run) throw new Stopped();
 		return this.run;
 	}
 	/** Waits `ms`, pausable, in small steps; an idle wait may be skipped. */
