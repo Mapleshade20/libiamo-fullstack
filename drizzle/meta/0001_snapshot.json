@@ -1,5 +1,5 @@
 {
-  "id": "77a30521-d8ff-422a-a23a-917b9ef44925",
+  "id": "e899ca20-2410-4ab0-8976-119f6b73ff38",
   "prevId": "f3f55ccc-addf-4ba3-8e8a-2222aa62eebe",
   "version": "7",
   "dialect": "postgresql",
@@ -707,12 +707,6 @@
         "completion_reason": {
           "name": "completion_reason",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "last_processed_user_message_id": {
-          "name": "last_processed_user_message_id",
-          "type": "integer",
           "primaryKey": false,
           "notNull": false
         },

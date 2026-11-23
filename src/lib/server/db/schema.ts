@@ -529,7 +529,6 @@ export const exchange = pgTable(
 		expiresAt: at("expires_at").notNull(),
 		status: text("status").notNull().default("in_progress"),
 		completionReason: text("completion_reason"),
-		lastProcessedUserMessageId: integer("last_processed_user_message_id"),
 		lastSeenAssistantMessageId: integer("last_seen_assistant_message_id"),
 		agentReadUpToMessageId: integer("agent_read_up_to_message_id"),
 		followUpCount: integer("follow_up_count").notNull().default(0),
