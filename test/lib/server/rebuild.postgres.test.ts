@@ -54,6 +54,7 @@ import {
 	piece,
 	pieceRevision,
 	pieceStep,
+	practiceDay,
 	reviewLog,
 	scenario,
 	scenarioSource,
@@ -89,7 +90,7 @@ import { suggest, suggestionsOf } from "#lib/server/scenario/suggestions.ts";
 import { sourceIdentity } from "#lib/server/translation/identity.ts";
 import { makeSourceRow, queueSources } from "#lib/server/translation/runner.ts";
 import { saveSheet, sheetOf, translationFor } from "#lib/server/translation/sheet.ts";
-import { credit } from "#lib/server/week/days.ts";
+import { credit, reviewsDone } from "#lib/server/week/days.ts";
 import { PIECES_PAGE, piecesPage, shelvesOf } from "#lib/server/writing/pieces.ts";
 import { takeUp } from "#lib/server/writing/take-up.ts";
 import { POST as startPost } from "../../../src/routes/api/s/+server.ts";
@@ -794,6 +795,37 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 		// The other half is still earned, on the same row.
 		expect(await credit(db, learner, "learned", "en", at)).toBe(true);
 		expect(await version()).not.toBe(first);
+	});
+
+	it("finds the reviews done only when there is something in the notebook and none of it is waiting", async () => {
+		const now = new Date();
+		// Nothing collected yet: nothing has been reviewed by looking.
+		expect(await reviewsDone(db, learner.id, "en", now)).toBe(false);
+		// But learning something then is the whole day: there is nothing it could have reviewed.
+		expect(await credit(db, learner, "learned", "en", now)).toBe(true);
+		expect((await db.select().from(practiceDay).where(eq(practiceDay.userId, learner.id)))[0]).toMatchObject({
+			learnedAt: now,
+			reviewedAt: now,
+		});
+		const [card] = await db
+			.insert(note)
+			.values({
+				userId: learner.id,
+				language: "en",
+				kind: "collected",
+				phrase: "hello",
+				meaning: "你好",
+				meaningLanguage: "zh-CN",
+				fsrs: newCard(now, "UTC"),
+				due: new Date(now.getTime() + 864e5),
+			})
+			.returning();
+		// A new note waits until the next local day: today's reviews are done.
+		expect(await reviewsDone(db, learner.id, "en", now)).toBe(true);
+		// Another language's notebook is its own.
+		expect(await reviewsDone(db, learner.id, "es", now)).toBe(false);
+		await db.update(note).set({ due: now }).where(eq(note.id, card.id));
+		expect(await reviewsDone(db, learner.id, "en", now)).toBe(false);
 	});
 
 	it("retired revision callbacks cannot overwrite a replacement or recreate a deleted snapshot", async () => {
