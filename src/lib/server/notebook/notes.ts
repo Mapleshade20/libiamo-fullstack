@@ -69,13 +69,12 @@ export type Collected = {
 	marked: string;
 	sentence: string;
 };
-/**
- * Phrases filled in from something the learner read, each kept the moment it is: the reading first (once), then an entry
- * for each. Returns the reading and the entries' ids, in order.
- */
 /** A passage pasted to collect from, kept before anything is highlighted in it. */
-export async function addReading(userId: string, text: string, language: string): Promise<string> {
-	const [r] = await db.insert(reading).values({ userId, language, text }).returning({ id: reading.id });
+export async function addReading(userId: string, text: string, language: string, place?: string): Promise<string> {
+	const [r] = await db
+		.insert(reading)
+		.values({ userId, language, text, place: place || null })
+		.returning({ id: reading.id });
 	return r.id;
 }
 
@@ -114,26 +113,40 @@ export async function readingOf(userId: string, id: string): Promise<{ id: strin
 	return { ...r, kept };
 }
 
+type ReadingIn = { id?: string; text: string; language: string; place?: string };
+/** The reading a page names, if it is the learner's. */
+export async function ownReading(userId: string, id: string | undefined, w: typeof db | Tx = db): Promise<string | null> {
+	if (!id) return null;
+	const [mine] = await w
+		.select({ id: reading.id })
+		.from(reading)
+		.where(and(eq(reading.id, id), eq(reading.userId, userId)));
+	return mine?.id ?? null;
+}
+
+/** The reading a page names when it is the learner's, else a new one of what they pasted. */
+export async function readingFor(userId: string, r: ReadingIn, w: typeof db | Tx = db): Promise<string> {
+	const mine = await ownReading(userId, r.id, w);
+	if (mine) return mine;
+	const [made] = await w
+		.insert(reading)
+		.values({ userId, language: r.language, text: r.text, place: r.place || null })
+		.returning({ id: reading.id });
+	return made.id;
+}
+
+/**
+ * Phrases filled in from something the learner read, each kept the moment it is: the reading first (once), then an entry
+ * for each. Returns the reading and the entries' ids, in order.
+ */
 export async function fileCollected(
 	u: WeekLearner,
-	r: { id?: string; text: string; language: string; place?: string; tutorLanguage: string },
+	r: ReadingIn & { tutorLanguage: string },
 	items: Collected[],
 	now = new Date(),
 ): Promise<{ readingId: string; ids: string[] }> {
 	return db.transaction(async (tx) => {
-		let readingId = r.id;
-		if (readingId) {
-			const [mine] = await tx
-				.select({ id: reading.id })
-				.from(reading)
-				.where(and(eq(reading.id, readingId), eq(reading.userId, u.id)));
-			if (!mine) readingId = undefined;
-		}
-		if (!readingId)
-			[{ id: readingId }] = await tx
-				.insert(reading)
-				.values({ userId: u.id, language: r.language, text: r.text, place: r.place || null })
-				.returning({ id: reading.id });
+		const readingId = await readingFor(u.id, r, tx);
 		if (!items.length) return { readingId, ids: [] };
 		// One at a time: a phrase already kept from the same words (another tab, an earlier visit) is not kept twice, and
 		// its entry's id comes back instead.

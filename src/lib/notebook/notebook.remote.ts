@@ -72,9 +72,11 @@ export const rate = command(
 	},
 );
 
-/** Something pasted to collect from: kept as a reading at once, so its page (/collect/<id>) can be opened again. */
-export const startReading = command(z.object({ passage: z.string().trim().min(1).max(12_000), lang: language }), async ({ passage, lang }) =>
-	addReading(learner().id, passage, lang),
+/** Something pasted to collect from (or a scenario's text, once something in it is marked): kept as a reading at once,
+    so its page (/collect/<id>) can be opened again and its calls are recorded with it. */
+export const startReading = command(
+	z.object({ passage: z.string().trim().min(1).max(12_000), lang: language, place: z.string().max(40).optional() }),
+	async ({ passage, lang, place }) => addReading(learner().id, passage, lang, place),
 );
 
 /** A reading of theirs, to collect from. */

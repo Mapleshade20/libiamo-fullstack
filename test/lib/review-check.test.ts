@@ -2,12 +2,12 @@ import assert from "node:assert/strict";
 import { test } from "vitest";
 import { hintOf, verdictOf } from "#lib/review/check.ts";
 
-const own = { kind: "own" as const, answer: "it left him miserable and furious", also: ["it left him furious and miserable"] };
+const own = { kind: "own" as const, answer: "it left him miserable and furious" };
 const read = { kind: "collected" as const, answer: "For what it's worth" };
 
 test("a typed answer matches regardless of case, punctuation and curly quotes", () => {
 	assert.equal(verdictOf(read, "for what it’s worth!"), "exact");
-	assert.equal(verdictOf(own, "It left him furious and miserable."), "exact");
+	assert.equal(verdictOf(own, "It left him miserable and furious."), "exact");
 });
 
 test("a small slip is close, not wrong", () => {

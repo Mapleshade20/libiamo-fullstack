@@ -9,8 +9,6 @@ export type Face = {
 	/** The sentence, with `answer` in it. */
 	text: string;
 	answer: string;
-	/** Other answers that count as the same. */
-	also?: string[];
 	/** What the learner first wrote there, shown struck: the cue for a card from their own writing. */
 	was?: string;
 	/** What it means, or the sentence's translation: the cue for the rest. */

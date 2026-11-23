@@ -18,12 +18,12 @@ function distance(a: string, b: string) {
 	return d[a.length][b.length];
 }
 /** `own` cards may be said another way just as well: only the learner can tell, so another answer is "other", not wrong. */
-export function verdictOf(card: { kind: "own" | "collected"; answer: string; also?: string[] }, given: string): Verdict {
+export function verdictOf(card: { kind: "own" | "collected"; answer: string }, given: string): Verdict {
 	if (!given.trim()) return "none";
 	const g = norm(given);
-	const all = [card.answer, ...(card.also ?? [])].map(norm);
-	if (all.includes(g)) return "exact";
-	const best = Math.min(...all.map((a) => distance(a, g) / Math.max(a.length, 1)));
+	const a = norm(card.answer);
+	if (a === g) return "exact";
+	const best = distance(a, g) / Math.max(a.length, 1);
 	if (best <= 0.2) return "close";
 	return card.kind === "own" ? "other" : "miss";
 }

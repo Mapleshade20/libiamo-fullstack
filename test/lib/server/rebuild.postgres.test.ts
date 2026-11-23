@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { and, eq } from "drizzle-orm";
 import postgres from "postgres";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -42,7 +42,7 @@ vi.mock("#lib/server/translation/source.ts", () => ({
 import { encryptKey } from "#lib/server/account/key.ts";
 import { inbox } from "#lib/server/admin/inbox.ts";
 import { adminScenario, scenarioFromSuggestion } from "#lib/server/admin/scenarios.ts";
-import { sessions } from "#lib/server/admin/sessions.ts";
+import { sessionOf, sessions } from "#lib/server/admin/sessions.ts";
 import { deleteUser, users } from "#lib/server/admin/users.ts";
 import { db, sql } from "#lib/server/db/index.ts";
 import {
@@ -69,7 +69,17 @@ import { settingFrom } from "#lib/server/exchange/setting.ts";
 import { Caller, type CallRecord, chat } from "#lib/server/llm/caller.ts";
 import { learnerCaller } from "#lib/server/llm/callers.ts";
 import { pruneCalls, writeRecord } from "#lib/server/llm/records.ts";
-import { fileCollected, NOTEBOOK_PAGE, notebookGlance, notebookPage, rateNote, readingOf } from "#lib/server/notebook/notes.ts";
+import {
+	addReading,
+	fileCollected,
+	NOTEBOOK_PAGE,
+	notebookGlance,
+	notebookPage,
+	ownReading,
+	rateNote,
+	readingFor,
+	readingOf,
+} from "#lib/server/notebook/notes.ts";
 import { newCard } from "#lib/server/review/scheduler.ts";
 import {
 	abandon,
@@ -140,7 +150,11 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 	};
 	beforeAll(async () => {
 		await admin.unsafe(`CREATE DATABASE "${config.name}"`);
-		await sql.unsafe(readFileSync("drizzle/0000_init.sql", "utf8"));
+		// Every migration in order, as production has them.
+		for (const f of readdirSync("drizzle")
+			.filter((f) => f.endsWith(".sql"))
+			.toSorted())
+			await sql.unsafe(readFileSync(`drizzle/${f}`, "utf8"));
 	});
 	afterAll(async () => {
 		try {
@@ -608,6 +622,53 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 		await db.update(exchange).set({ status: "completed", completedAt: new Date() });
 		expect((await afterOf(u, "imessage-thanks", "es"))?.pieceId).toBe(es.pieceId);
 		expect(await afterOf(u, "imessage-thanks", "en")).toBeNull();
+	});
+
+	it("records collecting with its reading, shows it to the admin while the learner helps improve Libiamo, and never names another's reading", async () => {
+		await db.insert(user).values({ id: "other", email: "someone@example.test", name: "Someone" });
+		const theirs = await addReading("other", "Their text.", "en");
+		// A reading id from someone else is never theirs to record under or to file into.
+		expect(await ownReading(learner.id, theirs)).toBeNull();
+		const readingId = await readingFor(learner.id, { id: theirs, text: "It was late, so I took the long way round.\nThen home.", language: "en" });
+		expect(readingId).not.toBe(theirs);
+		expect(await readingFor(learner.id, { id: readingId, text: "ignored", language: "en" })).toBe(readingId);
+
+		await writeRecord(
+			{ userId: learner.id, readingId, keepText: true },
+			{
+				...call,
+				tag: "collect/explain",
+				messages: [{ role: "user", content: 'Highlights:\n1. "the long way round"\n\nFor each highlight' }],
+				output: '{"items":[{"n":1,"phrase":"take the long way round","meaning":"绕远路","why":"w","example":"e"}]}',
+			},
+		);
+		await fileCollected(learner, { id: readingId, text: "", language: "en", tutorLanguage: "zh-CN" }, [
+			{
+				phrase: "take the long way round",
+				meaning: "绕远路",
+				register: "neutral",
+				why: "w",
+				example: "e",
+				marked: "the long way round",
+				sentence: "It was late, so I took the long way round.",
+			},
+		]);
+		const row = (await sessions()).find((s) => s.id === readingId);
+		expect(row).toMatchObject({ kind: "collect", title: "It was late, so I took the long way round.", stops: 1, calls: 1, callsKept: true });
+		const view = await sessionOf(readingId);
+		expect(view?.steps.map((s) => s.label)).toEqual(["Pasted", "Highlighted 1", "In the notebook"]);
+		expect(view?.steps[1]).toMatchObject({
+			calls: [1],
+			lines: [
+				{ who: "me", text: "the long way round" },
+				{ who: "tutor", text: "take the long way round: 绕远路\n\nw\n\ne" },
+			],
+		});
+
+		// A learner who stops helping improve Libiamo is no longer shown.
+		await db.update(user).set({ helpImprove: false }).where(eq(user.id, learner.id));
+		expect((await sessions()).some((s) => s.id === readingId)).toBe(false);
+		expect(await sessionOf(readingId)).toBeNull();
 	});
 
 	it("marks again what was collected from a reading, and never keeps the same words twice", async () => {

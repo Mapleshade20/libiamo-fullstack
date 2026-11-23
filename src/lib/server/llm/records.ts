@@ -9,7 +9,7 @@ import type { CallRecord, Recorder } from "./caller.ts";
  * messages and the reply only while the learner helps improve Libiamo (`help_improve`). A system prompt is stored once
  * in `llm_prompt` and named by its hash.
  */
-export type RecordScope = { userId: string | null; pieceId?: string | null; keepText: boolean };
+export type RecordScope = { userId: string | null; pieceId?: string | null; readingId?: string | null; keepText: boolean };
 
 export function recorder(scope: RecordScope): Recorder {
 	return (r) => {
@@ -41,6 +41,7 @@ export async function writeRecord(scope: RecordScope, r: CallRecord) {
 		await tx.insert(llmCall).values({
 			userId: scope.userId,
 			pieceId: scope.pieceId ?? null,
+			readingId: scope.readingId ?? null,
 			stepSeq: r.step,
 			purpose: r.purpose,
 			tag: r.tag,

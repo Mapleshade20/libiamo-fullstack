@@ -292,7 +292,7 @@ async function askAbout(m: Mark, q: string) {
 		const r = await fetch("/api/collect/ask", {
 			method: "POST",
 			headers: { "content-type": "application/json" },
-			body: JSON.stringify({ ...SETUP, phrase: m.data.phrase, history: m.thread.filter((x) => x.a !== null), question: q }),
+			body: JSON.stringify({ ...SETUP, readingId, phrase: m.data.phrase, history: m.thread.filter((x) => x.a !== null), question: q }),
 		}).then((x) => answered<{ answer?: string }>(x));
 		if (!active()) return;
 		turn.a = r.answer ?? tx("colFailed");

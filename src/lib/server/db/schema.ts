@@ -705,7 +705,6 @@ export const note = pgTable(
 		sentence: text("sentence"),
 		marked: text("marked"),
 		was: text("was"),
-		also: text("also").array().default(sql`'{}'::text[]`).notNull(),
 		fsrs: jsonb("fsrs").notNull(),
 		due: at("due").notNull(),
 		deletedAt: at("deleted_at"),
@@ -782,6 +781,8 @@ export const llmCall = pgTable(
 		id: uuid("id").primaryKey().default(sql`uuidv7()`),
 		userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
 		pieceId: uuid("piece_id").references(() => piece.id, { onDelete: "cascade" }),
+		/** A collecting call's reading (what the learner pasted): its record in the admin's sessions. */
+		readingId: uuid("reading_id").references(() => reading.id, { onDelete: "cascade" }),
 		stepSeq: integer("step_seq"),
 		purpose: text("purpose").notNull(),
 		tag: text("tag").notNull(),
@@ -807,6 +808,7 @@ export const llmCall = pgTable(
 	(t) => [
 		check("llm_call_state_check", oneOf(t.state, CALL_STATES)),
 		index("llm_call_piece_idx").on(t.pieceId),
+		index("llm_call_reading_idx").on(t.readingId),
 		index("llm_call_created_idx").on(t.createdAt),
 		index("llm_call_user_created_idx").on(t.userId, t.createdAt),
 		index("llm_call_prompt_idx").on(t.promptHash),

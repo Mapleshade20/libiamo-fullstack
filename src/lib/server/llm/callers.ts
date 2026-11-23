@@ -36,6 +36,8 @@ async function keyOf(userId: string): Promise<{ route: Route; decision: string |
 export type LearnerScope = {
 	user: { id: string; helpImprove: boolean };
 	pieceId?: string | null;
+	/** A collecting call's reading (the learner's, checked by the caller's maker). */
+	readingId?: string | null;
 	lanes?: Lanes;
 	step?: () => number | null;
 	/** Ask the provider even when the development cache holds the request. */
@@ -54,7 +56,7 @@ export async function learnerCaller(scope: LearnerScope): Promise<Caller> {
 		cache,
 		fresh: scope.fresh,
 		step: scope.step,
-		record: recorder({ userId: scope.user.id, pieceId: scope.pieceId, keepText: scope.user.helpImprove }),
+		record: recorder({ userId: scope.user.id, pieceId: scope.pieceId, readingId: scope.readingId, keepText: scope.user.helpImprove }),
 	});
 }
 

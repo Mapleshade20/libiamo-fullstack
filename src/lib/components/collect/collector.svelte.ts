@@ -1,7 +1,8 @@
 import { captureTourState } from "#lib/components/tour/lifetime.ts";
 import { keepCollected, sandboxed } from "#lib/components/tour/sandbox.svelte.ts";
+import type { LEARNABLE } from "#lib/constants.ts";
 import { answered, needKey, stopOf } from "#lib/llm/stops.ts";
-import { removeNotes } from "#lib/notebook/notebook.remote.ts";
+import { removeNotes, startReading } from "#lib/notebook/notebook.remote.ts";
 
 /*
  * Phrases kept from something read, wherever it is read (a scenario's situation, later the session's context): each
@@ -38,7 +39,7 @@ export class Collector {
 	private batch = `${Date.now()}`;
 	private timers = new Map<string, ReturnType<typeof setTimeout>>();
 	private retries = 0;
-	/** Each text's reading, once its first phrase is kept. */
+	/** Each text's reading, kept before its first phrase is filled in (so a failed call's retry names the same one). */
 	private readings = new Map<string, string>();
 	constructor(private setup: Setup) {}
 	private forget(ids: (string | undefined)[]) {
@@ -81,6 +82,13 @@ export class Collector {
 		try {
 			needKey();
 			this.halt = null;
+			// The tour's sandbox never reaches the server.
+			if (!this.readings.has(block) && !sandboxed())
+				this.readings.set(
+					block,
+					await startReading({ passage, lang: this.setup.lang as (typeof LEARNABLE)[number], place: this.setup.place?.slice(0, 40) }),
+				);
+			if (!this.active()) return;
 			const r = await fetch("/api/collect/explain", {
 				method: "POST",
 				headers: { "content-type": "application/json" },
