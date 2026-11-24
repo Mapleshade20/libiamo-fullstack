@@ -60,6 +60,7 @@ import {
 	scenario,
 	scenarioSource,
 	sessionCase,
+	suggestion,
 	user,
 	userKey,
 } from "#lib/server/db/schema.ts";
@@ -541,6 +542,13 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 			.where(eq(scenario.id, id));
 		expect(await mine()).toMatchObject({ status: "live", scenarioId: id });
 		expect((await inbox()).suggestions.find((x) => x.id === first.id)?.scenario).toMatchObject({ id, published: true });
+		// One in a language learners are offered no scenarios in waits, rather than becoming a draft nobody can save.
+		// Room in the five for one more.
+		await db.update(suggestion).set({ status: "unused" }).where(eq(suggestion.status, "pending"));
+		await suggest(learner.id, { place: "email", language: "de", situation: "Mein Vermieter antwortet nicht.", who: "", purpose: "Nachfragen" });
+		const [german] = (await inbox()).suggestions.filter((x) => x.language === "de");
+		await expect(scenarioFromSuggestion(german.id, learner.id)).rejects.toThrow("Learners of German are not offered scenarios yet");
+		expect((await inbox()).suggestions.find((x) => x.id === german.id)).toMatchObject({ status: "pending" });
 	});
 
 	it("deletes owned dynamic prompts with the account and refuses records arriving after deletion", async () => {
@@ -675,6 +683,16 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 		});
 		expect(await entering).toBeNull();
 		expect(await openExchange(u, inEs)).toEqual(es);
+		// Nor in a scenario made a translation meanwhile: what is entered is the scenario as it is once its row is held.
+		const inEn2 = await settingIn("en");
+		await db.transaction(async (tx) => {
+			await tx.select().from(scenario).where(eq(scenario.id, "imessage-thanks")).for("update");
+			entering = openExchange(late, inEn2);
+			await new Promise((r) => setTimeout(r, 100));
+			await tx.update(scenario).set({ kind: "translation", place: "translation" }).where(eq(scenario.id, "imessage-thanks"));
+		});
+		expect(await entering).toBeNull();
+		await db.update(scenario).set({ kind: "exchange", place: "imessage" }).where(eq(scenario.id, "imessage-thanks"));
 		// Nor in a language that is a draft.
 		await db
 			.update(scenario)

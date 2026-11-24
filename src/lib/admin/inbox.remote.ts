@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { EXCHANGE_PLACES } from "#lib/constants.ts";
 import { inbox as inboxOf, markFeedback, setAside } from "#lib/server/admin/inbox.ts";
-import { scenarioFromSuggestion } from "#lib/server/admin/scenarios.ts";
+import { ScenarioError, scenarioFromSuggestion } from "#lib/server/admin/scenarios.ts";
 import { admin } from "#lib/server/guard.ts";
 import { command, query } from "$app/server";
 import { waiting } from "./admin.remote.ts";
@@ -21,9 +21,14 @@ export const setSuggestionAside = command(z.object({ id: z.string().uuid(), reas
 /** Makes a draft scenario of a suggestion and answers its id (the page opens it); one from elsewhere names its place. */
 export const makeScenario = command(z.object({ id: z.uuid(), place: z.enum(EXCHANGE_PLACES).optional() }), async ({ id, place }) => {
 	const u = admin();
-	const scenarioId = await scenarioFromSuggestion(id, u.id, place);
-	await Promise.all([inbox().refresh(), waiting().refresh()]);
-	return scenarioId;
+	try {
+		const scenarioId = await scenarioFromSuggestion(id, u.id, place);
+		await Promise.all([inbox().refresh(), waiting().refresh()]);
+		return { ok: true as const, scenarioId };
+	} catch (e) {
+		if (e instanceof ScenarioError) return { ok: false as const, error: e.message };
+		throw e;
+	}
 });
 
 export const markFeedbackDone = command(z.object({ id: z.string().uuid(), done: z.boolean() }), async ({ id, done }) => {

@@ -344,6 +344,9 @@ export async function freeId(base: string) {
 export async function scenarioFromSuggestion(suggestionId: string, by: string, chosen?: ExchangePlace) {
 	const [s] = await db.select().from(suggestion).where(eq(suggestion.id, suggestionId));
 	if (!s) throw new ScenarioError("No such suggestion.");
+	// Kept waiting, not made a draft that cannot be saved.
+	if (!hasScenarios(s.language))
+		throw new ScenarioError(`Learners of ${langName(s.language, "en")} are not offered scenarios yet: it waits until they are.`);
 	const place = s.place === "other" ? chosen : (s.place as ExchangePlace);
 	if (!place) throw new ScenarioError("Say where it happens.");
 	const id = await freeId(s.purpose);
