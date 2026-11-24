@@ -855,6 +855,18 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 		// Live, it is published.
 		expect(await saved({ ...ok, versions: { es: version } }, true, false)).toBe("saved");
 		expect((await db.select().from(scenario).where(eq(scenario.id, "menu-two")))[0].status).toBe("published");
+		// A language learners have written in keeps its version (a draft stops offering it); one nobody has goes.
+		await db
+			.insert(piece)
+			.values({ userId: learner.id, language: "es", kind: "translation", scenarioId: "menu-two", text: "", tutorLanguage: "zh-CN" });
+		const two = { ...ok, versions: { es: version, fr: version } };
+		expect(await saved(two, false, false)).toBe("saved");
+		expect(await saved({ ...ok, versions: { fr: version } }, false, false)).toBe(
+			"Learners have written in Spanish: make it a draft instead of removing it.",
+		);
+		expect(await saved({ ...ok, versions: { es: { ...version, draft: true } } }, false, false)).toMatch(/Every language is a draft/);
+		expect(await saved({ ...ok, versions: { es: version } }, false, false)).toBe("saved");
+		expect((await adminScenario("menu-two"))?.writtenIn).toEqual(["es"]);
 	});
 
 	it("makes a source for a version saved before it could leave terms out", async () => {

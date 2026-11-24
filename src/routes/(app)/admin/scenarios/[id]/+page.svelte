@@ -108,7 +108,7 @@ $effect.pre(() => {
 	shown = key;
 	if (isNew) take(blank());
 	else if (loaded) {
-		const { publishedAt: _p, written: _w, sources: _s, works: _k, from: _f, ...draft } = loaded;
+		const { publishedAt: _p, written: _w, writtenIn: _i, sources: _s, works: _k, from: _f, ...draft } = loaded;
 		take(draft as Draft);
 	}
 });
@@ -615,7 +615,11 @@ async function saveEdit(r: AdminSource) {
 				{#if ["ao3", "reddit", "discord"].includes(d.place)}
 					<Button variant="ghost" size="sm" onclick={() => (importing = true)}><ClipboardPaste aria-hidden="true" />Import a capture</Button>
 				{/if}
-				{#if Object.keys(d.versions).length > 1}
+				{#if loaded?.writtenIn.includes(lang)}
+					<span class="kept" use:tip={`Learners have written in ${langEn(lang)}, so it stays: make it a draft to stop offering it.`}
+						><Lock class="size-3.5" aria-hidden="true" />Learners wrote in it</span
+					>
+				{:else if Object.keys(d.versions).length > 1}
 					{@const l = lang}
 					<Button
 						variant="ghost"
@@ -1279,6 +1283,14 @@ async function saveEdit(r: AdminSource) {
 }
 .state.live {
 	color: var(--ok);
+}
+.kept {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 0 10px;
+	font-size: 13px;
+	color: var(--muted);
 }
 .ver-name {
 	margin: 0 4px 0 2px;

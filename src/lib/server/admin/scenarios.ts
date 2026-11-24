@@ -61,6 +61,8 @@ export type ScenarioDraft = {
 export type AdminScenario = ScenarioDraft & {
 	publishedAt: string | null;
 	written: number;
+	/** The languages learners have written in it in (any piece, finished or not). */
+	writtenIn: string[];
 	sources: AdminSource[];
 	works: { id: string; title: string }[];
 	/** The learner's suggestion it was made from. */
@@ -78,10 +80,13 @@ async function writtenCounts(ids?: string[]) {
 	return new Map(rows.map((r) => [r.id as string, r.n]));
 }
 
-/** Pieces of a scenario at all, finished or not: once there is one, where it happens is fixed. */
-async function anyPiece(id: string) {
-	const [r] = await db.select({ n: count() }).from(piece).where(eq(piece.scenarioId, id));
-	return r.n > 0;
+/**
+ * The languages a scenario has pieces in, finished or not. Once it has one, where it happens is fixed; a language with
+ * one keeps its version, which its conversations are played and handed over from (server/exchange/setting.ts).
+ */
+async function writtenIn(id: string) {
+	const rows = await db.selectDistinct({ language: piece.language }).from(piece).where(eq(piece.scenarioId, id));
+	return rows.map((r) => r.language);
 }
 
 export async function adminScenarios(): Promise<AdminScenarioRow[]> {
@@ -119,11 +124,12 @@ export async function adminScenarios(): Promise<AdminScenarioRow[]> {
 export async function adminScenario(id: string): Promise<AdminScenario | null> {
 	const [row] = await db.select().from(scenario).where(eq(scenario.id, id));
 	if (!row) return null;
-	const [sources, written, works, from] = await Promise.all([
+	const [sources, written, works, from, languages] = await Promise.all([
 		db.select().from(scenarioSource).where(eq(scenarioSource.scenarioId, id)).orderBy(scenarioSource.language, scenarioSource.native),
 		writtenCounts([id]),
 		db.select({ id: work.id, title: work.title }).from(work).orderBy(work.title),
 		suggestionFor(id),
+		writtenIn(id),
 	]);
 	return {
 		id: row.id,
@@ -137,6 +143,7 @@ export async function adminScenario(id: string): Promise<AdminScenario | null> {
 		versions: row.versions as Record<string, Version>,
 		publishedAt: row.publishedAt?.toISOString() ?? null,
 		written: written.get(id) ?? 0,
+		writtenIn: languages,
 		works,
 		from,
 		sources: sources.map((s) => ({
@@ -175,8 +182,14 @@ export async function saveScenario(input: ScenarioDraft, opts: { isNew: boolean;
 	const [was] = await db.select().from(scenario).where(eq(scenario.id, input.id));
 	if (opts.isNew && was) throw new ScenarioError(`There is already a scenario called ${input.id}.`);
 	if (!opts.isNew && !was) throw new ScenarioError("No such scenario.");
-	if (was && (was.place !== input.place || was.kind !== input.kind) && (await anyPiece(input.id)))
+	const written = was ? await writtenIn(input.id) : [];
+	if (was && (was.place !== input.place || was.kind !== input.kind) && written.length)
 		throw new ScenarioError("Learners have written in this scenario, so where it happens cannot change.");
+	const gone = written.filter((l) => !versions.data[l]);
+	if (gone.length)
+		throw new ScenarioError(
+			`Learners have written in ${gone.map((l) => langName(l, "en")).join(" and ")}: make ${gone.length > 1 ? "them drafts" : "it a draft"} instead of removing ${gone.length > 1 ? "them" : "it"}.`,
+		);
 	const status: ScenarioStatus = opts.publish
 		? "published"
 		: (was?.status as ScenarioStatus | undefined) === "published"
@@ -209,7 +222,7 @@ export async function withdrawScenario(id: string) {
 
 /** Deletes a draft nobody has written in. */
 export async function deleteScenario(id: string) {
-	if (await anyPiece(id)) throw new ScenarioError("Learners have written in this scenario; withdraw it instead.");
+	if ((await writtenIn(id)).length) throw new ScenarioError("Learners have written in this scenario; withdraw it instead.");
 	await db.transaction(async (tx) => {
 		// A suggestion it was made from waits again.
 		await tx.update(suggestion).set({ status: "pending", scenarioId: null, resolvedAt: null }).where(eq(suggestion.scenarioId, id));
