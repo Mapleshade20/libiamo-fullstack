@@ -307,7 +307,9 @@ const trySave = (publish: boolean) =>
 			: [],
 		() => save(publish),
 	);
-let editing = $state<(SourceEdit & { id: string }) | null>(null);
+// The generation it was opened on goes with the save: a source made or edited meanwhile (the page asks again while
+// others are made) refuses it rather than being overwritten.
+let editing = $state<(SourceEdit & { id: string; generation: string }) | null>(null);
 const GLOSS = [
 	["term", "Term, as in the original"],
 	["shown", "As the source shows it"],
@@ -315,13 +317,13 @@ const GLOSS = [
 ] as const;
 let editProblem = $state("");
 const edit = (r: AdminSource) => {
-	editing = { id: r.id, title: r.title, text: r.text, glossary: structuredClone(r.glossary) };
+	editing = { id: r.id, generation: r.generation, title: r.title, text: r.text, glossary: structuredClone(r.glossary) };
 	editProblem = "";
 };
 async function saveEdit(r: AdminSource) {
 	if (!editing) return;
-	const { id: _, ...e } = $state.snapshot(editing);
-	await confirm({ scenarioId: d.id, sourceId: r.id, generation: r.generation, edit: e }).then(
+	const { id: _, generation, ...e } = $state.snapshot(editing);
+	await confirm({ scenarioId: d.id, sourceId: r.id, generation, edit: e }).then(
 		() => (editing = null),
 		(err) => (editProblem = err?.body?.message ?? "Could not save it."),
 	);

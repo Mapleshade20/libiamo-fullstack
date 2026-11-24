@@ -703,6 +703,7 @@ export const note = pgTable(
 		examples: jsonb("examples").notNull().default(sql`'[]'::jsonb`),
 		sentence: text("sentence"),
 		marked: text("marked"),
+		markedAt: integer("marked_at"),
 		was: text("was"),
 		fsrs: jsonb("fsrs").notNull(),
 		due: at("due").notNull(),

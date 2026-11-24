@@ -19,7 +19,8 @@ import { REGISTERS, type Register } from "#lib/constants.ts";
 import { tx } from "#lib/i18n/tx.ts";
 import { changeNote, due, noteById, notebook, removeNotes } from "#lib/notebook/notebook.remote.ts";
 import { lang, noteNow } from "#lib/notebook/notebook.svelte.ts";
-import { around, fixedPart, noteFaces } from "#lib/review/faces.ts";
+import type { Example } from "#lib/notebook/types.ts";
+import { around, faceAt, fixedPart, noteFaces } from "#lib/review/faces.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
 
@@ -45,27 +46,17 @@ const REG: Record<string, string> = {
 };
 const when = $derived(n ? (n.due ? tx("noteDueNow") : n.next === 1 ? tx("noteDueTomorrow") : tx("noteDueIn", { n: n.next ?? 1 })) : "");
 const key = (phrase: string) => fixedPart(phrase);
-const read = $derived(n?.sentence ? around(n.sentence, n.marked ?? n.phrase) : null);
-const settled = $derived(n?.final ? around(n.final, n.marked || key(n.phrase)) : null);
+const read = $derived(n?.sentence ? around(n.sentence, n.marked ?? n.phrase, n.markedAt) : null);
+const settled = $derived(n?.final ? around(n.final, n.marked || key(n.phrase), n.marked ? n.markedAt : undefined) : null);
 
 let deleting = $state(false);
-type Draft = { phrase: string; gloss: string; usage: string; register: string; examples: { t: string; n?: string; span?: string }[] };
+type Draft = { phrase: string; gloss: string; usage: string; register: string; examples: Example[] };
 let draft = $state<Draft | null>(null);
 function startEdit() {
 	if (n) draft = { phrase: n.phrase, gloss: n.gloss, usage: n.usage ?? "", register: n.register ?? "", examples: $state.snapshot(n.examples) ?? [] };
 }
-// The card review asks next, as it would be with what is being written (the same face of the entry).
-const card = $derived.by(() => {
-	if (!n || !draft) return n?.card;
-	const was = noteFaces({ ...n, kind: n.from });
-	const now = noteFaces({ ...n, ...draft, kind: n.from });
-	return now[
-		Math.max(
-			0,
-			was.findIndex((f) => f.text === n.card?.text),
-		) % now.length
-	];
-});
+// The card review asks next, as it would be with what is being written (picked as review picks it).
+const card = $derived(n && draft ? faceAt(noteFaces({ ...n, ...draft, kind: n.from }), n.reps) : n?.card);
 const REGS = [{ value: "", label: "—" }, ...REGISTERS.map((r) => ({ value: r, label: tx(REG[r]) }))];
 let busy = $state(false);
 async function save(e: SubmitEvent) {
@@ -136,7 +127,7 @@ $effect(() => {
 							<textarea class="input area" bind:value={e.t} rows="2" maxlength="400" lang={app.lang} aria-label={tx("noteExamples")}></textarea>
 							<input class="input" bind:value={e.n} maxlength="400" placeholder={tx("noteTranslation")} aria-label={tx("noteTranslation")}>
 							{#if e.t.trim()}
-								<MarkWords text={e.t} bind:span={e.span} lang={app.lang} />
+								<MarkWords text={e.t} bind:span={e.span} bind:at={e.at} lang={app.lang} />
 							{/if}
 							<button
 								type="button"
@@ -179,7 +170,7 @@ $effect(() => {
 			{#if n.examples?.length}
 				<ul class="examples" aria-label={tx("noteExamples")}>
 					{#each n.examples as e}
-						{@const m = around(e.t, e.span || key(n.phrase))}
+						{@const m = (e.span && around(e.t, e.span, e.at)) || around(e.t, key(n.phrase))}
 						<li>
 							<p class="t" lang={app.lang}>
 								{#if m}

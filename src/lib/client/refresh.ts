@@ -41,7 +41,7 @@ export function settled() {
 	hydrated = true;
 }
 
-type Held = { ready: boolean; refresh(): Promise<unknown> };
+type Held = { ready: boolean; error?: unknown; refresh(): Promise<unknown> };
 const isQuery = (q: unknown): q is Held => typeof q === "object" && q !== null && "ready" in q && typeof (q as Held).refresh === "function";
 
 /** How long an answer a page opened on counts as just asked. */
@@ -75,10 +75,12 @@ export function opening(open: (event: LoadEvent<Record<string, string>>) => unkn
 		if (kept.size > 32) kept.delete(kept.keys().next().value as string);
 		// The first page is the server's, rendered with its answers: nothing to wait for or ask again.
 		if (!hydrated) return { opened: [] };
-		const missing = queries.filter((q) => !q.ready);
+		// One whose last asking failed is asked again and waited for: Kit keeps a failure (a page awaiting the query meets
+		// it again), and the query is kept here past the moment Kit would let it go.
+		const missing = queries.filter((q) => !q.ready || q.error).map((q) => (q.error ? refreshQuery(q) : q));
 		// Held answers this young are not asked again (a hover passing again, a quick trip back), unless the page must
 		// open on the latest.
-		const held = recent && !fresh ? [] : queries.filter((q) => !missing.includes(q));
+		const held = recent && !fresh ? [] : queries.filter((q) => q.ready && !q.error);
 		// A failure is the page's to show, as its own await meets it.
 		await Promise.all([...missing, ...(fresh ? held.map(refreshQuery) : [])].map((p) => Promise.resolve(p).catch(() => {})));
 		return { opened: fresh ? [] : held };

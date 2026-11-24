@@ -1,3 +1,5 @@
+import type { Example } from "#lib/notebook/types.ts";
+
 /*
  * What review asks, decided once for review and the notebook (2026-11-08). Every card is the same shape: a sentence
  * with the phrase blanked, and above it one cue to recall it by. From the learner's own writing, the cue is what they
@@ -9,6 +11,8 @@ export type Face = {
 	/** The sentence, with `answer` in it. */
 	text: string;
 	answer: string;
+	/** Where `answer` begins in `text` (the same words may be there twice). */
+	at?: number;
 	/** Words inside the answer that are not the phrase (the slot in "framed … as"): shown, though written with the rest. */
 	given?: string[];
 	/** What the learner first wrote there, shown struck: the cue for a card from their own writing. */
@@ -24,24 +28,47 @@ export const fixedPart = (phrase: string) =>
 		.map((x) => x.trim().replace(/^[,;]\s*|[,;]$/g, ""))
 		.sort((a, b) => b.length - a.length)[0] ?? "";
 
-/** Where each piece of a span ("framed … as") is in a sentence, in order and whatever the case; null when one is not. */
-export function spanRanges(text: string, span: string): [number, number][] | null {
+/** A word's letters or digits, in a script written with spaces (where a piece of a span may not begin or end mid-word). */
+const spaced = (c = "") =>
+	/[\p{L}\p{N}]/u.test(c) && !/[\p{sc=Han}\p{sc=Hiragana}\p{sc=Katakana}\p{sc=Thai}\p{sc=Lao}\p{sc=Khmer}\p{sc=Myanmar}]/u.test(c);
+
+/**
+ * Where each piece of a span ("framed … as") is in a sentence, in order and whatever the case; null when one is not.
+ * `at`, where the first piece was marked, picks that one of the same words written twice; without it, or when the
+ * sentence no longer has them there, a piece is looked for as whole words ("over" is not the end of "leftover"), and
+ * failing that anywhere.
+ */
+export function spanRanges(text: string, span: string, at?: number): [number, number][] | null {
 	const low = text.toLowerCase();
-	const out: [number, number][] = [];
-	for (const piece of span.split(/\s*…\s*/).filter(Boolean)) {
-		const at = low.indexOf(piece.toLowerCase(), out.at(-1)?.[1] ?? 0);
-		if (at < 0) return null;
-		out.push([at, at + piece.length]);
-	}
-	return out.length ? out : null;
+	const pieces = span
+		.toLowerCase()
+		.split(/\s*…\s*/)
+		.filter(Boolean);
+	const whole = (i: number, n: number) => !(spaced(text[i - 1]) && spaced(text[i])) && !(spaced(text[i + n - 1]) && spaced(text[i + n]));
+	const find = (words: boolean) => {
+		const out: [number, number][] = [];
+		for (const [k, piece] of pieces.entries()) {
+			// Where it was marked is taken as it is.
+			if (k === 0 && at !== undefined && low.startsWith(piece, at)) {
+				out.push([at, at + piece.length]);
+				continue;
+			}
+			let i = low.indexOf(piece, out.at(-1)?.[1] ?? 0);
+			while (words && i >= 0 && !whole(i, piece.length)) i = low.indexOf(piece, i + 1);
+			if (i < 0) return null;
+			out.push([i, i + piece.length]);
+		}
+		return out.length ? out : null;
+	};
+	return find(true) ?? find(false);
 }
 
 /**
  * A sentence split around the words that matter in it, for marking or blanking them; null when they are not in it. A
  * span in pieces ("framed … as") is the stretch from the first to the last, with the words between them `given`.
  */
-export function around(text: string, part: string) {
-	const r = spanRanges(text, part);
+export function around(text: string, part: string, at?: number) {
+	const r = spanRanges(text, part, at);
 	if (!r) return null;
 	const [from, to] = [r[0][0], r[r.length - 1][1]];
 	const given = r.slice(1).map(([at], i) => text.slice(r[i][1], at).trim());
@@ -49,20 +76,34 @@ export function around(text: string, part: string) {
 }
 
 /** What a card asks of a sentence found `around` its span: the stretch, and the words in it the learner is given. */
-const asked = (at: { part: string; given: string[] }) => ({ answer: at.part, ...(at.given.length ? { given: at.given } : {}) });
+const asked = (at: { before: string; part: string; given: string[] }) => ({
+	answer: at.part,
+	at: at.before.length,
+	...(at.given.length ? { given: at.given } : {}),
+});
 
-/** A sentence a model marked with <m>…</m>: the plain sentence, and its marked words as a span (pieces apart joined by "…"). */
-export function unmark(tagged: string): { text: string; span?: string } {
+/**
+ * A sentence a model marked with <m>…</m>: the plain sentence, its marked words as a span (pieces apart joined by "…"),
+ * and where the first of them is (`at`, so the same words earlier in the sentence are not taken for them).
+ */
+export function unmark(tagged: string): { text: string; span?: string; at?: number } {
 	const pieces: string[] = [];
 	let last = 0;
+	let plain = 0;
+	let at: number | undefined;
 	for (const m of tagged.matchAll(/<m>(.*?)<\/m>/g)) {
 		const between = tagged.slice(last, m.index).replace(/<\/?m>/g, "");
+		plain += between.length;
 		// Marked words with only a space between them are one piece.
 		if (pieces.length && !between.trim()) pieces[pieces.length - 1] += between + m[1];
-		else if (m[1].trim()) pieces.push(m[1]);
+		else if (m[1].trim()) {
+			pieces.push(m[1]);
+			at ??= plain + m[1].length - m[1].trimStart().length;
+		}
+		plain += m[1].length;
 		last = m.index + m[0].length;
 	}
-	return { text: tagged.replace(/<\/?m>/g, ""), ...(pieces.length ? { span: pieces.map((p) => p.trim()).join(" … ") } : {}) };
+	return { text: tagged.replace(/<\/?m>/g, ""), ...(pieces.length ? { span: pieces.map((p) => p.trim()).join(" … "), at } : {}) };
 }
 
 /**
@@ -75,23 +116,27 @@ export function facesOf(n: {
 	gloss?: string;
 	before?: string;
 	final?: string;
-	/** The words of `final` that are the phrase as used there (the notes call marks them). */
+	/** The words of `final` that are the phrase as used there (the notes call marks them), and where they begin. */
 	marked?: string;
-	examples?: { t: string; n?: string; span?: string }[];
+	markedAt?: number;
+	examples?: Example[];
 }): Face[] {
 	const key = fixedPart(n.phrase);
 	const out: Face[] = [];
-	const own = n.final ? around(n.final, n.marked || key) : null;
+	const own = n.final ? around(n.final, n.marked || key, n.marked ? n.markedAt : undefined) : null;
 	if (own && n.final) out.push({ text: n.final, ...asked(own), was: n.before, cue: n.before ? undefined : n.gloss });
 	for (const e of n.examples ?? []) out.push(...exampleFace(e, key, n.gloss));
 	return out;
 }
 
 /** An example's card: the words it marks as the phrase (`span`), else the phrase's fixed words; none when neither is in it. */
-function exampleFace(e: { t: string; n?: string; span?: string }, key: string, gloss?: string): Face[] {
-	const at = (e.span && around(e.t, e.span)) || around(e.t, key);
+function exampleFace(e: Example, key: string, gloss?: string): Face[] {
+	const at = (e.span && around(e.t, e.span, e.at)) || around(e.t, key);
 	return at ? [{ text: e.t, ...asked(at), cue: e.n || gloss }] : [];
 }
+
+/** The face a card shows after `reps` reviews: each in turn, so later reviews move on. */
+export const faceAt = (faces: Face[], reps = 0) => faces[reps % faces.length];
 
 /**
  * Every card an entry gets, in the order review asks them (a card's review count picks one, so later reviews move on).
@@ -106,12 +151,13 @@ export function noteFaces(n: {
 	final?: string;
 	sentence?: string;
 	marked?: string;
-	examples?: { t: string; n?: string; span?: string }[];
+	markedAt?: number;
+	examples?: Example[];
 }): Face[] {
 	let out: Face[];
 	if (n.kind === "own") out = facesOf(n);
 	else {
-		const read = n.sentence && n.marked ? around(n.sentence, n.marked) : null;
+		const read = n.sentence && n.marked ? around(n.sentence, n.marked, n.markedAt) : null;
 		out = read && n.sentence ? [{ text: n.sentence, ...asked(read), cue: n.gloss }] : [];
 		for (const e of n.examples ?? []) out.push(...exampleFace(e, fixedPart(n.phrase), n.gloss));
 	}

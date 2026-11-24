@@ -10,7 +10,7 @@ import { around, type Face } from "#lib/review/faces.ts";
  * pieces hung under it. Review passes `asked` to fill the blank with the answer once the card turns.
  */
 let { face, lang, asked }: { face: Face; lang: string; asked?: Snippet } = $props();
-const parts = $derived(around(face.text, face.answer));
+const parts = $derived(around(face.text, face.answer, face.at));
 const words = $derived(face.given ? [face.answer] : face.answer.split(/\s+/));
 </script>
 

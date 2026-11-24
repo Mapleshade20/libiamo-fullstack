@@ -50,7 +50,9 @@ export const changeNote = command(
 		gloss: line(400),
 		usage: line(600),
 		register: z.enum(REGISTERS).nullable(),
-		examples: z.array(z.object({ t: line(400).min(1), n: line(400).optional(), span: line(200).optional() })).max(8),
+		examples: z
+			.array(z.object({ t: line(400).min(1), n: line(400).optional(), span: line(200).optional(), at: z.number().int().min(0).max(400).optional() }))
+			.max(8),
 	}),
 	async ({ id, ...set }) => {
 		await editNote(learner(), id, set);

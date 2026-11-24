@@ -295,15 +295,18 @@ export async function notesFor(d: Draft, items: NoteItem[], ai: Caller): Promise
 	const r = (await chatJson([{ role: "user", content: user }], NotesSchema, { ai, effort: "low", tag: "session/notes" })).value.notes;
 	return items.map((x, i) => {
 		const y = r.find((z) => z.n === i + 1);
-		// Where the expression is in their sentence, if the model marked words that are there (the copy may be shortened).
-		const span = unmark(y?.ended ?? "").span;
-		const marked = span && around(x.final, span) ? span : undefined;
+		// Where the expression is in their sentence, if the model marked words that are there (the copy may be shortened:
+		// where it begins is found where the copy is).
+		const ended = unmark(y?.ended ?? "");
+		const from = x.final.indexOf(ended.text);
+		const markedAt = from >= 0 && ended.at !== undefined ? from + ended.at : undefined;
+		const marked = ended.span && around(x.final, ended.span, markedAt) ? ended.span : undefined;
 		if (!y?.file || !y.phrase || !y.meaning || alreadyTheirs(marked ?? y.phrase, x.before, x.after)) return null;
 		const examples = (y.examples ?? []).slice(0, 3).map((e) => {
 			const m = unmark(e.t);
-			return { t: m.text, n: e.n, ...(m.span ? { span: m.span } : {}) };
+			return { t: m.text, n: e.n, ...(m.span ? { span: m.span, at: m.at } : {}) };
 		});
-		return { phrase: y.phrase, meaning: y.meaning, usage: y.usage ?? "", ...(marked ? { marked } : {}), examples };
+		return { phrase: y.phrase, meaning: y.meaning, usage: y.usage ?? "", ...(marked ? { marked, markedAt } : {}), examples };
 	});
 }
 

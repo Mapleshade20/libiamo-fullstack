@@ -8,7 +8,8 @@ import { stopOf } from "#lib/server/llm/transport.ts";
 import { type CollectInput, explain, type Highlight } from "#lib/server/notebook/collect.ts";
 import { fileCollected, readingFor } from "#lib/server/notebook/notes.ts";
 
-type Marked = Highlight & { sentence: string };
+/** A highlight in its sentence, and where in it it begins. */
+type Marked = Highlight & { sentence: string; at?: number };
 
 /* Fills in what the learner highlighted in something they read, and keeps each phrase in their notebook at once: the
    reading is kept with the first (its id comes back for the next), every phrase as an entry (their ids come back, so
@@ -16,11 +17,14 @@ type Marked = Highlight & { sentence: string };
 export async function POST({ request }) {
 	const u = learner();
 	const b = await request.json();
-	const hs: Marked[] = (Array.isArray(b.highlights) ? b.highlights : []).slice(0, 12).map((h: { n: unknown; text: unknown; sentence?: unknown }) => ({
-		n: Number(h.n),
-		text: String(h.text ?? "").slice(0, 200),
-		sentence: String(h.sentence ?? "").slice(0, 1000),
-	}));
+	const hs: Marked[] = (Array.isArray(b.highlights) ? b.highlights : [])
+		.slice(0, 12)
+		.map((h: { n: unknown; text: unknown; sentence?: unknown; at?: unknown }) => ({
+			n: Number(h.n),
+			text: String(h.text ?? "").slice(0, 200),
+			sentence: String(h.sentence ?? "").slice(0, 1000),
+			at: Number.isInteger(h.at) && (h.at as number) >= 0 ? (h.at as number) : undefined,
+		}));
 	if (!hs.length) error(400, "nothing highlighted");
 	const setup = collectSetup(b);
 	if (!(LEARNABLE as readonly string[]).includes(setup.lang)) error(400, "unknown language");
@@ -39,13 +43,13 @@ export async function POST({ request }) {
 async function fill(u: ReturnType<typeof learner>, b: Record<string, unknown>, d: CollectInput, hs: Marked[], readingId: string): Promise<Answer> {
 	const items = await explain(d, hs, Number(b.retry) || 0).catch((e) => e as Error);
 	if (items instanceof Error) return { body: { error: items.message, code: stopOf(items) }, status: 502 };
-	const { ids } = await fileCollected(
+	const kept = await fileCollected(
 		u,
 		{ id: readingId, text: d.passage, language: d.lang, tutorLanguage: d.feedback === "target" ? d.lang : d.native },
 		items.map((it) => {
 			const h = hs.find((x) => x.n === it.n);
-			return { ...it, marked: h?.text ?? it.phrase, sentence: h?.sentence ?? "" };
+			return { ...it, marked: h?.text ?? it.phrase, markedAt: h?.at, sentence: h?.sentence ?? "" };
 		}),
 	);
-	return { body: { readingId, items: items.map((it, i) => ({ ...it, id: ids[i] })) } };
+	return { body: { readingId: kept.readingId, items: items.map((it, i) => ({ ...it, id: kept.ids[i] })) } };
 }

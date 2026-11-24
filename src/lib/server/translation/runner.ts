@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { APP_LANGS } from "#lib/constants.ts";
-import type { TranslationVersion } from "#lib/scenario/versions.ts";
+import { TranslationVersion } from "#lib/scenario/versions.ts";
 import { db } from "#lib/server/db/index.ts";
 import { scenario, scenarioSource } from "#lib/server/db/schema.ts";
 import type { Caller } from "#lib/server/llm/caller.ts";
@@ -47,10 +47,12 @@ export async function makeSourceRow(id: string, ai: Caller = serviceCaller()) {
 	if (!row) return;
 	const target = row.src.language as Lang;
 	const native = row.src.native as Lang;
-	const v = (row.s.versions as Record<string, TranslationVersion>)[target];
+	const saved = (row.s.versions as Record<string, unknown>)[target];
 	const current = and(eq(scenarioSource.id, id), eq(scenarioSource.state, "pending"), eq(scenarioSource.generation, row.src.generation));
 	try {
-		if (!v) throw new Error(`no ${target} version`);
+		if (!saved) throw new Error(`no ${target} version`);
+		// Read through its schema: a version saved before a field was added (`leaveOut`) has the field's default.
+		const v = TranslationVersion.parse(saved);
 		if (row.src.inputHash !== sourceIdentity(v, row.s.workId)) throw new Error("Source input changed; queue this version again.");
 		const { units: original, join } = unitsOf(v.original);
 		const context = `${v.where}, read by ${v.readers}`;

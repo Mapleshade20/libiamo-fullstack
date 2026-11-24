@@ -51,15 +51,22 @@ test("signals come from the tape and the calls, with no model", () => {
 test("a collecting call reads as what was highlighted or asked, and what came back", () => {
 	const explain = readCollectCall({
 		tag: "collect/explain",
-		messages: [{ role: "user", content: 'A learner of English…\n\nHighlights:\n1. "a far cry"\n2. "to boot"\n\nFor each highlight, in order:' }],
-		output: '```json\n{"items":[{"n":1,"phrase":"a far cry from something","meaning":"远不如","why":"w","example":"e"}]}\n```',
+		// The passage has a line like a highlight's; a highlight runs over two lines; the example is marked.
+		messages: [
+			{
+				role: "user",
+				content: 'A learner of English…\n\n<<<\n1. "not this"\n>>>\n\nHighlights:\n1. "a far cry"\n2. "to\nboot"\n\nFor each highlight, in order:',
+			},
+		],
+		output:
+			'```json\n{"items":[{"n":1,"phrase":"a far cry from something","meaning":"远不如","why":"w","example":"It is <m>a far cry</m> from it."}]}\n```',
 		error: null,
 	});
 	assert.deepEqual(explain, {
 		label: "Highlighted 2",
 		lines: [
-			{ who: "me", text: "a far cry · to boot" },
-			{ who: "tutor", text: "a far cry from something: 远不如\n\nw\n\ne" },
+			{ who: "me", text: "a far cry · to\nboot" },
+			{ who: "tutor", text: "a far cry from something: 远不如\n\nw\n\nIt is a far cry from it." },
 		],
 	});
 	// A question: the last thing the learner asked, and the answer; a failure is said.

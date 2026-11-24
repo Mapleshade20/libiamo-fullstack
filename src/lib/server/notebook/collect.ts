@@ -25,7 +25,8 @@ const Item = z.object({
 	/** The words of the example that are the phrase as used there, so a review card can blank them ("framed … as"). */
 	span: z.string().optional(),
 });
-export type Explained = z.infer<typeof Item>;
+/** `at`: where `span` begins in the example. */
+export type Explained = z.infer<typeof Item> & { at?: number };
 
 /** The tutor's language: the learner's own, or the one they read in, as they chose. */
 const tutorOf = (d: CollectInput) => NAME[d.feedback === "native" ? d.native : d.lang] ?? "English";
@@ -68,7 +69,7 @@ export async function explain(d: CollectInput, given: Highlight[], retry = 0): P
 		given,
 		value.items.map((it) => {
 			const m = unmark(it.example);
-			return { ...it, example: m.text, span: m.span ?? it.span };
+			return { ...it, example: m.text, span: m.span ?? it.span, at: m.at };
 		}),
 	);
 }

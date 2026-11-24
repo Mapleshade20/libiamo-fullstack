@@ -3,7 +3,7 @@ import { and, asc, desc, eq, inArray, isNull, lt, lte, or, sql } from "drizzle-o
 import { z } from "zod";
 import type { Register, Verdict } from "#lib/constants.ts";
 import type { DueSummary, Example, Note, NotebookGlance, NotebookPage, NoteFrom, NoteRow, ReviewCard } from "#lib/notebook/types.ts";
-import { around, noteFaces } from "#lib/review/faces.ts";
+import { around, faceAt, noteFaces } from "#lib/review/faces.ts";
 import type { RatingName } from "#lib/review/types.ts";
 import { db } from "#lib/server/db/index.ts";
 import { note, piece, reading, reviewLog } from "#lib/server/db/schema.ts";
@@ -21,7 +21,14 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Learner = WeekLearner & { activeLanguage?: string | null };
 
 const Examples = z
-	.array(z.object({ t: z.string().max(1000), n: z.string().max(1000).optional(), span: z.string().max(400).optional() }))
+	.array(
+		z.object({
+			t: z.string().max(1000),
+			n: z.string().max(1000).optional(),
+			span: z.string().max(400).optional(),
+			at: z.number().int().min(0).optional(),
+		}),
+	)
 	.max(8)
 	.catch([]);
 
@@ -51,6 +58,7 @@ export async function fileOwn(
 				examples: Examples.parse(l.note.examples),
 				sentence: l.final ?? null,
 				marked: l.note.marked ?? null,
+				markedAt: l.note.markedAt ?? null,
 				was: l.before ?? null,
 				fsrs: card,
 				due: new Date(card.dueAt),
@@ -67,7 +75,11 @@ export type Collected = {
 	why: string;
 	example: string;
 	span?: string;
+	/** Where `span` begins in the example. */
+	at?: number;
 	marked: string;
+	/** Where `marked` begins in `sentence`. */
+	markedAt?: number;
 	sentence: string;
 };
 /** A passage pasted to collect from, kept before anything is highlighted in it. */
@@ -80,7 +92,7 @@ export async function addReading(userId: string, text: string, language: string,
 }
 
 /** A phrase already collected from a reading, as the collect page marks it again. */
-export type Kept = Omit<Collected, "span"> & { id: string };
+export type Kept = Omit<Collected, "span" | "at"> & { id: string };
 
 /** One of the learner's readings, as the collect page opens it, with what is still kept from it. */
 export async function readingOf(userId: string, id: string): Promise<{ id: string; passage: string; lang: string; kept: Kept[] } | null> {
@@ -98,6 +110,7 @@ export async function readingOf(userId: string, id: string): Promise<{ id: strin
 			why: note.why,
 			examples: note.examples,
 			marked: note.marked,
+			markedAt: note.markedAt,
 			sentence: note.sentence,
 		})
 		.from(note)
@@ -109,6 +122,7 @@ export async function readingOf(userId: string, id: string): Promise<{ id: strin
 		why: n.why ?? "",
 		example: (examples as { t?: string }[])[0]?.t ?? "",
 		marked: n.marked ?? n.phrase,
+		markedAt: n.markedAt ?? undefined,
 		sentence: n.sentence ?? "",
 	}));
 	return { ...r, kept };
@@ -166,9 +180,10 @@ export async function fileCollected(
 					meaningLanguage: r.tutorLanguage,
 					register: it.register,
 					why: it.why || null,
-					examples: it.example ? [{ t: it.example, ...(it.span ? { span: it.span } : {}) }] : [],
+					examples: it.example ? [{ t: it.example, ...(it.span ? { span: it.span, at: it.at } : {}) }] : [],
 					sentence: it.sentence || null,
 					marked: it.marked,
+					markedAt: it.markedAt ?? null,
 					fsrs: card,
 					due: new Date(card.dueAt),
 				})
@@ -208,14 +223,12 @@ function faces(r: Row) {
 		final: r.sentence ?? undefined,
 		sentence: r.sentence ?? undefined,
 		marked: r.marked ?? undefined,
+		markedAt: r.markedAt ?? undefined,
 		examples: Examples.parse(r.examples),
 	});
 }
 /** The face a card shows now: one per review, in turn. */
-const faceOf = (r: Row) => {
-	const all = faces(r);
-	return all[((r.fsrs as StoredCard).reps ?? 0) % all.length];
-};
+const faceOf = (r: Row) => faceAt(faces(r), (r.fsrs as StoredCard).reps);
 
 /** An entry as its row in the list shows it: the phrase, its meaning, where it came from, and when it is asked next. */
 function rowView(r: Pick<Row, "id" | "phrase" | "kind" | "meaning" | "fsrs" | "pieceId" | "title">, now: Date, tz: string): NoteRow {
@@ -244,6 +257,8 @@ function view(r: Row, now: Date, tz: string): Note {
 		examples: Examples.parse(r.examples) as Example[],
 		...(own ? { before: r.was ?? undefined, final: r.sentence ?? undefined } : { sentence: r.sentence ?? undefined }),
 		marked: r.marked ?? undefined,
+		markedAt: r.markedAt ?? undefined,
+		reps: (r.fsrs as StoredCard).reps ?? 0,
 		card: faceOf(r),
 	};
 }
@@ -311,7 +326,7 @@ export async function editNote(u: Learner, id: string, set: NoteChange) {
 			usage: sql`case when ${own} then ${usage} else ${note.usage} end`,
 			why: sql`case when ${own} then ${note.why} else ${usage} end`,
 			register: set.register,
-			examples: set.examples.map(({ t, n, span }) => ({ t, ...(n ? { n } : {}), ...(span && around(t, span) ? { span } : {}) })),
+			examples: set.examples.map(({ t, n, span, at }) => ({ t, ...(n ? { n } : {}), ...(span && around(t, span, at) ? { span, at } : {}) })),
 		})
 		.where(mine(u.id, id));
 }

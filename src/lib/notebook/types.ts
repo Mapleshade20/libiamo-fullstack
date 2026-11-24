@@ -4,7 +4,8 @@ import type { QueueKind, RatingName } from "#lib/review/types.ts";
 
 /* The notebook as the pages see it (server/notebook/notes.ts). */
 
-export type Example = { t: string; n?: string; span?: string };
+/** An example: the sentence, its translation, the words in it that are the phrase (`span`) and where they begin (`at`). */
+export type Example = { t: string; n?: string; span?: string; at?: number };
 
 /** An entry as the notebook's list shows it. */
 export type NoteRow = {
@@ -39,6 +40,10 @@ export type Note = NoteRow & {
 	final?: string;
 	sentence?: string;
 	marked?: string;
+	/** Where `marked` begins in its sentence (the same words may be there twice). */
+	markedAt?: number;
+	/** How many times it has been reviewed, which picks the card review asks next (`faceAt`). */
+	reps?: number;
 	/** The card review asks next. */
 	card?: Face;
 };

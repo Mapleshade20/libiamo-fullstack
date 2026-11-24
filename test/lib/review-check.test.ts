@@ -70,6 +70,7 @@ test("a phrase in pieces is one blank from the first piece to the last, with the
 	assert.deepEqual(unmark("He <m>framed</m> the delay <m>as</m> a <m>chance</m> <m>to rest</m>."), {
 		text: "He framed the delay as a chance to rest.",
 		span: "framed … as … chance to rest",
+		at: 3,
 	});
 	assert.deepEqual(unmark("No tags."), { text: "No tags." });
 	assert.deepEqual(around("He Framed the delay as a rest", "framed … as"), {
@@ -91,6 +92,7 @@ test("a phrase in pieces is one blank from the first piece to the last, with the
 	assert.deepEqual(own, {
 		text: "So you framed it as a choice.",
 		answer: "framed it as",
+		at: 7,
 		given: ["it"],
 		was: "you said it was a choice",
 		cue: undefined,
@@ -98,9 +100,27 @@ test("a phrase in pieces is one blank from the first piece to the last, with the
 	assert.deepEqual(example, {
 		text: "He framed the delay as a rest.",
 		answer: "framed the delay as",
+		at: 3,
 		given: ["the delay"],
 		cue: "他把延误说成休息。",
 	});
 	// The words given stay whole in the first-letters hint.
 	assert.equal(hintOf("framed the delay as", ["the delay"]), "f····· the delay a·");
+});
+
+test("a blank is the words marked, not the same letters inside another word or the same words earlier", async () => {
+	const { around, noteFaces, spanRanges, unmark } = await import("#lib/review/faces.ts");
+	// "over" is not the end of "leftover".
+	assert.equal(around("I took the leftover bread over to Jo.", "took … over")?.part, "took the leftover bread over");
+	// The second "like", where it was marked; without where, the first (the words alone cannot say which).
+	const twice = unmark("I like how you <m>like</m> it.");
+	assert.deepEqual(twice, { text: "I like how you like it.", span: "like", at: 15 });
+	assert.deepEqual(spanRanges(twice.text, "like", twice.at), [[15, 19]]);
+	assert.deepEqual(spanRanges(twice.text, "like"), [[2, 6]]);
+	const [face] = noteFaces({ kind: "collected", phrase: "like", sentence: twice.text, marked: "like", markedAt: 15 });
+	assert.equal(face.at, 15);
+	assert.equal(around(face.text, face.answer, face.at)?.before, "I like how you ");
+	// Moved since (the sentence changed), it is looked for again; a script written without spaces has no word edges.
+	assert.equal(around("You like it.", "like", 15)?.before, "You ");
+	assert.equal(around("我很喜欢你", "喜欢")?.part, "喜欢");
 });

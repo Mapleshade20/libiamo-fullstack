@@ -1,5 +1,6 @@
 import { and, asc, count, desc, eq, inArray, ne, type SQL, sql, sum } from "drizzle-orm";
 import type { CaseRow, RecordedCall, RecordedStep, SessionRow, SessionView, Signal, SignalKind } from "#lib/admin/records.ts";
+import { unmark } from "#lib/review/faces.ts";
 import { db } from "#lib/server/db/index.ts";
 import { llmCall, llmPrompt, note, piece, pieceStep, reading, sessionCase, user } from "#lib/server/db/schema.ts";
 
@@ -139,7 +140,8 @@ export function readStep(s: Pick<Step, "action" | "body" | "response">): Pick<Re
 /** Signals from the tape alone (the learner's pushback), with the calls' (the system's struggles). */
 export function signalsOf(
 	steps: Pick<Step, "action" | "body" | "response" | "ms">[],
-	o: { finished: boolean; lastAt: number; now: number; failedCalls: number; cost: number; medianCost: number },
+	/** `slowestMs`: the slowest step of a session whose steps are not given (collecting: its calls). */
+	o: { finished: boolean; lastAt: number; now: number; failedCalls: number; cost: number; medianCost: number; slowestMs?: number },
 ): Signal[] {
 	const n = (a: string) => steps.filter((s) => s.action === a).length;
 	const out: Signal[] = [];
@@ -166,7 +168,7 @@ export function signalsOf(
 	const end = steps.find((s) => s.action === "end");
 	const issues = (end?.response as Json)?.issues;
 	if (Array.isArray(issues) && issues.length) out.push({ kind: "lost" });
-	const slowest = Math.max(0, ...steps.map((s) => s.ms ?? 0));
+	const slowest = Math.max(o.slowestMs ?? 0, ...steps.map((s) => s.ms ?? 0));
 	if (slowest > SLOW_MS) out.push({ kind: "slow", n: Math.round(slowest / 1000) });
 	if (o.medianCost > 0 && o.cost > 3 * o.medianCost) out.push({ kind: "cost" });
 	return out;
@@ -291,7 +293,9 @@ async function pieceSessions(o: Scope, now: Date): Promise<SessionRow[]> {
 
 /**
  * Collecting from what learners read, newest first: each reading of a learner who helps improve Libiamo while it has
- * calls kept (they go after thirty days, and the reading with them from this list).
+ * calls kept (they go after thirty days, and the reading with them from this list), every one with its words. A call
+ * made while they did not help is recorded without them but still names its reading: such a reading is never shown,
+ * or what they read and kept then would be, read from the reading and the notebook.
  */
 async function readingSessions(o: Scope): Promise<SessionRow[]> {
 	const rows = await db
@@ -303,6 +307,7 @@ async function readingSessions(o: Scope): Promise<SessionRow[]> {
 				eq(user.helpImprove, true),
 				o.ids ? inArray(reading.id, o.ids) : undefined,
 				sql`exists (select 1 from ${llmCall} where ${llmCall.readingId} = ${reading.id})`,
+				sql`not exists (select 1 from ${llmCall} where ${llmCall.readingId} = ${reading.id} and ${llmCall.messages} is null)`,
 			),
 		)
 		.orderBy(desc(reading.createdAt))
@@ -318,6 +323,7 @@ async function readingSessions(o: Scope): Promise<SessionRow[]> {
 				failed: sql<number>`count(*) filter (where ${llmCall.state} = 'failed')::int`,
 				kept: sql<number>`count(${llmCall.messages})::int`,
 				last: sql<string>`max(${llmCall.createdAt})`,
+				slowest: sql<number>`coalesce(max(${llmCall.latencyMs}), 0)::int`,
 			})
 			.from(llmCall)
 			.where(inArray(llmCall.readingId, ids))
@@ -350,7 +356,7 @@ async function readingSessions(o: Scope): Promise<SessionRow[]> {
 			calls: c?.n ?? 0,
 			cost,
 			finished: true,
-			signals: signalsOf([], { finished: true, lastAt: last, now: last, failedCalls: c?.failed ?? 0, cost, medianCost }),
+			signals: signalsOf([], { finished: true, lastAt: last, now: last, failedCalls: c?.failed ?? 0, cost, medianCost, slowestMs: c?.slowest }),
 			callsKept: (c?.kept ?? 0) > 0,
 			sha: "",
 			cases: 0,
@@ -397,7 +403,14 @@ export function readCollectCall(
 		return { label: "Question", lines: [{ who: "me", text: asked }, ...(c.output ? [{ who: "tutor" as const, text: c.output }] : []), ...failed] };
 	if (c.tag !== "collect/explain")
 		return { label: c.tag, lines: [{ who: "me", text: asked }, ...(c.output ? [{ who: "tutor" as const, text: c.output }] : []), ...failed] };
-	const marked = [...asked.matchAll(/^\d+\. "(.*)"$/gm)].map((m) => m[1]);
+	// The list after the passage (not lines of the passage that look alike); a highlight may run over lines.
+	const head = "Highlights:\n";
+	const from = asked.lastIndexOf(head);
+	const listed = from < 0 ? "" : asked.slice(from + head.length).split("\n\nFor each highlight")[0];
+	const marked = listed
+		.split(/\n(?=\d+\. ")/)
+		.map((l) => l.match(/^\d+\. "([\s\S]*)"$/)?.[1])
+		.filter((x) => x !== undefined);
 	let items: Json[] = [];
 	try {
 		const out = c.output ?? "";
@@ -408,7 +421,7 @@ export function readCollectCall(
 	}
 	// The page sets each paragraph ("\n\n") apart and runs single lines together.
 	const filled = items.length
-		? items.flatMap((it) => [`${text(it.phrase)}: ${text(it.meaning)}`, text(it.why), text(it.example)].filter(Boolean)).join("\n\n")
+		? items.flatMap((it) => [`${text(it.phrase)}: ${text(it.meaning)}`, text(it.why), unmark(text(it.example)).text].filter(Boolean)).join("\n\n")
 		: (c.output ?? "");
 	return {
 		label: marked.length === 1 ? "Highlighted 1" : `Highlighted ${marked.length}`,

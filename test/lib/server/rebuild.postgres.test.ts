@@ -77,6 +77,7 @@ import {
 	NOTEBOOK_PAGE,
 	notebookGlance,
 	notebookPage,
+	noteOf,
 	ownReading,
 	rateNote,
 	readingFor,
@@ -269,7 +270,7 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 			usage: "Used for spin.",
 			register: "formal" as const,
 			examples: [
-				{ t: "He framed the delay as a rest.", n: "他把延误说成休息。", span: "framed … as" },
+				{ t: "He framed the delay as a rest.", n: "他把延误说成休息。", span: "framed … as", at: 3 },
 				{ t: "Nothing of it here.", span: "framed" },
 			],
 		};
@@ -289,7 +290,7 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 			sentence: own.sentence,
 			was: own.was,
 			marked: own.marked,
-			examples: [{ t: "He framed the delay as a rest.", n: "他把延误说成休息。", span: "framed … as" }, { t: "Nothing of it here." }],
+			examples: [{ t: "He framed the delay as a rest.", n: "他把延误说成休息。", span: "framed … as", at: 3 }, { t: "Nothing of it here." }],
 		});
 		// A collected entry says why it is worth taking where an own one says how it is used.
 		expect(b).toMatchObject({ usage: null, why: "Used for spin.", register: null, sentence: read.sentence, marked: read.marked });
@@ -689,6 +690,7 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 			{ userId: learner.id, readingId, keepText: true },
 			{
 				...call,
+				ms: 9_000,
 				tag: "collect/explain",
 				messages: [{ role: "user", content: 'Highlights:\n1. "the long way round"\n\nFor each highlight' }],
 				output: '{"items":[{"n":1,"phrase":"take the long way round","meaning":"绕远路","why":"w","example":"e"}]}',
@@ -707,6 +709,7 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 		]);
 		const row = (await sessions()).find((s) => s.id === readingId);
 		expect(row).toMatchObject({ kind: "collect", title: "It was late, so I took the long way round.", stops: 1, calls: 1, callsKept: true });
+		expect(row?.signals).toContainEqual({ kind: "slow", n: 9 });
 		const view = await sessionOf(readingId);
 		expect(view?.steps.map((s) => s.label)).toEqual(["Pasted", "Highlighted 1", "In the notebook"]);
 		expect(view?.steps[1]).toMatchObject({
@@ -719,6 +722,12 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 
 		// A learner who stops helping improve Libiamo is no longer shown.
 		await db.update(user).set({ helpImprove: false }).where(eq(user.id, learner.id));
+		expect((await sessions()).some((s) => s.id === readingId)).toBe(false);
+		expect(await sessionOf(readingId)).toBeNull();
+		// A call made meanwhile is recorded without its words; helping again, the reading stays hidden, or what they read
+		// and kept then would be shown from the reading and the notebook.
+		await writeRecord({ userId: learner.id, readingId, keepText: false }, call);
+		await db.update(user).set({ helpImprove: true }).where(eq(user.id, learner.id));
 		expect((await sessions()).some((s) => s.id === readingId)).toBe(false);
 		expect(await sessionOf(readingId)).toBeNull();
 	});
@@ -758,6 +767,10 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 		expect(back.ids[0]).not.toBe(first.ids[0]);
 		// Another learner's reading is not theirs to open.
 		expect(await readingOf("other", first.readingId)).toBeNull();
+		// Words that are in their sentence twice: the ones highlighted, where they are, are marked again and asked.
+		const twice = await fileCollected(learner, { ...r, id: first.readingId }, [{ ...item("like", "I like how you like it."), markedAt: 15 }]);
+		expect((await readingOf(learner.id, first.readingId))?.kept.find((k) => k.id === twice.ids[0])?.markedAt).toBe(15);
+		expect((await noteOf(learner, twice.ids[0]))?.card).toMatchObject({ answer: "like", at: 15 });
 	});
 
 	it("refuses a first save if its displayed source was replaced", async () => {
@@ -811,6 +824,18 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 		// Made again, it is the model's once more.
 		await remakeSource(src.id, kept.generation);
 		expect((await db.select().from(scenarioSource))[0]).toMatchObject({ state: "pending", notes: null });
+	});
+
+	it("makes a source for a version saved before it could leave terms out", async () => {
+		config.extractTerms.mockResolvedValue([{ term: "Soup", kind: "term", note: "" }]);
+		await importContent(db, content());
+		// As production has the scenarios published before `leaveOut`: no such field in the version.
+		await db.update(scenario).set({ versions: { en: version } });
+		await queueSources("menu", { natives: ["zh-CN"], again: true });
+		const [made] = await db.select().from(scenarioSource);
+		await makeSourceRow(made.id, new Caller({ route: null }));
+		expect((await db.select().from(scenarioSource))[0].state).not.toBe("failed");
+		expect(config.makeSource.mock.calls[0][1].map((t: { term: string }) => t.term)).toEqual(["Soup"]);
 	});
 
 	it("a superseded generator cannot consume a new request for the same original", async () => {

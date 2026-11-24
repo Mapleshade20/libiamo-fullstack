@@ -64,3 +64,11 @@ it("asks again first for a page that must open on the latest, however recently i
 	for (let i = 0; i < 2; i++) expect((await opening(() => [deck], { fresh: true })(at("/review"))).opened).toEqual([]);
 	expect(deck.refresh).toHaveBeenCalledTimes(2);
 });
+
+it("asks again, and waits for, a query whose last asking failed", async () => {
+	const failed = { ...fakeQuery(false), error: { status: 503 } };
+	const load = opening(() => [failed])(at("/library"));
+	await load;
+	expect(failed.refresh).toHaveBeenCalledOnce();
+	expect((await load).opened).toEqual([]);
+});

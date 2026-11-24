@@ -88,7 +88,8 @@ function markedBefore(): Mark[] {
 	for (const k of mine?.kept ?? []) {
 		const from = k.sentence ? passage.indexOf(k.sentence) : 0;
 		if (from < 0) continue;
-		const at = passage.indexOf(k.marked, from);
+		// Where it was marked, else its words (an entry kept before that was noted).
+		const at = k.markedAt !== undefined && passage.startsWith(k.marked, from + k.markedAt) ? from + k.markedAt : passage.indexOf(k.marked, from);
 		if (at < 0 || (k.sentence && at + k.marked.length > from + k.sentence.length)) continue;
 		const [a, b] = [segAt(at), segAt(at + k.marked.length - 1)];
 		if (a < 0 || b < 0 || out.some((m) => m.b >= a && m.a <= b)) continue;
@@ -124,9 +125,12 @@ const forget = (ids: (string | undefined)[]) => {
 	const gone = ids.filter((x): x is string => !!x && !marks.some((m) => m.id === x));
 	if (gone.length && !sandboxed()) removeNotes(gone).catch(() => {});
 };
+/** The sentence a mark is in, and where in it the mark begins. */
 function sentenceOf(m: Mark) {
 	const at = segs[m.a].index;
-	return (SENTENCES.find((x) => at >= x.index && at < x.index + x.segment.length)?.segment ?? "").trim();
+	const s = SENTENCES.find((x) => at >= x.index && at < x.index + x.segment.length);
+	const lead = s ? s.segment.length - s.segment.trimStart().length : 0;
+	return { sentence: (s?.segment ?? "").trim(), at: s ? at - s.index - lead : 0 };
 }
 /** The tour's phrases go to its sandbox (the server kept the learner's as they were filled in). */
 function store() {
@@ -145,7 +149,7 @@ function store() {
 					register: d.register,
 					example: d.example,
 					marked: textOf(m),
-					sentence: sentenceOf(m),
+					sentence: sentenceOf(m).sentence,
 				};
 			}),
 	);
@@ -171,7 +175,7 @@ async function fill() {
 		m.busy = true;
 		m.failed = false;
 	}
-	const sent = todo.map((m) => ({ n: m.n, text: textOf(m), a: m.a, b: m.b, sentence: sentenceOf(m) }));
+	const sent = todo.map((m) => ({ n: m.n, text: textOf(m), a: m.a, b: m.b, ...sentenceOf(m) }));
 	try {
 		needKey();
 		stopped = null;

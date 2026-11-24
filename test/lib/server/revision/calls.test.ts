@@ -54,8 +54,10 @@ test("an entry says where its expression is in their sentence and in each exampl
 			meaning: "m",
 			usage: "u",
 			marked: "framed … as",
+			// Where it begins in their sentence, though the copy left out its first word.
+			markedAt: 7,
 			examples: [
-				{ t: "He framed the delay as a rest.", n: "a", span: "framed … as" },
+				{ t: "He framed the delay as a rest.", n: "a", span: "framed … as", at: 3 },
 				{ t: "Nothing marked.", n: "b" },
 			],
 		},

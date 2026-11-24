@@ -31,9 +31,12 @@ const nextWord = (i: number) => {
 };
 const markAt = (i: number) => marks.find((m) => i >= m.a && i <= m.b);
 const textOf = (m: Mark) => text.slice(segs[m.a].index, segs[m.b].index + segs[m.b].segment.length);
+/** The sentence a mark is in, and where in it the mark begins. */
 function sentenceOf(m: Mark) {
 	const at = segs[m.a].index;
-	return (sentences.find((x) => at >= x.index && at < x.index + x.segment.length)?.segment ?? "").trim();
+	const s = sentences.find((x) => at >= x.index && at < x.index + x.segment.length);
+	const lead = s ? s.segment.length - s.segment.trimStart().length : 0;
+	return { sentence: (s?.segment ?? "").trim(), at: s ? at - s.index - lead : 0 };
 }
 const keyOf = (m: Mark) => `${block}:${m.n}`;
 const stateOf = (m: Mark) => collector.kept.find((k) => k.key === keyOf(m));

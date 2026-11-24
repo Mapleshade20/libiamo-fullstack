@@ -1,5 +1,5 @@
 {
-  "id": "e899ca20-2410-4ab0-8976-119f6b73ff38",
+  "id": "55e6bd59-6f8e-49fb-8125-42d9d13ba6cd",
   "prevId": "f3f55ccc-addf-4ba3-8e8a-2222aa62eebe",
   "version": "7",
   "dialect": "postgresql",
@@ -1814,6 +1814,12 @@
         "marked": {
           "name": "marked",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "marked_at": {
+          "name": "marked_at",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false
         },
