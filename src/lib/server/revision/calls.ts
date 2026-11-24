@@ -299,7 +299,7 @@ export async function notesFor(d: Draft, items: NoteItem[], ai: Caller): Promise
 		// where it begins is found where the copy is).
 		const ended = unmark(y?.ended ?? "");
 		const from = x.final.indexOf(ended.text);
-		const markedAt = from >= 0 && ended.at !== undefined ? from + ended.at : undefined;
+		const markedAt = from >= 0 ? ended.at?.map((a) => from + a) : undefined;
 		const marked = ended.span && around(x.final, ended.span, markedAt) ? ended.span : undefined;
 		if (!y?.file || !y.phrase || !y.meaning || alreadyTheirs(marked ?? y.phrase, x.before, x.after)) return null;
 		const examples = (y.examples ?? []).slice(0, 3).map((e) => {

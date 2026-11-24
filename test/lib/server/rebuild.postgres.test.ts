@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import postgres from "postgres";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -270,7 +270,7 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 			usage: "Used for spin.",
 			register: "formal" as const,
 			examples: [
-				{ t: "He framed the delay as a rest.", n: "他把延误说成休息。", span: "framed … as", at: 3 },
+				{ t: "He framed the delay as a rest.", n: "他把延误说成休息。", span: "framed … as", at: [3, 20] },
 				{ t: "Nothing of it here.", span: "framed" },
 			],
 		};
@@ -290,7 +290,7 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 			sentence: own.sentence,
 			was: own.was,
 			marked: own.marked,
-			examples: [{ t: "He framed the delay as a rest.", n: "他把延误说成休息。", span: "framed … as", at: 3 }, { t: "Nothing of it here." }],
+			examples: [{ t: "He framed the delay as a rest.", n: "他把延误说成休息。", span: "framed … as", at: [3, 20] }, { t: "Nothing of it here." }],
 		});
 		// A collected entry says why it is worth taking where an own one says how it is used.
 		expect(b).toMatchObject({ usage: null, why: "Used for spin.", register: null, sentence: read.sentence, marked: read.marked });
@@ -732,6 +732,10 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 		await db.update(user).set({ helpImprove: true }).where(eq(user.id, learner.id));
 		expect((await sessions()).some((s) => s.id === readingId)).toBe(false);
 		expect(await sessionOf(readingId)).toBeNull();
+		// Nor once that call has gone after its thirty days, while the ones with words stay.
+		await db.delete(llmCall).where(and(eq(llmCall.readingId, readingId), isNull(llmCall.messages)));
+		expect(await db.select().from(llmCall).where(eq(llmCall.readingId, readingId))).toHaveLength(1);
+		expect(await sessionOf(readingId)).toBeNull();
 	});
 
 	it("marks again what was collected from a reading, and never keeps the same words twice", async () => {
@@ -770,8 +774,8 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 		// Another learner's reading is not theirs to open.
 		expect(await readingOf("other", first.readingId)).toBeNull();
 		// Words that are in their sentence twice: the ones highlighted, where they are, are marked again and asked.
-		const twice = await fileCollected(learner, { ...r, id: first.readingId }, [{ ...item("like", "I like how you like it."), markedAt: 15 }]);
-		expect((await readingOf(learner.id, first.readingId))?.kept.find((k) => k.id === twice.ids[0])?.markedAt).toBe(15);
+		const twice = await fileCollected(learner, { ...r, id: first.readingId }, [{ ...item("like", "I like how you like it."), markedAt: [15] }]);
+		expect((await readingOf(learner.id, first.readingId))?.kept.find((k) => k.id === twice.ids[0])?.markedAt).toEqual([15]);
 		expect((await noteOf(learner, twice.ids[0]))?.card).toMatchObject({ answer: "like", at: 15 });
 	});
 

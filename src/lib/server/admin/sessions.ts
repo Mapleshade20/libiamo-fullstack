@@ -293,9 +293,9 @@ async function pieceSessions(o: Scope, now: Date): Promise<SessionRow[]> {
 
 /**
  * Collecting from what learners read, newest first: each reading of a learner who helps improve Libiamo while it has
- * calls kept (they go after thirty days, and the reading with them from this list), every one with its words. A call
- * made while they did not help is recorded without them but still names its reading: such a reading is never shown,
- * or what they read and kept then would be, read from the reading and the notebook.
+ * calls kept (they go after thirty days, and the reading with them from this list). A call made while they did not help
+ * is recorded without its words but still names its reading, which is then `withheld` for good: shown, it would show
+ * what they read and kept then, from the reading and the notebook, once that call had gone.
  */
 async function readingSessions(o: Scope): Promise<SessionRow[]> {
 	const rows = await db
@@ -306,8 +306,8 @@ async function readingSessions(o: Scope): Promise<SessionRow[]> {
 			and(
 				eq(user.helpImprove, true),
 				o.ids ? inArray(reading.id, o.ids) : undefined,
+				eq(reading.withheld, false),
 				sql`exists (select 1 from ${llmCall} where ${llmCall.readingId} = ${reading.id})`,
-				sql`not exists (select 1 from ${llmCall} where ${llmCall.readingId} = ${reading.id} and ${llmCall.messages} is null)`,
 			),
 		)
 		.orderBy(desc(reading.createdAt))

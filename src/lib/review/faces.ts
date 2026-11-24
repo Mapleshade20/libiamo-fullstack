@@ -34,29 +34,32 @@ const spaced = (c = "") =>
 
 /**
  * Where each piece of a span ("framed … as") is in a sentence, in order and whatever the case; null when one is not.
- * `at`, where the first piece was marked, picks that one of the same words written twice; without it, or when the
- * sentence no longer has them there, a piece is looked for as whole words ("over" is not the end of "leftover"), and
- * failing that anywhere.
+ * `at`, where each piece was marked, picks those of the same words written more than once; a piece without it, or no
+ * longer there, is looked for as whole words ("over" is not the end of "leftover"), and failing that anywhere. Found
+ * in the sentence as written (never a lowercased copy, whose letters can be more: "İ").
  */
-export function spanRanges(text: string, span: string, at?: number): [number, number][] | null {
-	const low = text.toLowerCase();
-	const pieces = span
-		.toLowerCase()
-		.split(/\s*…\s*/)
-		.filter(Boolean);
+export function spanRanges(text: string, span: string, at: readonly number[] = []): [number, number][] | null {
+	const pieces = span.split(/\s*…\s*/).filter(Boolean);
 	const whole = (i: number, n: number) => !(spaced(text[i - 1]) && spaced(text[i])) && !(spaced(text[i + n - 1]) && spaced(text[i + n]));
 	const find = (words: boolean) => {
 		const out: [number, number][] = [];
 		for (const [k, piece] of pieces.entries()) {
+			const from = out.at(-1)?.[1] ?? 0;
+			const marked = at[k];
 			// Where it was marked is taken as it is.
-			if (k === 0 && at !== undefined && low.startsWith(piece, at)) {
-				out.push([at, at + piece.length]);
+			if (marked !== undefined && marked >= from && text.slice(marked, marked + piece.length).toLowerCase() === piece.toLowerCase()) {
+				out.push([marked, marked + piece.length]);
 				continue;
 			}
-			let i = low.indexOf(piece, out.at(-1)?.[1] ?? 0);
-			while (words && i >= 0 && !whole(i, piece.length)) i = low.indexOf(piece, i + 1);
-			if (i < 0) return null;
-			out.push([i, i + piece.length]);
+			const re = new RegExp(piece.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "giu");
+			re.lastIndex = from;
+			let m = re.exec(text);
+			while (m && words && !whole(m.index, m[0].length)) {
+				re.lastIndex = m.index + 1;
+				m = re.exec(text);
+			}
+			if (!m) return null;
+			out.push([m.index, m.index + m[0].length]);
 		}
 		return out.length ? out : null;
 	};
@@ -67,7 +70,7 @@ export function spanRanges(text: string, span: string, at?: number): [number, nu
  * A sentence split around the words that matter in it, for marking or blanking them; null when they are not in it. A
  * span in pieces ("framed … as") is the stretch from the first to the last, with the words between them `given`.
  */
-export function around(text: string, part: string, at?: number) {
+export function around(text: string, part: string, at?: readonly number[]) {
 	const r = spanRanges(text, part, at);
 	if (!r) return null;
 	const [from, to] = [r[0][0], r[r.length - 1][1]];
@@ -84,13 +87,13 @@ const asked = (at: { before: string; part: string; given: string[] }) => ({
 
 /**
  * A sentence a model marked with <m>…</m>: the plain sentence, its marked words as a span (pieces apart joined by "…"),
- * and where the first of them is (`at`, so the same words earlier in the sentence are not taken for them).
+ * and where each piece begins (`at`, so the same words elsewhere in the sentence are not taken for them).
  */
-export function unmark(tagged: string): { text: string; span?: string; at?: number } {
+export function unmark(tagged: string): { text: string; span?: string; at?: number[] } {
 	const pieces: string[] = [];
+	const at: number[] = [];
 	let last = 0;
 	let plain = 0;
-	let at: number | undefined;
 	for (const m of tagged.matchAll(/<m>(.*?)<\/m>/g)) {
 		const between = tagged.slice(last, m.index).replace(/<\/?m>/g, "");
 		plain += between.length;
@@ -98,7 +101,7 @@ export function unmark(tagged: string): { text: string; span?: string; at?: numb
 		if (pieces.length && !between.trim()) pieces[pieces.length - 1] += between + m[1];
 		else if (m[1].trim()) {
 			pieces.push(m[1]);
-			at ??= plain + m[1].length - m[1].trimStart().length;
+			at.push(plain + m[1].length - m[1].trimStart().length);
 		}
 		plain += m[1].length;
 		last = m.index + m[0].length;
@@ -118,7 +121,7 @@ export function facesOf(n: {
 	final?: string;
 	/** The words of `final` that are the phrase as used there (the notes call marks them), and where they begin. */
 	marked?: string;
-	markedAt?: number;
+	markedAt?: number[];
 	examples?: Example[];
 }): Face[] {
 	const key = fixedPart(n.phrase);
@@ -151,7 +154,7 @@ export function noteFaces(n: {
 	final?: string;
 	sentence?: string;
 	marked?: string;
-	markedAt?: number;
+	markedAt?: number[];
 	examples?: Example[];
 }): Face[] {
 	let out: Face[];

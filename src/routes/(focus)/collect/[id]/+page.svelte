@@ -89,7 +89,8 @@ function markedBefore(): Mark[] {
 		const from = k.sentence ? passage.indexOf(k.sentence) : 0;
 		if (from < 0) continue;
 		// Where it was marked, else its words (an entry kept before that was noted).
-		const at = k.markedAt !== undefined && passage.startsWith(k.marked, from + k.markedAt) ? from + k.markedAt : passage.indexOf(k.marked, from);
+		const was = k.markedAt?.[0];
+		const at = was !== undefined && passage.startsWith(k.marked, from + was) ? from + was : passage.indexOf(k.marked, from);
 		if (at < 0 || (k.sentence && at + k.marked.length > from + k.sentence.length)) continue;
 		const [a, b] = [segAt(at), segAt(at + k.marked.length - 1)];
 		if (a < 0 || b < 0 || out.some((m) => m.b >= a && m.a <= b)) continue;

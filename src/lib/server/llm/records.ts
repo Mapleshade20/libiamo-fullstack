@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { and, eq, lt, not, sql } from "drizzle-orm";
 import { db } from "#lib/server/db/index.ts";
-import { llmCall, llmPrompt, sessionCase, user } from "#lib/server/db/schema.ts";
+import { llmCall, llmPrompt, reading, sessionCase, user } from "#lib/server/db/schema.ts";
 import type { CallRecord, Recorder } from "./caller.ts";
 
 /*
@@ -62,6 +62,7 @@ export async function writeRecord(scope: RecordScope, r: CallRecord) {
 			costUsd: r.costUsd ?? null,
 			latencyMs: r.ms ?? null,
 		});
+		if (scope.readingId && !keepText) await tx.update(reading).set({ withheld: true }).where(eq(reading.id, scope.readingId));
 	});
 }
 

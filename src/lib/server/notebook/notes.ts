@@ -26,7 +26,8 @@ const Examples = z
 			t: z.string().max(1000),
 			n: z.string().max(1000).optional(),
 			span: z.string().max(400).optional(),
-			at: z.number().int().min(0).optional(),
+			// Dropped alone when it is not as written now (never the example with it).
+			at: z.array(z.number().int().min(0)).max(8).optional().catch(undefined),
 		}),
 	)
 	.max(8)
@@ -75,11 +76,11 @@ export type Collected = {
 	why: string;
 	example: string;
 	span?: string;
-	/** Where `span` begins in the example. */
-	at?: number;
+	/** Where each piece of `span` begins in the example. */
+	at?: number[];
 	marked: string;
-	/** Where `marked` begins in `sentence`. */
-	markedAt?: number;
+	/** Where each piece of `marked` begins in `sentence`. */
+	markedAt?: number[];
 	sentence: string;
 };
 /** A passage pasted to collect from, kept before anything is highlighted in it. */

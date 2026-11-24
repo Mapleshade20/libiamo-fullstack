@@ -4,10 +4,10 @@ import { words } from "#lib/text/words.ts";
 
 /*
  * A sentence's words as toggles: the learner taps those its review card blanks. Runs of tapped words are the span's
- * pieces, apart ones joined by "…" ("framed … as"), as the notes call marks them (lib/review/faces.ts); `at` is where the
- * first begins, so the same words earlier in the sentence are not taken for them.
+ * pieces, apart ones joined by "…" ("framed … as"), as the notes call marks them (lib/review/faces.ts); `at` is where each
+ * begins, so the same words elsewhere in the sentence are not taken for them.
  */
-let { text, span = $bindable(), at = $bindable(), lang }: { text: string; span?: string; at?: number; lang: string } = $props();
+let { text, span = $bindable(), at = $bindable(), lang }: { text: string; span?: string; at?: number[]; lang: string } = $props();
 // Each word with the text around it (what comes before the first, what follows each up to the next).
 const ws = $derived(
 	words(text).map((w, i, all) => ({
@@ -23,14 +23,13 @@ const on = $derived(ws.map((w) => ranges.some(([a, b]) => w.from >= a && w.to <=
 function toggle(i: number) {
 	const next = on.map((x, j) => (j === i ? !x : x));
 	const pieces: string[] = [];
-	let from = 0;
-	at = undefined;
+	const starts: number[] = [];
 	ws.forEach((w, j) => {
-		if (next[j] && !next[j - 1]) from = w.from;
-		at ??= next[j] ? w.from : undefined;
-		if (next[j] && !next[j + 1]) pieces.push(text.slice(from, w.to));
+		if (next[j] && !next[j - 1]) starts.push(w.from);
+		if (next[j] && !next[j + 1]) pieces.push(text.slice(starts.at(-1), w.to));
 	});
 	span = pieces.length ? pieces.join(" … ") : undefined;
+	at = pieces.length ? starts : undefined;
 }
 </script>
 

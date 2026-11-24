@@ -48,7 +48,7 @@ async function fill(u: ReturnType<typeof learner>, b: Record<string, unknown>, d
 		{ id: readingId, text: d.passage, language: d.lang, tutorLanguage: d.feedback === "target" ? d.lang : d.native },
 		items.map((it) => {
 			const h = hs.find((x) => x.n === it.n);
-			return { ...it, marked: h?.text ?? it.phrase, markedAt: h?.at, sentence: h?.sentence ?? "" };
+			return { ...it, marked: h?.text ?? it.phrase, markedAt: h?.at === undefined ? undefined : [h.at], sentence: h?.sentence ?? "" };
 		}),
 	);
 	return { body: { readingId: kept.readingId, items: items.map((it, i) => ({ ...it, id: kept.ids[i] })) } };

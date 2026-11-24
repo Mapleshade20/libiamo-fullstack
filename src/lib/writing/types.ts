@@ -8,8 +8,8 @@ export type NoteBody = {
 	meaning: string;
 	usage: string;
 	marked?: string;
-	markedAt?: number;
-	examples: { t: string; n: string; span?: string; at?: number }[];
+	markedAt?: number[];
+	examples: { t: string; n: string; span?: string; at?: number[] }[];
 };
 /**
  * One thing the learner worked out: the phrase they settled on, and whether they found it themselves. text: the tutor's

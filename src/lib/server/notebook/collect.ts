@@ -26,7 +26,7 @@ const Item = z.object({
 	span: z.string().optional(),
 });
 /** `at`: where `span` begins in the example. */
-export type Explained = z.infer<typeof Item> & { at?: number };
+export type Explained = z.infer<typeof Item> & { at?: number[] };
 
 /** The tutor's language: the learner's own, or the one they read in, as they chose. */
 const tutorOf = (d: CollectInput) => NAME[d.feedback === "native" ? d.native : d.lang] ?? "English";

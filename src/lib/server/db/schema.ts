@@ -671,6 +671,9 @@ export const reading = pgTable(
 		language: text("language").notNull(),
 		text: text("text").notNull(),
 		place: text("place"),
+		/** A call was made from it while the learner did not help improve Libiamo: the admin never sees it (its calls go
+		    after thirty days; this stays). */
+		withheld: boolean("withheld").notNull().default(false),
 		createdAt: created(),
 	},
 	(t) => [check("reading_language_check", oneOf(t.language, LEARNABLE)), index("reading_user_idx").on(t.userId)],
@@ -703,7 +706,7 @@ export const note = pgTable(
 		examples: jsonb("examples").notNull().default(sql`'[]'::jsonb`),
 		sentence: text("sentence"),
 		marked: text("marked"),
-		markedAt: integer("marked_at"),
+		markedAt: integer("marked_at").array(),
 		was: text("was"),
 		fsrs: jsonb("fsrs").notNull(),
 		due: at("due").notNull(),

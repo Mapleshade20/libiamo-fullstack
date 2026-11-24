@@ -1,5 +1,5 @@
 {
-  "id": "55e6bd59-6f8e-49fb-8125-42d9d13ba6cd",
+  "id": "828c3428-d868-45f3-b98b-e77807396de7",
   "prevId": "f3f55ccc-addf-4ba3-8e8a-2222aa62eebe",
   "version": "7",
   "dialect": "postgresql",
@@ -1819,7 +1819,7 @@
         },
         "marked_at": {
           "name": "marked_at",
-          "type": "integer",
+          "type": "integer[]",
           "primaryKey": false,
           "notNull": false
         },
@@ -2654,6 +2654,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "withheld": {
+          "name": "withheld",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         },
         "created_at": {
           "name": "created_at",
