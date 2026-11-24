@@ -30,7 +30,7 @@ import ScenarioCard from "#lib/components/home/ScenarioCard.svelte";
 import Situation from "#lib/components/scenario/Situation.svelte";
 import { toast } from "#lib/components/shell/toast.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
-import { type ExchangePlace, LEARNABLE, type Place, type ScenarioStatus, type SourceState, type Urgency } from "#lib/constants.ts";
+import { type ExchangePlace, type Place, SCENARIO_LANGS, type ScenarioStatus, type SourceState, type Urgency } from "#lib/constants.ts";
 import { openingNames, situationOf } from "#lib/exchange/opening.ts";
 import { blankOpening, blankVersion } from "#lib/scenario/blank.ts";
 import { SITE_OF } from "#lib/scenario/types.ts";
@@ -118,7 +118,8 @@ const locked = $derived(!isNew && (loaded?.written ?? 0) > 0);
 const v = $derived(d.versions[lang]);
 const ev = $derived(translate ? undefined : (v as ExchangeVersion | undefined));
 const tv = $derived(translate ? (v as TranslationVersion | undefined) : undefined);
-const missing = $derived(LEARNABLE.filter((l) => !d.versions[l]));
+// Only the languages learners are offered scenarios in (lib/constants.ts; the server holds to it too).
+const missing = $derived(SCENARIO_LANGS.filter((l) => !d.versions[l]));
 const SITES = (["ao3", "reddit", "email", "discord", "imessage", "translation"] as const).map((p) => ({
 	value: p,
 	label: p === "translation" ? "Translation" : SITE_OF[p],
@@ -551,7 +552,7 @@ async function saveEdit(r: AdminSource) {
 						aria-label="Language"
 						size="sm"
 						bind:value={() => lang, moveLanguage}
-						items={LEARNABLE.map((l) => ({ value: l, label: langEn(l) }))}
+						items={SCENARIO_LANGS.map((l) => ({ value: l, label: langEn(l) }))}
 					/>
 				</div>
 			{:else}

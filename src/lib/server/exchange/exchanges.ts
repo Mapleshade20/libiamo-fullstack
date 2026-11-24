@@ -12,11 +12,12 @@ import { getSessionExpiry, RE_ENGAGE_DELAY_MS, sampleReplyDelayMs } from "#lib/e
 import { isAsyncSurface, resolveScene } from "#lib/exchange/scene.ts";
 import type { Stop } from "#lib/llm/stops.ts";
 import { SITE_OF } from "#lib/scenario/types.ts";
+import { live, type Version } from "#lib/scenario/versions.ts";
 import { addressedCastParticipants, allocateParticipants, drawTakerCount } from "#lib/server/exchange/agents/floor.ts";
 import { scheduleWorldMoment } from "#lib/server/exchange/agents/worker.ts";
 import { buildSceneTranscript } from "#lib/server/exchange/prompt-context.ts";
 import { db } from "../db/index.ts";
-import { agentBatch, agentDelivery, exchange, exchangeMessage, piece, user } from "../db/schema.ts";
+import { agentBatch, agentDelivery, exchange, exchangeMessage, piece, scenario, user } from "../db/schema.ts";
 import { type Setting, settingOf } from "./setting.ts";
 
 export const sessionMessageChronologicalOrder = [asc(exchangeMessage.createdAt), asc(exchangeMessage.id)];
@@ -297,13 +298,15 @@ async function scheduleTakers(tx: SubmitTx, input: Parameters<typeof scheduleArr
 /**
  * Opens the exchange of a scenario: its piece (`writing`, the plan typed on the scenario page, which the page keeps on the
  * device until now, as its background) and the exchange, in one transaction. A learner has at most one unfinished piece
- * of a scenario in a language (a partial unique index), so entering again returns the one already open.
+ * of a scenario in a language (a partial unique index), so entering again returns the one already open. A new one is
+ * made only while the scenario is published with this language live, checked on its row, held (the admin's save waits,
+ * or went first): its conversation is played from that version. Null when it is not.
  */
 export async function openExchange(
 	u: { id: string; tutorLanguage: string; nativeLanguage?: string | null },
 	s: Setting,
 	plan = "",
-): Promise<{ exchangeId: number; pieceId: string }> {
+): Promise<{ exchangeId: number; pieceId: string } | null> {
 	const startedAt = new Date();
 	return db.transaction(async (tx) => {
 		const opened = async () =>
@@ -318,6 +321,8 @@ export async function openExchange(
 			)[0];
 		const open = await opened();
 		if (open) return open;
+		const [row] = await tx.select({ status: scenario.status, versions: scenario.versions }).from(scenario).where(eq(scenario.id, s.id)).for("share");
+		if (row?.status !== "published" || !live((row.versions as Record<string, Version>)[s.language])) return null;
 		const [p] = await tx
 			.insert(piece)
 			.values({

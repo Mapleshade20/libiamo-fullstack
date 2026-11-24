@@ -1,6 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
-import { type ExchangePlace, langName, type Place, type ScenarioKind, type ScenarioStatus, type SourceState, type Urgency } from "#lib/constants.ts";
+import {
+	type ExchangePlace,
+	hasScenarios,
+	langName,
+	type Place,
+	type ScenarioKind,
+	type ScenarioStatus,
+	type SourceState,
+	type Urgency,
+} from "#lib/constants.ts";
 import { blankVersion } from "#lib/scenario/blank.ts";
 import { SITE_OF } from "#lib/scenario/types.ts";
 import { live, type TranslationVersion, type Version, versionProblems, versionsSchema } from "#lib/scenario/versions.ts";
@@ -84,8 +93,8 @@ async function writtenCounts(ids?: string[]) {
  * The languages a scenario has pieces in, finished or not. Once it has one, where it happens is fixed; a language with
  * one keeps its version, which its conversations are played and handed over from (server/exchange/setting.ts).
  */
-async function writtenIn(id: string) {
-	const rows = await db.selectDistinct({ language: piece.language }).from(piece).where(eq(piece.scenarioId, id));
+async function writtenIn(id: string, w: Pick<typeof db, "selectDistinct"> = db) {
+	const rows = await w.selectDistinct({ language: piece.language }).from(piece).where(eq(piece.scenarioId, id));
 	return rows.map((r) => r.language);
 }
 
@@ -179,39 +188,47 @@ export async function saveScenario(input: ScenarioDraft, opts: { isNew: boolean;
 	if (!Object.keys(versions.data).length) throw new ScenarioError("A scenario needs at least one language.");
 	if ((input.kind === "translation") !== (input.place === "translation"))
 		throw new ScenarioError("A translation happens on the sheet, and only a translation does.");
-	const [was] = await db.select().from(scenario).where(eq(scenario.id, input.id));
-	if (opts.isNew && was) throw new ScenarioError(`There is already a scenario called ${input.id}.`);
-	if (!opts.isNew && !was) throw new ScenarioError("No such scenario.");
-	const written = was ? await writtenIn(input.id) : [];
-	if (was && (was.place !== input.place || was.kind !== input.kind) && written.length)
-		throw new ScenarioError("Learners have written in this scenario, so where it happens cannot change.");
-	const gone = written.filter((l) => !versions.data[l]);
-	if (gone.length)
-		throw new ScenarioError(
-			`Learners have written in ${gone.map((l) => langName(l, "en")).join(" and ")}: make ${gone.length > 1 ? "them drafts" : "it a draft"} instead of removing ${gone.length > 1 ? "them" : "it"}.`,
-		);
-	const status: ScenarioStatus = opts.publish
-		? "published"
-		: (was?.status as ScenarioStatus | undefined) === "published"
+	const unoffered = Object.keys(versions.data).filter((l) => !hasScenarios(l));
+	if (unoffered.length)
+		throw new ScenarioError(`Learners of ${unoffered.map((l) => langName(l, "en")).join(" and ")} are not offered scenarios yet.`);
+	// The scenario's row is held while it is checked and written: a learner entering it waits (server/exchange), so no
+	// piece starts in a language this save takes away.
+	const status = await db.transaction(async (tx) => {
+		const [was] = await tx.select().from(scenario).where(eq(scenario.id, input.id)).for("update");
+		if (opts.isNew && was) throw new ScenarioError(`There is already a scenario called ${input.id}.`);
+		if (!opts.isNew && !was) throw new ScenarioError("No such scenario.");
+		const written = was ? await writtenIn(input.id, tx) : [];
+		if (was && (was.place !== input.place || was.kind !== input.kind) && written.length)
+			throw new ScenarioError("Learners have written in this scenario, so where it happens cannot change.");
+		const gone = written.filter((l) => !versions.data[l]);
+		if (gone.length)
+			throw new ScenarioError(
+				`Learners have written in ${gone.map((l) => langName(l, "en")).join(" and ")}: make ${gone.length > 1 ? "them drafts" : "it a draft"} instead of removing ${gone.length > 1 ? "them" : "it"}.`,
+			);
+		const status: ScenarioStatus = opts.publish
 			? "published"
-			: (input.status ?? "draft");
-	if (status === "published" && !Object.values(versions.data).some(live))
-		throw new ScenarioError("Every language is a draft, so no learner would find it: make one live (or withdraw the scenario).");
-	const set = {
-		kind: input.kind,
-		place: input.place,
-		status,
-		minutes: input.minutes,
-		urgency: input.kind === "exchange" ? (input.urgency ?? "medium") : null,
-		maxTurns: input.kind === "exchange" ? input.maxTurns : null,
-		workId: input.workId,
-		versions: versions.data,
-		...(status === "published" && !was?.publishedAt ? { publishedAt: new Date() } : {}),
-	};
-	await db
-		.insert(scenario)
-		.values({ id: input.id, ...set, createdBy: opts.by })
-		.onConflictDoUpdate({ target: scenario.id, set });
+			: (was?.status as ScenarioStatus | undefined) === "published"
+				? "published"
+				: (input.status ?? "draft");
+		if (status === "published" && !Object.values(versions.data).some(live))
+			throw new ScenarioError("Every language is a draft, so no learner would find it: make one live (or withdraw the scenario).");
+		const set = {
+			kind: input.kind,
+			place: input.place,
+			status,
+			minutes: input.minutes,
+			urgency: input.kind === "exchange" ? (input.urgency ?? "medium") : null,
+			maxTurns: input.kind === "exchange" ? input.maxTurns : null,
+			workId: input.workId,
+			versions: versions.data,
+			...(status === "published" && !was?.publishedAt ? { publishedAt: new Date() } : {}),
+		};
+		await tx
+			.insert(scenario)
+			.values({ id: input.id, ...set, createdBy: opts.by })
+			.onConflictDoUpdate({ target: scenario.id, set });
+		return status;
+	});
 	if (status === "published" && input.kind === "translation") await queueSources(input.id);
 }
 
@@ -222,8 +239,9 @@ export async function withdrawScenario(id: string) {
 
 /** Deletes a draft nobody has written in. */
 export async function deleteScenario(id: string) {
-	if ((await writtenIn(id)).length) throw new ScenarioError("Learners have written in this scenario; withdraw it instead.");
 	await db.transaction(async (tx) => {
+		await tx.select({ id: scenario.id }).from(scenario).where(eq(scenario.id, id)).for("update");
+		if ((await writtenIn(id, tx)).length) throw new ScenarioError("Learners have written in this scenario; withdraw it instead.");
 		// A suggestion it was made from waits again.
 		await tx.update(suggestion).set({ status: "pending", scenarioId: null, resolvedAt: null }).where(eq(suggestion.scenarioId, id));
 		await tx.delete(issueScenario).where(eq(issueScenario.scenarioId, id));

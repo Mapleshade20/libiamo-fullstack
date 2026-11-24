@@ -646,13 +646,45 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 			if (!s) throw new Error(`no ${language} setting`);
 			return s;
 		};
+		const enter = async (who: typeof u, s: Awaited<ReturnType<typeof settingIn>>) => {
+			const r = await openExchange(who, s);
+			if (!r) throw new Error("not entered");
+			return r;
+		};
 		// Entering in English twice at once (two tabs), then in Spanish: two pieces, each in its language; entering again finds each.
 		const inEn = await settingIn("en");
-		const [en, twice] = await Promise.all([openExchange(u, inEn), openExchange(u, inEn)]);
+		const [en, twice] = await Promise.all([enter(u, inEn), enter(u, inEn)]);
 		expect(twice).toEqual(en);
-		const es = await openExchange(u, await settingIn("es"));
+		const inEs = await settingIn("es");
+		const es = await enter(u, inEs);
 		expect(es.pieceId).not.toBe(en.pieceId);
 		expect(await openExchange(u, await settingIn("en"))).toEqual(en);
+		// A save taking Spanish away while someone enters it: they wait for it, then find no Spanish to start in; the one
+		// already in it goes on.
+		await db.insert(user).values({ id: "late", email: "late@example.test", name: "Late" });
+		const late = { ...u, id: "late" };
+		let entering: Promise<unknown> = Promise.resolve();
+		await db.transaction(async (tx) => {
+			await tx.select().from(scenario).where(eq(scenario.id, "imessage-thanks")).for("update");
+			entering = openExchange(late, inEs);
+			await new Promise((r) => setTimeout(r, 100));
+			await tx
+				.update(scenario)
+				.set({ versions: { en: thanks.versions.en } })
+				.where(eq(scenario.id, "imessage-thanks"));
+		});
+		expect(await entering).toBeNull();
+		expect(await openExchange(u, inEs)).toEqual(es);
+		// Nor in a language that is a draft.
+		await db
+			.update(scenario)
+			.set({ versions: { en: thanks.versions.en, es: { ...thanks.versions.en, draft: true } } })
+			.where(eq(scenario.id, "imessage-thanks"));
+		expect(await openExchange(late, inEs)).toBeNull();
+		await db
+			.update(scenario)
+			.set({ versions: { en: thanks.versions.en, es: thanks.versions.en } })
+			.where(eq(scenario.id, "imessage-thanks"));
 		const langs = new Map((await db.select({ id: piece.id, language: piece.language }).from(piece)).map((p) => [p.id, p.language]));
 		expect([langs.get(en.pieceId), langs.get(es.pieceId)]).toEqual(["en", "es"]);
 		// A second unfinished piece in one language is refused by the database itself.
@@ -854,6 +886,8 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 			"Id: 2 to 60 lowercase letters, digits and hyphens\nMinutes: a whole number from 1 to 120\nSpanish: Title is empty",
 		);
 		const ok = { ...draft, id: "menu-two", minutes: 5, versions: { es: { ...version, draft: true } } };
+		// Only a language learners are offered scenarios in (lib/constants.ts SCENARIO_LANGS).
+		expect(await saved({ ...ok, versions: { de: version } })).toBe("Learners of German are not offered scenarios yet.");
 		expect(await saved(ok, true)).toBe("Every language is a draft, so no learner would find it: make one live (or withdraw the scenario).");
 		expect(await saved(ok)).toBe("saved");
 		// Live, it is published.
