@@ -147,8 +147,9 @@ async function change(next: string) {
 		class="pointer-events-none absolute inset-x-0 bottom-0 h-px w-full opacity-0"
 		onfocus={() => trigger?.focus()}
 		onchange={(event) => {
-			// Browser autofill writes the native control directly.
-			if (event.currentTarget.value !== value) {
+			// Browser autofill writes the native control directly. Not the change `change()` sends (untrusted): by then a
+			// picker that takes the value out of its items (the admin's "Add a language") has left the control empty.
+			if (event.isTrusted && event.currentTarget.value !== value) {
 				value = event.currentTarget.value;
 				onValueChange?.(value);
 			}

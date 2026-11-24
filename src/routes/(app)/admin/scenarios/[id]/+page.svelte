@@ -551,7 +551,7 @@ async function saveEdit(r: AdminSource) {
 				{#if v}
 					<!-- biome-ignore lint/a11y/noLabelWithoutControl: Checkbox renders a native checkbox inside the label -->
 					<label class="hide"
-						><Checkbox bind:checked={() => !!v.draft, (x) => (v.draft = x || undefined)} /><span>Hidden from learners in {langEn(lang)}</span></label
+						><Checkbox bind:checked={() => !!v.draft, (x) => (v.draft = x || undefined)} /><span>Draft in {langEn(lang)}</span></label
 					>
 				{/if}
 				<span class="grow"></span>
