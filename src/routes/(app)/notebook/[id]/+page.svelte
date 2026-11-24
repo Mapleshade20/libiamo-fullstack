@@ -37,7 +37,7 @@ const REG: Record<string, string> = {
 const when = $derived(n ? (n.due ? tx("noteDueNow") : n.next === 1 ? tx("noteDueTomorrow") : tx("noteDueIn", { n: n.next ?? 1 })) : "");
 const key = (phrase: string) => fixedPart(phrase);
 const read = $derived(n?.sentence ? around(n.sentence, n.marked ?? n.phrase) : null);
-const settled = $derived(n?.final ? around(n.final, key(n.phrase)) : null);
+const settled = $derived(n?.final ? around(n.final, n.marked || key(n.phrase)) : null);
 
 let editing = $state(false);
 let deleting = $state(false);
@@ -108,7 +108,7 @@ $effect(() => {
 		{#if n.examples?.length}
 			<ul class="examples" aria-label={tx("noteExamples")}>
 				{#each n.examples as e}
-					{@const m = around(e.t, key(n.phrase))}
+					{@const m = around(e.t, e.span || key(n.phrase))}
 					<li>
 						<p class="t" lang={app.lang}>
 							{#if m}

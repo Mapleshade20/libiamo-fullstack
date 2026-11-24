@@ -6,11 +6,12 @@ import { around, type Face } from "#lib/review/faces.ts";
 /*
  * The front of a review card (lib/review/faces.ts), for review itself and for the notebook's preview: the cue (what
  * the learner first wrote, struck, or what it means), then the sentence with the phrase blanked, one blank per word
- * about as long as the word. Review passes `asked` to fill the blank with the answer once the card turns.
+ * about as long as the word. A phrase in pieces ("framed … as") is one blank, written whole, with the words between its
+ * pieces hung under it. Review passes `asked` to fill the blank with the answer once the card turns.
  */
 let { face, lang, asked }: { face: Face; lang: string; asked?: Snippet } = $props();
 const parts = $derived(around(face.text, face.answer));
-const words = $derived(face.answer.split(/\s+/));
+const words = $derived(face.given ? [face.answer] : face.answer.split(/\s+/));
 </script>
 
 {#if face.was}
@@ -26,10 +27,18 @@ const words = $derived(face.answer.split(/\s+/));
 		{#if asked}
 			{@render asked()}
 		{:else}
-			<span role="img" aria-label={tx("rvGapLabel", { n: words.length })}
+			<span
+				class="blank"
+				role="img"
+				aria-label={[tx("rvGapLabel", { n: face.answer.split(/\s+/).length }), face.given && tx("rvGiven", { words: face.given.join(" … ") })]
+					.filter(Boolean)
+					.join(", ")}
 				>{#each words as w, i}
 					{i ? " " : ""}<span class="gap" style:--w={Math.max(2, w.length)}></span>
-				{/each}</span
+				{/each}
+				{#if face.given}
+					<span class="given">{tx("rvGiven", { words: face.given.join(" … ") })}</span>
+				{/if}</span
 			>
 		{/if}
 		{parts.after}
@@ -54,6 +63,20 @@ const words = $derived(face.answer.split(/\s+/));
 	margin: 0;
 	font: 21px / 1.6 var(--font-serif-stack);
 	color: var(--ink);
+}
+/* The words given inside a blank in pieces hang under it, small, and the line makes room for them. */
+.blank:has(.given) {
+	position: relative;
+	display: inline-block;
+	padding-bottom: 1.1em;
+}
+.given {
+	position: absolute;
+	left: 0.12em;
+	bottom: 0;
+	white-space: nowrap;
+	font: 13px / 1.2 var(--font-sans-stack);
+	color: var(--muted);
 }
 /* One blank per missing word, each about as long as its word, so the learner knows how much to write. */
 .gap {

@@ -1,7 +1,8 @@
 /* A learner's pieces as the pages see them: in their lists, and a finished one on its own page. */
 
 /** A notebook entry's body, written when the piece is finished (server/revision/pass2 notesFor). */
-export type NoteBody = { phrase: string; meaning: string; usage: string; examples: { t: string; n: string }[] };
+/** `marked`, and an example's `span`: the words of that sentence that are the phrase as used there ("framed … as"). */
+export type NoteBody = { phrase: string; meaning: string; usage: string; marked?: string; examples: { t: string; n: string; span?: string }[] };
 /**
  * One thing the learner worked out: the phrase they settled on, and whether they found it themselves. text: the tutor's
  * pattern; before: what they first wrote there; final: what they settled on; was: for a pass-1 change, just the words it

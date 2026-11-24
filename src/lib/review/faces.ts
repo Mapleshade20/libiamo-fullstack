@@ -9,6 +9,8 @@ export type Face = {
 	/** The sentence, with `answer` in it. */
 	text: string;
 	answer: string;
+	/** Words inside the answer that are not the phrase (the slot in "framed … as"): shown, though written with the rest. */
+	given?: string[];
 	/** What the learner first wrote there, shown struck: the cue for a card from their own writing. */
 	was?: string;
 	/** What it means, or the sentence's translation: the cue for the rest. */
@@ -22,10 +24,40 @@ export const fixedPart = (phrase: string) =>
 		.map((x) => x.trim().replace(/^[,;]\s*|[,;]$/g, ""))
 		.sort((a, b) => b.length - a.length)[0] ?? "";
 
-/** A sentence split around the words that matter in it, for marking or blanking them; null when they are not in it. */
+/**
+ * A sentence split around the words that matter in it, for marking or blanking them; null when they are not in it. A
+ * span in pieces ("framed … as") is the stretch from the first to the last, with the words between them `given`.
+ */
 export function around(text: string, part: string) {
-	const at = part ? text.toLowerCase().indexOf(part.toLowerCase()) : -1;
-	return at < 0 ? null : { before: text.slice(0, at), part: text.slice(at, at + part.length), after: text.slice(at + part.length) };
+	const low = text.toLowerCase();
+	const given: string[] = [];
+	let from = -1;
+	let to = 0;
+	for (const piece of part.split(/\s*…\s*/).filter(Boolean)) {
+		const at = low.indexOf(piece.toLowerCase(), to);
+		if (at < 0) return null;
+		if (from < 0) from = at;
+		else given.push(text.slice(to, at).trim());
+		to = at + piece.length;
+	}
+	return from < 0 ? null : { before: text.slice(0, from), part: text.slice(from, to), after: text.slice(to), given };
+}
+
+/** What a card asks of a sentence found `around` its span: the stretch, and the words in it the learner is given. */
+const asked = (at: { part: string; given: string[] }) => ({ answer: at.part, ...(at.given.length ? { given: at.given } : {}) });
+
+/** A sentence a model marked with <m>…</m>: the plain sentence, and its marked words as a span (pieces apart joined by "…"). */
+export function unmark(tagged: string): { text: string; span?: string } {
+	const pieces: string[] = [];
+	let last = 0;
+	for (const m of tagged.matchAll(/<m>(.*?)<\/m>/g)) {
+		const between = tagged.slice(last, m.index).replace(/<\/?m>/g, "");
+		// Marked words with only a space between them are one piece.
+		if (pieces.length && !between.trim()) pieces[pieces.length - 1] += between + m[1];
+		else if (m[1].trim()) pieces.push(m[1]);
+		last = m.index + m[0].length;
+	}
+	return { text: tagged.replace(/<\/?m>/g, ""), ...(pieces.length ? { span: pieces.map((p) => p.trim()).join(" … ") } : {}) };
 }
 
 /**
@@ -38,12 +70,14 @@ export function facesOf(n: {
 	gloss?: string;
 	before?: string;
 	final?: string;
+	/** The words of `final` that are the phrase as used there (the notes call marks them). */
+	marked?: string;
 	examples?: { t: string; n?: string; span?: string }[];
 }): Face[] {
 	const key = fixedPart(n.phrase);
 	const out: Face[] = [];
-	const own = n.final ? around(n.final, key) : null;
-	if (own && n.final) out.push({ text: n.final, answer: own.part, was: n.before, cue: n.before ? undefined : n.gloss });
+	const own = n.final ? around(n.final, n.marked || key) : null;
+	if (own && n.final) out.push({ text: n.final, ...asked(own), was: n.before, cue: n.before ? undefined : n.gloss });
 	for (const e of n.examples ?? []) out.push(...exampleFace(e, key, n.gloss));
 	return out;
 }
@@ -51,7 +85,7 @@ export function facesOf(n: {
 /** An example's card: the words it marks as the phrase (`span`), else the phrase's fixed words; none when neither is in it. */
 function exampleFace(e: { t: string; n?: string; span?: string }, key: string, gloss?: string): Face[] {
 	const at = (e.span && around(e.t, e.span)) || around(e.t, key);
-	return at ? [{ text: e.t, answer: at.part, cue: e.n || gloss }] : [];
+	return at ? [{ text: e.t, ...asked(at), cue: e.n || gloss }] : [];
 }
 
 /**
@@ -73,7 +107,7 @@ export function noteFaces(n: {
 	if (n.kind === "own") out = facesOf(n);
 	else {
 		const read = n.sentence && n.marked ? around(n.sentence, n.marked) : null;
-		out = read && n.sentence ? [{ text: n.sentence, answer: read.part, cue: n.gloss }] : [];
+		out = read && n.sentence ? [{ text: n.sentence, ...asked(read), cue: n.gloss }] : [];
 		for (const e of n.examples ?? []) out.push(...exampleFace(e, fixedPart(n.phrase), n.gloss));
 	}
 	return out.length ? out : [{ text: n.phrase, answer: n.phrase, cue: n.gloss }];

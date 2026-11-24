@@ -64,3 +64,43 @@ test("an entry's cards: its own sentence first, then examples; a collected one i
 		{ text: "slow burn", answer: "slow burn", cue: "a slow romance" },
 	]);
 });
+
+test("a phrase in pieces is one blank from the first piece to the last, with the words between them given", async () => {
+	const { around, noteFaces, unmark } = await import("#lib/review/faces.ts");
+	assert.deepEqual(unmark("He <m>framed</m> the delay <m>as</m> a <m>chance</m> <m>to rest</m>."), {
+		text: "He framed the delay as a chance to rest.",
+		span: "framed … as … chance to rest",
+	});
+	assert.deepEqual(unmark("No tags."), { text: "No tags." });
+	assert.deepEqual(around("He Framed the delay as a rest", "framed … as"), {
+		before: "He ",
+		part: "Framed the delay as",
+		after: " a rest",
+		given: ["the delay"],
+	});
+	// Pieces only in order.
+	assert.equal(around("as he framed it", "framed … as"), null);
+	const [own, example] = noteFaces({
+		kind: "own",
+		phrase: "frame something as",
+		before: "you said it was a choice",
+		final: "So you framed it as a choice.",
+		marked: "framed … as",
+		examples: [{ t: "He framed the delay as a rest.", n: "他把延误说成休息。", span: "framed … as" }],
+	});
+	assert.deepEqual(own, {
+		text: "So you framed it as a choice.",
+		answer: "framed it as",
+		given: ["it"],
+		was: "you said it was a choice",
+		cue: undefined,
+	});
+	assert.deepEqual(example, {
+		text: "He framed the delay as a rest.",
+		answer: "framed the delay as",
+		given: ["the delay"],
+		cue: "他把延误说成休息。",
+	});
+	// The words given stay whole in the first-letters hint.
+	assert.equal(hintOf("framed the delay as", ["the delay"]), "f····· the delay a·");
+});

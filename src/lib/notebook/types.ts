@@ -34,7 +34,7 @@ export type Note = NoteRow & {
 	usage?: string;
 	examples?: Example[];
 	/** Own: what the learner first wrote there, and the sentence as they settled it. Collected: the sentence it was read
-	    in, and the words highlighted. */
+	    in. `marked`: the words of that sentence that are the phrase (highlighted, or marked by the notes call). */
 	before?: string;
 	final?: string;
 	sentence?: string;

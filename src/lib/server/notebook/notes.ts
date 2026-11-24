@@ -50,6 +50,7 @@ export async function fileOwn(
 				usage: l.note.usage || null,
 				examples: Examples.parse(l.note.examples),
 				sentence: l.final ?? null,
+				marked: l.note.marked ?? null,
 				was: l.before ?? null,
 				fsrs: card,
 				due: new Date(card.dueAt),
@@ -241,7 +242,8 @@ function view(r: Row, now: Date, tz: string): Note {
 		...(r.register ? { register: r.register as Register } : {}),
 		...((own ? r.usage : r.why) ? { usage: (own ? r.usage : r.why) ?? undefined } : {}),
 		examples: Examples.parse(r.examples) as Example[],
-		...(own ? { before: r.was ?? undefined, final: r.sentence ?? undefined } : { sentence: r.sentence ?? undefined, marked: r.marked ?? undefined }),
+		...(own ? { before: r.was ?? undefined, final: r.sentence ?? undefined } : { sentence: r.sentence ?? undefined }),
+		marked: r.marked ?? undefined,
 		card: faceOf(r),
 	};
 }
