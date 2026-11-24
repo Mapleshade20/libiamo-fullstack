@@ -1,4 +1,5 @@
 <script lang="ts">
+import Check from "@lucide/svelte/icons/check";
 import X from "@lucide/svelte/icons/x";
 import type { Snippet } from "svelte";
 import { tip } from "#lib/components/common/tip.ts";
@@ -6,9 +7,11 @@ import { tip } from "#lib/components/common/tip.ts";
 /*
  * The top of every focused page, one standard for all of them (review, collect, a scenario's way in and out, the
  * session): the wordmark (home) at the start, the page's own progress in the middle, and the way out, an ✕ named by
- * its tip, always last. Leaving a focused page never loses anything, so the ✕ never asks.
+ * its tip, always last. Leaving a focused page never loses anything, so the ✕ never asks; once the page has kept
+ * something (`kept`), it is a ✓, so leaving never reads as throwing that away.
  */
-let { children, exit }: { children?: Snippet; exit?: { label: string; href?: string; onclick?: () => void } } = $props();
+let { children, exit }: { children?: Snippet; exit?: { label: string; href?: string; onclick?: () => void; kept?: boolean } } = $props();
+const Icon = $derived(exit?.kept ? Check : X);
 </script>
 
 <header class="focus-bar">
@@ -17,10 +20,10 @@ let { children, exit }: { children?: Snippet; exit?: { label: string; href?: str
 	{#if exit}
 		{#if exit.href}
 			<a class="exit" href={exit.href} onclick={exit.onclick} use:tip={exit.label}
-				><X class="size-[18px]" aria-hidden="true" /><span class="sr-only">{exit.label}</span></a
+				><Icon class="size-[18px]" aria-hidden="true" /><span class="sr-only">{exit.label}</span></a
 			>
 		{:else}
-			<button type="button" class="exit" onclick={exit.onclick} use:tip={exit.label}><X class="size-[18px]" aria-hidden="true" /></button>
+			<button type="button" class="exit" onclick={exit.onclick} use:tip={exit.label}><Icon class="size-[18px]" aria-hidden="true" /></button>
 		{/if}
 	{/if}
 </header>

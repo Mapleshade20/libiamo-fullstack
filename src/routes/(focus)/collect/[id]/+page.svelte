@@ -336,7 +336,7 @@ const cls = (i: number) => {
 </script>
 
 {#if SETUP}
-	<FocusBar exit={{ label: ui("colDone"), onclick: done }} />
+	<FocusBar exit={{ label: ui("colDone"), onclick: done, kept: marks.some((m) => m.id) }} />
 	<main class="wrap" lang={htmlLang(UI)}>
 		<h1>{ui("colTitle")}</h1>
 		<p class="how">{ui(touch ? "colHowTouch" : "colHowDesk")}</p>
