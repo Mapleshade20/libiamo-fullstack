@@ -37,7 +37,7 @@ const words = $derived(face.given ? [face.answer] : face.answer.split(/\s+/));
 					{i ? " " : ""}<span class="gap" style:--w={Math.max(2, w.length)}></span>
 				{/each}
 				{#if face.given}
-					<span class="given">{tx("rvGiven", { words: face.given.join(" … ") })}</span>
+					<span class="given" aria-hidden="true">{face.given.join(" … ")}</span>
 				{/if}</span
 			>
 		{/if}
@@ -70,13 +70,26 @@ const words = $derived(face.given ? [face.answer] : face.answer.split(/\s+/));
 	display: inline-block;
 	padding-bottom: 1.1em;
 }
+/* Hung from the blank by a thin hook, the way a note in a margin points at its line. */
 .given {
 	position: absolute;
-	left: 0.12em;
+	left: 0.5em;
 	bottom: 0;
+	padding-left: 13px;
 	white-space: nowrap;
-	font: 13px / 1.2 var(--font-sans-stack);
+	font: 14px / 1.2 var(--font-serif-stack);
 	color: var(--muted);
+}
+.given::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: -0.4em;
+	width: 8px;
+	height: 1.05em;
+	border-left: 1px solid currentColor;
+	border-bottom: 1px solid currentColor;
+	border-bottom-left-radius: 5px;
 }
 /* One blank per missing word, each about as long as its word, so the learner knows how much to write. */
 .gap {
