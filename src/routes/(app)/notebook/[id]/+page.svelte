@@ -5,7 +5,7 @@ import Plus from "@lucide/svelte/icons/plus";
 import Trash2 from "@lucide/svelte/icons/trash-2";
 import X from "@lucide/svelte/icons/x";
 import { app } from "#lib/account/app.svelte.ts";
-import { revalidate } from "#lib/client/refresh.ts";
+import { refreshHeld } from "#lib/client/refresh.ts";
 import ModalDialog from "#lib/components/common/ModalDialog.svelte";
 import Select from "#lib/components/common/Select.svelte";
 import { tip } from "#lib/components/common/tip.ts";
@@ -32,7 +32,8 @@ import { page } from "$app/state";
  * into fields in place (where it came from is a record and stays); the card below is the one review asks next as it
  * would be once saved, and each example shows the words its own card will blank.
  */
-revalidate(noteNow(page.params.id ?? ""));
+let { data } = $props();
+$effect(() => refreshHeld(data.opened));
 const n = $derived(await noteNow(page.params.id ?? ""));
 const REG: Record<string, string> = {
 	neutral: "regNeutral",

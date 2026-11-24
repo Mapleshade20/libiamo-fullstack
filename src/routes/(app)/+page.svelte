@@ -2,20 +2,24 @@
 import { onMount } from "svelte";
 import { announcements } from "#lib/account/announcements.remote.ts";
 import { dateOf, local } from "#lib/account/announcements.ts";
+import { refreshHeld } from "#lib/client/refresh.ts";
 import Backdrop from "#lib/components/backdrop/Backdrop.svelte";
 import FloatingPanel from "#lib/components/common/FloatingPanel.svelte";
 import Composer from "#lib/components/home/Composer.svelte";
+import { greetingAt } from "#lib/components/home/greeting.ts";
 import Inbox from "#lib/components/home/Inbox.svelte";
 import Shelf from "#lib/components/home/Shelf.svelte";
 import { shell } from "#lib/components/shell/shell.svelte.ts";
 import { toast } from "#lib/components/shell/toast.svelte.ts";
 import { tx } from "#lib/i18n/tx.ts";
+import { clock } from "#lib/time/clock.svelte.ts";
 
 /*
- * The home page: unread things above the greeting, the box, and the shelf. The greeting and the shelf's heading are
- * drawn on the server (+page.server.ts), so what the page arrives with stays.
+ * The home page: unread things above the greeting, the box, and the shelf.
  */
 let { data } = $props();
+$effect(() => refreshHeld(data.opened));
+const { greeting, shelfHead } = greetingAt(clock.now, clock.timeZone);
 
 let markEl: HTMLElement | undefined = $state();
 let trayOpen = $state(false);
@@ -93,11 +97,11 @@ $effect(() => {
 				{/if}
 			</FloatingPanel>
 			<!-- A word joiner: never break between the mark and the first word. -->
-			<span>⁠{tx(data.greeting)}</span>
+			<span>⁠{tx(greeting)}</span>
 		</h1>
 		<Composer />
 	</section>
-	<Shelf head={data.shelfHead} />
+	<Shelf head={shelfHead} />
 </main>
 
 <style>

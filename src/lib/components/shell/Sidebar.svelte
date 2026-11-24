@@ -25,7 +25,7 @@ import { dueNow } from "#lib/notebook/notebook.svelte.ts";
 import { openPiece } from "#lib/writing/open.ts";
 import { siteOf } from "#lib/writing/sites.ts";
 import { shelfNow } from "#lib/writing/writing.svelte.ts";
-import { afterNavigate, goto } from "$app/navigation";
+import { afterNavigate, beforeNavigate, goto } from "$app/navigation";
 import { page } from "$app/state";
 import EmptyState from "./EmptyState.svelte";
 import { shell } from "./shell.svelte";
@@ -44,10 +44,12 @@ const nav = $derived<{ id: string; href: string; sticker: StickerName | "clink";
 	{ id: "writing", href: "/writing", sticker: "box", label: tx("navWriting"), count: shelfNow().open.length, tilt: -1 },
 ]);
 // A scenario belongs to the prompts; a piece to my writing.
-const current = $derived(
-	nav.find((n) => n.href === page.url.pathname)?.id ??
-		(page.url.pathname.startsWith("/scenario/") ? "library" : page.url.pathname.startsWith("/w/") ? "writing" : ""),
-);
+const rowOf = (path = "") =>
+	nav.find((n) => n.href === path)?.id ?? (path.startsWith("/scenario/") ? "library" : path.startsWith("/w/") ? "writing" : "");
+const current = $derived(rowOf(page.url.pathname));
+// The row the learner is going to: the card slides there as they click, while the page's answers are still on their way.
+let going = $state<string | null>(null);
+const at = $derived(going ?? current);
 // What they are writing and have written (the shelf leaves abandoned pieces to My writing).
 const recent = $derived(shelfNow().recent);
 // The account's own pages: there its sticker stays "in hand", as a row's does on its page.
@@ -70,9 +72,23 @@ let narrow = $state(false);
 // the learner moves.
 function placeMark(redraw = false) {
 	if (redraw) turn = Math.round((-0.8 + Math.random() * 1.4) * 100) / 100;
-	const row = navEl?.querySelector<HTMLElement>("[aria-current='page']");
+	const row = navEl?.querySelector<HTMLElement>(`[data-row="${at}"]`);
 	mark = row ? { top: row.offsetTop, height: row.offsetHeight, left: row.offsetLeft, width: row.offsetWidth } : null;
 }
+beforeNavigate(({ to, complete, willUnload }) => {
+	const row = rowOf(to?.url.pathname);
+	if (willUnload || !row || row === current) return;
+	going = row;
+	placeMark(true);
+	// Arrived (the page's row is the same), or turned back: the card lies on the page's row (unless another click has
+	// moved it on).
+	const back = () => {
+		if (going !== row) return;
+		going = null;
+		tick().then(() => placeMark());
+	};
+	complete.then(back, back);
+});
 // On a phone the drawer stays open while the card slides to the chosen row, with the page changing behind it, and
 // closes as both settle (the card's slide and the page's entrance end at about the same time).
 let closeTimer: ReturnType<typeof setTimeout> | undefined;
@@ -80,8 +96,10 @@ afterNavigate(async () => {
 	clearTimeout(closeTimer);
 	const open = shell.drawer && narrow;
 	if (!open) shell.setDrawer(false);
+	// Put down afresh for each page, unless the click already moved it here.
+	const moved = going !== null;
 	await tick();
-	placeMark(true);
+	placeMark(!moved);
 	if (open) closeTimer = setTimeout(() => shell.setDrawer(false), reducedMotion() ? 0 : 300);
 });
 $effect(() => () => clearTimeout(closeTimer));
@@ -198,13 +216,16 @@ const MENU_CLOSE_MS = 160;
 			<svg class="fold-mark" viewBox="0 0 20 20" aria-hidden="true"><path d="M12.4 4.6c-2.2 1.9-3.9 3.6-5.2 5.3 1.4 1.8 3 3.5 5.2 5.5" /></svg>
 		</button>
 	</div>
-	<nav class="nav" bind:this={navEl} style:--sel-turn="{turn}deg" aria-label={tx("homeTitle")}>
+	<!-- Their pages' code is fetched once the app is up, so going to one first waits only for its answers. -->
+	<nav class="nav" bind:this={navEl} data-sveltekit-preload-code="eager" style:--sel-turn="{turn}deg" aria-label={tx("homeTitle")}>
 		{#each nav as n (n.id)}
 			<a
 				class="nav-row"
 				class:playing={plays[n.id].playing}
 				href={n.href}
+				class:at={at === n.id}
 				aria-current={current === n.id ? "page" : undefined}
+				data-row={n.id}
 				data-tip={n.label}
 				aria-label={n.count ? `${n.label} (${n.count})` : n.label}
 				onclick={(e) => onNav(e, n.id)}
@@ -445,14 +466,14 @@ const MENU_CLOSE_MS = 160;
 .nav-row {
 	z-index: 1;
 }
-/* The page you are on: the card lying on top, which slides beneath the rows; its words turn with it. */
-.nav-row[aria-current="page"] {
+/* The page you are on (or going to): the card lying on top, which slides beneath the rows; its words turn with it. */
+.nav-row.at {
 	color: var(--ink);
 	font-weight: 500;
 	background: transparent;
 	rotate: var(--sel-turn, -0.8deg);
 }
-.nav-row[aria-current="page"]:hover {
+.nav-row.at:hover {
 	background: transparent;
 }
 .nav-sel {

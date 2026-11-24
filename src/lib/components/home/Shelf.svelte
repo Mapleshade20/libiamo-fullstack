@@ -1,7 +1,6 @@
 <script lang="ts">
 import { fade } from "svelte/transition";
 import { app } from "#lib/account/app.svelte.ts";
-import { revalidate } from "#lib/client/refresh.ts";
 import { reducedMotion } from "#lib/components/common/motion.ts";
 import { createPlay } from "#lib/components/stickers/play.svelte.ts";
 import Sticker from "#lib/components/stickers/Sticker.svelte";
@@ -21,13 +20,12 @@ import ScenarioCard from "./ScenarioCard.svelte";
  * Below the box: review as a slim row (only when cards are due), then at most four cards, in this order: the piece the
  * learner left unfinished, two scenarios (server/scenario shelfScenariosOf: the current issue first), and a card for
  * suggesting a situation (a link beside "All scenarios" when the shelf is full). A language without
- * prompts keeps the first and the last. The heading is drawn once per visit.
+ * prompts keeps the first and the last. The heading is the home page's.
  */
 let { head }: { head: string } = $props();
 const follow = $derived(followUp());
 const openPiece = $derived(shelfNow().open[0]);
 // Four at most: continue, follow-up, then scenarios; the "+" card only when there is room.
-revalidate(!sandboxed() && hasScenarios(app.lang) ? shelfScenarios(app.lang) : null, dueNow());
 // Asked for together: a `$derived(await …)` is not begun until the one before it has its answer, and a query is not
 // asked for until it is awaited (await_waterfall).
 const [offered, deck] = $derived(

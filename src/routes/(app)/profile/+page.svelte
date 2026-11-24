@@ -5,7 +5,7 @@ import Pencil from "@lucide/svelte/icons/pencil";
 import { onMount, tick } from "svelte";
 import { account } from "#lib/account/account.svelte.ts";
 import { app } from "#lib/account/app.svelte.ts";
-import { revalidate } from "#lib/client/refresh.ts";
+import { refreshHeld } from "#lib/client/refresh.ts";
 import InfoTip from "#lib/components/common/InfoTip.svelte";
 import ModalDialog from "#lib/components/common/ModalDialog.svelte";
 import { shake } from "#lib/components/common/motion.ts";
@@ -29,7 +29,8 @@ import { shelfNow } from "#lib/writing/writing.svelte.ts";
  * glimpses. Settings (how the app works for them) are a page of their own.
  */
 // Each week with the aim it was held to; a week's days are the learner's local days (`YYYY-MM-DD`), shown as they are.
-revalidate(historyNow(26), glanceNow());
+let { data } = $props();
+$effect(() => refreshHeld(data.opened));
 // Asked for together: a `$derived(await …)` is not begun until the one before it has its answer, and a query is not
 // asked for until it is awaited (await_waterfall).
 const [weeks, glanced] = $derived(await Promise.all([historyNow(26), glanceNow()]));

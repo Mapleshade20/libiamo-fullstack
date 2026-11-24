@@ -1,7 +1,7 @@
 <script lang="ts">
 import { blur } from "svelte/transition";
 import { app } from "#lib/account/app.svelte.ts";
-import { revalidate } from "#lib/client/refresh.ts";
+import { refreshHeld } from "#lib/client/refresh.ts";
 import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
 import Select from "#lib/components/common/Select.svelte";
 import ScenarioCard from "#lib/components/home/ScenarioCard.svelte";
@@ -18,7 +18,8 @@ import { siteOf } from "#lib/writing/sites.ts";
  * has no schedule and is ranked by code ("for you": not written yet first, places taking turns, newer first), then the
  * back issues. A place filter and a time filter narrow the pool.
  */
-revalidate(hasScenarios(app.lang) ? library(app.lang) : null);
+let { data } = $props();
+$effect(() => refreshHeld(data.opened));
 const lib = $derived(hasScenarios(app.lang) ? await library(app.lang) : { pool: [], past: [] });
 const issue = $derived(lib.issue);
 let sort = $state("for");

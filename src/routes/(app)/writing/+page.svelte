@@ -1,6 +1,6 @@
 <script lang="ts">
 import { app } from "#lib/account/app.svelte.ts";
-import { revalidate } from "#lib/client/refresh.ts";
+import { refreshHeld } from "#lib/client/refresh.ts";
 import EmptyState from "#lib/components/shell/EmptyState.svelte";
 import { tx } from "#lib/i18n/tx.ts";
 import { openPiece } from "#lib/writing/open.ts";
@@ -11,7 +11,8 @@ import { piecesPageNow, whenOf } from "#lib/writing/writing.svelte.ts";
    told us they posted. Opening one goes back into its session (the main app's archive and the sidebar's recents). It
    comes a page at a time (server/writing/pieces.ts `piecesPage`); the next is asked for as the end comes near. */
 const STATE = { open: "scenarioActive", revised: "wrRevised", posted: "wrPosted", abandoned: "wrAbandoned" } as const;
-revalidate(piecesPageNow());
+let { data } = $props();
+$effect(() => refreshHeld(data.opened));
 const first = $derived(await piecesPageNow());
 // The pages after the first, for the language being worked in.
 let more = $state<{ lang: string; items: PieceItem[]; next?: string }>({ lang: "", items: [] });

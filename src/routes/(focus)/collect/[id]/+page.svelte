@@ -3,7 +3,6 @@ import X from "@lucide/svelte/icons/x";
 import { onDestroy, onMount, tick } from "svelte";
 import { fly, slide } from "svelte/transition";
 import { app } from "#lib/account/app.svelte.ts";
-import { refreshQuery } from "#lib/client/refresh.ts";
 import LimitNotice from "#lib/components/common/LimitNotice.svelte";
 import { reducedMotion } from "#lib/components/common/motion.ts";
 import FocusBar from "#lib/components/shell/FocusBar.svelte";
@@ -29,10 +28,8 @@ import { page } from "$app/state";
 const currentChapter = captureTourState();
 let disposed = false;
 const active = () => !disposed && currentChapter();
-// What is kept from the reading changes on this page (collecting is an endpoint): an answer the browser still holds
-// from an earlier visit is asked again before the page marks what was kept.
+// The latest of what is kept from it: asked again before the page opens (+page.ts).
 const asked = sandboxed() ? null : readingById(page.params.id ?? "");
-if (asked?.ready) await refreshQuery(asked);
 const mine = asked ? await asked : null;
 const found = asked ? mine : tourReading(page.params.id ?? "");
 const SETUP = found ? { passage: found.passage, lang: found.lang, native: app.prefs.native, feedback: app.prefs.feedback } : null;
