@@ -1,14 +1,24 @@
 import { randomUUID } from "node:crypto";
 import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
-import type { ExchangePlace, Place, ScenarioKind, ScenarioStatus, SourceState, Urgency } from "#lib/constants.ts";
+import {
+	type ExchangePlace,
+	hasScenarios,
+	langName,
+	type Place,
+	type ScenarioKind,
+	type ScenarioStatus,
+	type SourceState,
+	type Urgency,
+} from "#lib/constants.ts";
 import { blankVersion } from "#lib/scenario/blank.ts";
 import { SITE_OF } from "#lib/scenario/types.ts";
-import { type TranslationVersion, type Version, versionsSchema } from "#lib/scenario/versions.ts";
+import { live, type TranslationVersion, type Version, versionProblems, versionsSchema } from "#lib/scenario/versions.ts";
 import { type InboxSuggestion, suggestionFor } from "#lib/server/admin/inbox.ts";
 import { db } from "#lib/server/db/index.ts";
 import { issueScenario, piece, scenario, scenarioSource, suggestion, work } from "#lib/server/db/schema.ts";
 import { sourceIdentity } from "#lib/server/translation/identity.ts";
 import { kickSources, queueSources } from "#lib/server/translation/runner.ts";
+import { isByLine, unitsOf } from "#lib/translation/blocks.ts";
 
 /*
  * Scenarios as the admin edits them: the row whole, its versions validated by kind and place on every save, a
@@ -60,6 +70,8 @@ export type ScenarioDraft = {
 export type AdminScenario = ScenarioDraft & {
 	publishedAt: string | null;
 	written: number;
+	/** The languages learners have written in it in (any piece, finished or not). */
+	writtenIn: string[];
 	sources: AdminSource[];
 	works: { id: string; title: string }[];
 	/** The learner's suggestion it was made from. */
@@ -77,10 +89,13 @@ async function writtenCounts(ids?: string[]) {
 	return new Map(rows.map((r) => [r.id as string, r.n]));
 }
 
-/** Pieces of a scenario at all, finished or not: once there is one, where it happens is fixed. */
-async function anyPiece(id: string) {
-	const [r] = await db.select({ n: count() }).from(piece).where(eq(piece.scenarioId, id));
-	return r.n > 0;
+/**
+ * The languages a scenario has pieces in, finished or not. Once it has one, where it happens is fixed; a language with
+ * one keeps its version, which its conversations are played and handed over from (server/exchange/setting.ts).
+ */
+async function writtenIn(id: string, w: Pick<typeof db, "selectDistinct"> = db) {
+	const rows = await w.selectDistinct({ language: piece.language }).from(piece).where(eq(piece.scenarioId, id));
+	return rows.map((r) => r.language);
 }
 
 export async function adminScenarios(): Promise<AdminScenarioRow[]> {
@@ -118,11 +133,12 @@ export async function adminScenarios(): Promise<AdminScenarioRow[]> {
 export async function adminScenario(id: string): Promise<AdminScenario | null> {
 	const [row] = await db.select().from(scenario).where(eq(scenario.id, id));
 	if (!row) return null;
-	const [sources, written, works, from] = await Promise.all([
+	const [sources, written, works, from, languages] = await Promise.all([
 		db.select().from(scenarioSource).where(eq(scenarioSource.scenarioId, id)).orderBy(scenarioSource.language, scenarioSource.native),
 		writtenCounts([id]),
 		db.select({ id: work.id, title: work.title }).from(work).orderBy(work.title),
 		suggestionFor(id),
+		writtenIn(id),
 	]);
 	return {
 		id: row.id,
@@ -136,6 +152,7 @@ export async function adminScenario(id: string): Promise<AdminScenario | null> {
 		versions: row.versions as Record<string, Version>,
 		publishedAt: row.publishedAt?.toISOString() ?? null,
 		written: written.get(id) ?? 0,
+		writtenIn: languages,
 		works,
 		from,
 		sources: sources.map((s) => ({
@@ -157,39 +174,61 @@ export class ScenarioError extends Error {}
 
 /**
  * Saves a scenario whole. `publish` publishes it (a translation's missing sources are queued); a published scenario
- * saved stays published. A new id must be free; an existing scenario with pieces keeps its kind and place.
+ * saved stays published, and either needs a language learners are offered it in. A new id must be free; an existing
+ * scenario with pieces keeps its kind and place. What is wrong is said a line each, in the page's words.
  */
 export async function saveScenario(input: ScenarioDraft, opts: { isNew: boolean; publish: boolean; by: string }) {
+	const problems = [
+		...(/^[a-z0-9-]{2,60}$/.test(input.id) ? [] : ["Id: 2 to 60 lowercase letters, digits and hyphens"]),
+		...(Number.isInteger(input.minutes) && input.minutes >= 1 && input.minutes <= 120 ? [] : ["Minutes: a whole number from 1 to 120"]),
+	];
 	const versions = versionsSchema(input.kind, input.place).safeParse(input.versions);
-	if (!versions.success) throw new ScenarioError(versions.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
-	if (!Object.keys(versions.data).length) throw new ScenarioError("A scenario needs at least one version.");
+	if (!versions.success) problems.push(...versionProblems(versions.error.issues, (l) => langName(l, "en")));
+	if (problems.length || !versions.success) throw new ScenarioError(problems.join("\n"));
+	if (!Object.keys(versions.data).length) throw new ScenarioError("A scenario needs at least one language.");
 	if ((input.kind === "translation") !== (input.place === "translation"))
 		throw new ScenarioError("A translation happens on the sheet, and only a translation does.");
-	const [was] = await db.select().from(scenario).where(eq(scenario.id, input.id));
-	if (opts.isNew && was) throw new ScenarioError(`There is already a scenario called ${input.id}.`);
-	if (!opts.isNew && !was) throw new ScenarioError("No such scenario.");
-	if (was && (was.place !== input.place || was.kind !== input.kind) && (await anyPiece(input.id)))
-		throw new ScenarioError("Learners have written in this scenario, so where it happens cannot change.");
-	const status: ScenarioStatus = opts.publish
-		? "published"
-		: (was?.status as ScenarioStatus | undefined) === "published"
+	const unoffered = Object.keys(versions.data).filter((l) => !hasScenarios(l));
+	if (unoffered.length)
+		throw new ScenarioError(`Learners of ${unoffered.map((l) => langName(l, "en")).join(" and ")} are not offered scenarios yet.`);
+	// The scenario's row is held while it is checked and written: a learner entering it waits (server/exchange), so no
+	// piece starts in a language this save takes away.
+	const status = await db.transaction(async (tx) => {
+		const [was] = await tx.select().from(scenario).where(eq(scenario.id, input.id)).for("update");
+		if (opts.isNew && was) throw new ScenarioError(`There is already a scenario called ${input.id}.`);
+		if (!opts.isNew && !was) throw new ScenarioError("No such scenario.");
+		const written = was ? await writtenIn(input.id, tx) : [];
+		if (was && (was.place !== input.place || was.kind !== input.kind) && written.length)
+			throw new ScenarioError("Learners have written in this scenario, so where it happens cannot change.");
+		const gone = written.filter((l) => !versions.data[l]);
+		if (gone.length)
+			throw new ScenarioError(
+				`Learners have written in ${gone.map((l) => langName(l, "en")).join(" and ")}: make ${gone.length > 1 ? "them drafts" : "it a draft"} instead of removing ${gone.length > 1 ? "them" : "it"}.`,
+			);
+		const status: ScenarioStatus = opts.publish
 			? "published"
-			: (input.status ?? "draft");
-	const set = {
-		kind: input.kind,
-		place: input.place,
-		status,
-		minutes: input.minutes,
-		urgency: input.kind === "exchange" ? (input.urgency ?? "medium") : null,
-		maxTurns: input.kind === "exchange" ? input.maxTurns : null,
-		workId: input.workId,
-		versions: versions.data,
-		...(status === "published" && !was?.publishedAt ? { publishedAt: new Date() } : {}),
-	};
-	await db
-		.insert(scenario)
-		.values({ id: input.id, ...set, createdBy: opts.by })
-		.onConflictDoUpdate({ target: scenario.id, set });
+			: (was?.status as ScenarioStatus | undefined) === "published"
+				? "published"
+				: (input.status ?? "draft");
+		if (status === "published" && !Object.values(versions.data).some(live))
+			throw new ScenarioError("Every language is a draft, so no learner would find it: make one live (or withdraw the scenario).");
+		const set = {
+			kind: input.kind,
+			place: input.place,
+			status,
+			minutes: input.minutes,
+			urgency: input.kind === "exchange" ? (input.urgency ?? "medium") : null,
+			maxTurns: input.kind === "exchange" ? input.maxTurns : null,
+			workId: input.workId,
+			versions: versions.data,
+			...(status === "published" && !was?.publishedAt ? { publishedAt: new Date() } : {}),
+		};
+		await tx
+			.insert(scenario)
+			.values({ id: input.id, ...set, createdBy: opts.by })
+			.onConflictDoUpdate({ target: scenario.id, set });
+		return status;
+	});
 	if (status === "published" && input.kind === "translation") await queueSources(input.id);
 }
 
@@ -200,8 +239,9 @@ export async function withdrawScenario(id: string) {
 
 /** Deletes a draft nobody has written in. */
 export async function deleteScenario(id: string) {
-	if (await anyPiece(id)) throw new ScenarioError("Learners have written in this scenario; withdraw it instead.");
 	await db.transaction(async (tx) => {
+		await tx.select({ id: scenario.id }).from(scenario).where(eq(scenario.id, id)).for("update");
+		if ((await writtenIn(id, tx)).length) throw new ScenarioError("Learners have written in this scenario; withdraw it instead.");
 		// A suggestion it was made from waits again.
 		await tx.update(suggestion).set({ status: "pending", scenarioId: null, resolvedAt: null }).where(eq(suggestion.scenarioId, id));
 		await tx.delete(issueScenario).where(eq(issueScenario.scenarioId, id));
@@ -226,12 +266,54 @@ export async function remakeSource(sourceId: string, generation: string) {
 	kickSources();
 }
 
-/** The admin has read the source and vouches for it. */
-export async function confirmSource(sourceId: string, generation: string) {
-	await db
+export type SourceEdit = Pick<AdminSource, "title" | "text" | "glossary">;
+
+/**
+ * The admin has read the source and vouches for it, in their own wording when they edited it: kept under a new
+ * generation (a sheet showing the old one is refused when sent, and reloads) and marked edited, so making it again warns.
+ */
+export async function confirmSource(sourceId: string, generation: string, edit?: SourceEdit) {
+	if (edit) await checkEdit(sourceId, edit);
+	const [done] = await db
 		.update(scenarioSource)
-		.set({ state: "confirmed" })
-		.where(and(eq(scenarioSource.id, sourceId), eq(scenarioSource.generation, generation), inArray(scenarioSource.state, ["checked", "notes"])));
+		.set(edit ? { ...edit, state: "confirmed", notes: { edited: true }, generation: randomUUID() } : { state: "confirmed" })
+		.where(
+			and(
+				eq(scenarioSource.id, sourceId),
+				eq(scenarioSource.generation, generation),
+				inArray(scenarioSource.state, ["checked", "notes", "confirmed"]),
+			),
+		)
+		.returning({ id: scenarioSource.id });
+	if (!done) throw new ScenarioError("The source changed since this page loaded: look at it again.");
+}
+
+/** An edited source keeps the original's layout (the sheet pairs them), and each term is in both texts. */
+async function checkEdit(sourceId: string, e: SourceEdit) {
+	const [row] = await db
+		.select({ src: scenarioSource, s: scenario })
+		.from(scenarioSource)
+		.innerJoin(scenario, eq(scenario.id, scenarioSource.scenarioId))
+		.where(eq(scenarioSource.id, sourceId));
+	const v = row && (row.s.versions as Record<string, TranslationVersion>)[row.src.language];
+	if (!row?.src.text || !v || row.src.inputHash !== sourceIdentity(v, row.s.workId))
+		throw new ScenarioError("This source is not current: make it again.");
+	const byLine = isByLine(v.original);
+	const n = unitsOf(v.original).units.length;
+	const problems = [
+		e.title ? "" : "It needs a title.",
+		isByLine(e.text) === byLine && unitsOf(e.text).units.length === n ? "" : `Keep the original's ${n} ${byLine ? "lines" : "paragraphs"}.`,
+		...e.glossary.map((g) =>
+			!g.term || !g.shown || !g.gloss
+				? "Each term needs how the source shows it and what it means."
+				: !v.original.toLowerCase().includes(g.term.toLowerCase())
+					? `"${g.term}" is not in the original.`
+					: e.text.includes(g.shown)
+						? ""
+						: `"${g.shown}" is not in the source.`,
+		),
+	].filter(Boolean);
+	if (problems.length) throw new ScenarioError([...new Set(problems)].join(" "));
 }
 
 /** A free scenario id from a title: its words, lowercased, numbered when taken. */
@@ -262,6 +344,9 @@ export async function freeId(base: string) {
 export async function scenarioFromSuggestion(suggestionId: string, by: string, chosen?: ExchangePlace) {
 	const [s] = await db.select().from(suggestion).where(eq(suggestion.id, suggestionId));
 	if (!s) throw new ScenarioError("No such suggestion.");
+	// Kept waiting, not made a draft that cannot be saved.
+	if (!hasScenarios(s.language))
+		throw new ScenarioError(`Learners of ${langName(s.language, "en")} are not offered scenarios yet: it waits until they are.`);
 	const place = s.place === "other" ? chosen : (s.place as ExchangePlace);
 	if (!place) throw new ScenarioError("Say where it happens.");
 	const id = await freeId(s.purpose);

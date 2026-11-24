@@ -1,7 +1,8 @@
 import { captureTourState } from "#lib/components/tour/lifetime.ts";
 import { keepCollected, sandboxed } from "#lib/components/tour/sandbox.svelte.ts";
+import type { LEARNABLE } from "#lib/constants.ts";
 import { answered, needKey, stopOf } from "#lib/llm/stops.ts";
-import { removeNotes } from "#lib/notebook/notebook.remote.ts";
+import { removeNotes, startReading } from "#lib/notebook/notebook.remote.ts";
 
 /*
  * Phrases kept from something read, wherever it is read (a scenario's situation, later the session's context): each
@@ -14,6 +15,8 @@ export type Kept = {
 	key: string;
 	marked: string;
 	sentence: string;
+	/** Where `marked` begins in `sentence`. */
+	at: number;
 	phrase?: string;
 	meaning?: string;
 	register?: string;
@@ -38,8 +41,10 @@ export class Collector {
 	private batch = `${Date.now()}`;
 	private timers = new Map<string, ReturnType<typeof setTimeout>>();
 	private retries = 0;
-	/** Each text's reading, once its first phrase is kept. */
-	private readings = new Map<string, string>();
+	/** Each text's reading, kept (once) before its first phrase is filled in, so every call and retry names the same one. */
+	private readings = new Map<string, Promise<string>>();
+	/** The marks a call is filling in: a call made meanwhile leaves them to it. */
+	private asked = new Set<Kept>();
 	constructor(private setup: Setup) {}
 	private forget(ids: (string | undefined)[]) {
 		if (!this.active()) return;
@@ -48,9 +53,9 @@ export class Collector {
 	}
 
 	/** A mark in a text was made or changed; filled in a moment later, with the other new marks in the same text. */
-	mark(block: string, passage: string, key: string, marked: string, sentence: string) {
+	mark(block: string, passage: string, key: string, marked: string, place: { sentence: string; at: number }) {
 		const at = this.kept.findIndex((k) => k.key === key);
-		const item: Kept = { key, marked, sentence };
+		const item: Kept = { key, marked, ...place };
 		if (at >= 0) this.forget([this.kept[at].id]);
 		if (at >= 0) this.kept[at] = item;
 		else this.kept.push(item);
@@ -75,29 +80,41 @@ export class Collector {
 	}
 	private async fill(block: string, passage: string) {
 		if (!this.active()) return;
-		const todo = this.kept.filter((k) => k.key.startsWith(`${block}:`) && !k.phrase);
+		const todo = this.kept.filter((k) => k.key.startsWith(`${block}:`) && !k.phrase && !this.asked.has(k));
 		if (!todo.length) return;
-		const sent = todo.map((k, i) => ({ n: i + 1, text: k.marked, key: k.key, sentence: k.sentence }));
+		for (const k of todo) this.asked.add(k);
+		const sent = todo.map((k, i) => ({ n: i + 1, text: k.marked, key: k.key, sentence: k.sentence, at: k.at }));
 		try {
 			needKey();
 			this.halt = null;
+			// The tour's sandbox never reaches the server. A text is kept as far as a reading holds (the call reads as much).
+			let reading = this.readings.get(block);
+			if (!reading && !sandboxed()) {
+				const lang = this.setup.lang as (typeof LEARNABLE)[number];
+				reading = startReading({ passage: passage.slice(0, 12_000), lang, place: this.setup.place?.slice(0, 40) });
+				this.readings.set(block, reading);
+				// A reading that could not be kept is asked for again by the next call.
+				reading.catch(() => this.readings.delete(block));
+			}
+			const readingId = await reading;
+			if (!this.active()) return;
 			const r = await fetch("/api/collect/explain", {
 				method: "POST",
 				headers: { "content-type": "application/json" },
 				body: JSON.stringify({
 					...this.setup,
 					passage,
-					readingId: this.readings.get(block),
-					highlights: sent.map(({ n, text, sentence }) => ({ n, text, sentence })),
+					readingId,
+					highlights: sent.map(({ n, text, sentence, at }) => ({ n, text, sentence, at })),
 					retry: this.retries,
 				}),
 			});
-			const { items, readingId } = await answered<{
+			const { items, readingId: kept } = await answered<{
 				readingId?: string;
 				items: { n: number; id?: string; phrase: string; meaning: string; register: string; why: string; example: string }[];
 			}>(r);
 			if (!this.active()) return;
-			if (readingId) this.readings.set(block, readingId);
+			if (kept && kept !== readingId) this.readings.set(block, Promise.resolve(kept));
 			const stale: (string | undefined)[] = [];
 			for (const s of sent) {
 				const k = this.kept.find((x) => x.key === s.key);
@@ -128,6 +145,8 @@ export class Collector {
 				const k = this.kept.find((x) => x.key === s.key);
 				if (k) k.failed = true;
 			}
+		} finally {
+			for (const k of todo) this.asked.delete(k);
 		}
 		this.store();
 	}

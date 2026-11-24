@@ -1,9 +1,11 @@
 import { z } from "zod";
+import { around, unmark } from "#lib/review/faces.ts";
 import { type Caller, chat, chatJson } from "#lib/server/llm/caller.ts";
 import { aLearner, cap, type Draft, fbName, LANG_NAMES, type Lang, noteLines, pinLang, readerFrame } from "#lib/server/revision/draft.ts";
 import { readerSeat } from "#lib/server/revision/pass2/analyze.ts";
 import type { Material } from "#lib/server/revision/pass2/material.ts";
 import { words } from "#lib/text/words.ts";
+import type { NoteBody } from "#lib/writing/types.ts";
 
 // C0: the scene card. The learner sees and may correct it; everything downstream reads it.
 const SceneSchema = z.object({
@@ -247,6 +249,7 @@ const NotesSchema = z.object({
 			lesson: z.string(),
 			file: z.boolean(),
 			phrase: z.string().nullable().optional(),
+			ended: z.string().nullable().optional(),
 			meaning: z.string().nullable().optional(),
 			usage: z.string().nullable().optional(),
 			examples: z
@@ -256,7 +259,6 @@ const NotesSchema = z.object({
 		}),
 	),
 });
-export type NoteBody = { phrase: string; meaning: string; usage: string; examples: { t: string; n: string }[] };
 /** One part that changed: the stretch as first written and as it ended, and the change itself (`before` → `after`). */
 export type NoteItem = { orig: string; final: string; before: string; after: string; problem: string; why: string[]; how: "rebuilt" | "corrected" };
 const letters = (t: string) => t.toLowerCase().match(/\p{L}+/gu) ?? [];
@@ -280,19 +282,31 @@ export async function notesFor(d: Draft, items: NoteItem[], ai: Caller): Promise
 		`Their notebook keeps ${T} expressions to review later. For each part, first lesson: what the change teaches, in a few English words. Then file: whether it earns an entry. An entry is worth filing only when the change teaches a reusable ${T} expression this writer did not have: a word in the sense meant here, which verb, preposition or adjective goes with which word, a set phrase or formula, the way this community says something. Not worth filing: a grammar rule applied (agreement, tense, mood, articles, gender, word order, a missing verb), spelling, accents, punctuation and capitals, a fact or a name put right, one of the writer's own alternatives picked, and words a writer at their level already uses (judge their level from what the draft already gets right).`,
 		"One entry per expression: when two parts teach the same one, file it with the first and not again.",
 		"For a part you file, write the entry:",
-		`- phrase: the expression the change taught, copied from how it ended (words that are not in it never go in): the words that do the job the change was about, not the sentence's frame around them; as a learner would file it ("topped with", "it's not anyone's fault"), at most six words, "…" only where a slot really varies; no letters such as X or Y, no translation, no grammar terms.`,
+		`- phrase: the expression the change taught: the words that do the job the change was about, not the sentence's frame around them; as a learner would file it, in the form a phrasebook lists it ("topped with", "it's not anyone's fault"), at most six words, "…" only where a slot really varies; no letters such as X or Y, no translation, no grammar terms.`,
 		`- meaning: in ${F}, one short line: what it means or does, in the sense it has here.`,
 		`- usage: in ${F}, one or two short sentences: when people use it and what it goes with (register when it matters), and what makes it better than what they first wrote when that is the point.`,
 		`- examples: three short, natural ${T} sentences using it in exactly the sense it has here (if it has other senses, as "our own" means both "made by us" and "belonging to us", never those), each with its ${F} translation (n): one in a situation like theirs (not their own sentence again), two in everyday situations far from it, built differently around it so they see how it is used, not one frame. Names of people, characters, places and groups stay exactly as the piece writes them, in the translations too (never a translated or transliterated name).`,
+		"- ended: how it ended, copied exactly, with the expression as used there marked by a tag (<m>…</m>). In each example's t, mark the expression the same way.",
+		"Marking shows where the expression is in a sentence: the words of that sentence that are the expression, as they are inflected there, and not words that only fill a slot in it; when other words come between its parts, each part is marked on its own.",
 		"For a part you do not file, give only n, lesson and file.",
 		pinLang(d),
-		'Reply with JSON only: {"notes":[{"n":1,"lesson":"","file":true,"phrase":"","meaning":"","usage":"","examples":[{"t":"","n":""}]},{"n":2,"lesson":"","file":false}]}',
+		'Reply with JSON only: {"notes":[{"n":1,"lesson":"","file":true,"phrase":"","ended":"","meaning":"","usage":"","examples":[{"t":"","n":""}]},{"n":2,"lesson":"","file":false}]}',
 	].join("\n");
 	const r = (await chatJson([{ role: "user", content: user }], NotesSchema, { ai, effort: "low", tag: "session/notes" })).value.notes;
 	return items.map((x, i) => {
 		const y = r.find((z) => z.n === i + 1);
-		if (!y?.file || !y.phrase || !y.meaning || alreadyTheirs(y.phrase, x.before, x.after)) return null;
-		return { phrase: y.phrase, meaning: y.meaning, usage: y.usage ?? "", examples: (y.examples ?? []).slice(0, 3) };
+		// Where the expression is in their sentence, if the model marked words that are there (the copy may be shortened:
+		// where it begins is found where the copy is).
+		const ended = unmark(y?.ended ?? "");
+		const from = x.final.indexOf(ended.text);
+		const markedAt = from >= 0 ? ended.at?.map((a) => from + a) : undefined;
+		const marked = ended.span && around(x.final, ended.span, markedAt) ? ended.span : undefined;
+		if (!y?.file || !y.phrase || !y.meaning || alreadyTheirs(marked ?? y.phrase, x.before, x.after)) return null;
+		const examples = (y.examples ?? []).slice(0, 3).map((e) => {
+			const m = unmark(e.t);
+			return { t: m.text, n: e.n, ...(m.span ? { span: m.span, at: m.at } : {}) };
+		});
+		return { phrase: y.phrase, meaning: y.meaning, usage: y.usage ?? "", ...(marked ? { marked, markedAt } : {}), examples };
 	});
 }
 

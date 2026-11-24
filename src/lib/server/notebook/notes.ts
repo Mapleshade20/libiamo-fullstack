@@ -3,7 +3,7 @@ import { and, asc, desc, eq, inArray, isNull, lt, lte, or, sql } from "drizzle-o
 import { z } from "zod";
 import type { Register, Verdict } from "#lib/constants.ts";
 import type { DueSummary, Example, Note, NotebookGlance, NotebookPage, NoteFrom, NoteRow, ReviewCard } from "#lib/notebook/types.ts";
-import { noteFaces } from "#lib/review/faces.ts";
+import { around, faceAt, noteFaces } from "#lib/review/faces.ts";
 import type { RatingName } from "#lib/review/types.ts";
 import { db } from "#lib/server/db/index.ts";
 import { note, piece, reading, reviewLog } from "#lib/server/db/schema.ts";
@@ -21,7 +21,15 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Learner = WeekLearner & { activeLanguage?: string | null };
 
 const Examples = z
-	.array(z.object({ t: z.string().max(1000), n: z.string().max(1000).optional(), span: z.string().max(400).optional() }))
+	.array(
+		z.object({
+			t: z.string().max(1000),
+			n: z.string().max(1000).optional(),
+			span: z.string().max(400).optional(),
+			// Dropped alone when it is not as written now (never the example with it).
+			at: z.array(z.number().int().min(0)).max(8).optional().catch(undefined),
+		}),
+	)
 	.max(8)
 	.catch([]);
 
@@ -50,6 +58,8 @@ export async function fileOwn(
 				usage: l.note.usage || null,
 				examples: Examples.parse(l.note.examples),
 				sentence: l.final ?? null,
+				marked: l.note.marked ?? null,
+				markedAt: l.note.markedAt ?? null,
 				was: l.before ?? null,
 				fsrs: card,
 				due: new Date(card.dueAt),
@@ -66,21 +76,24 @@ export type Collected = {
 	why: string;
 	example: string;
 	span?: string;
+	/** Where each piece of `span` begins in the example. */
+	at?: number[];
 	marked: string;
+	/** Where each piece of `marked` begins in `sentence`. */
+	markedAt?: number[];
 	sentence: string;
 };
-/**
- * Phrases filled in from something the learner read, each kept the moment it is: the reading first (once), then an entry
- * for each. Returns the reading and the entries' ids, in order.
- */
 /** A passage pasted to collect from, kept before anything is highlighted in it. */
-export async function addReading(userId: string, text: string, language: string): Promise<string> {
-	const [r] = await db.insert(reading).values({ userId, language, text }).returning({ id: reading.id });
+export async function addReading(userId: string, text: string, language: string, place?: string): Promise<string> {
+	const [r] = await db
+		.insert(reading)
+		.values({ userId, language, text, place: place || null })
+		.returning({ id: reading.id });
 	return r.id;
 }
 
 /** A phrase already collected from a reading, as the collect page marks it again. */
-export type Kept = Omit<Collected, "span"> & { id: string };
+export type Kept = Omit<Collected, "span" | "at"> & { id: string };
 
 /** One of the learner's readings, as the collect page opens it, with what is still kept from it. */
 export async function readingOf(userId: string, id: string): Promise<{ id: string; passage: string; lang: string; kept: Kept[] } | null> {
@@ -98,6 +111,7 @@ export async function readingOf(userId: string, id: string): Promise<{ id: strin
 			why: note.why,
 			examples: note.examples,
 			marked: note.marked,
+			markedAt: note.markedAt,
 			sentence: note.sentence,
 		})
 		.from(note)
@@ -109,31 +123,46 @@ export async function readingOf(userId: string, id: string): Promise<{ id: strin
 		why: n.why ?? "",
 		example: (examples as { t?: string }[])[0]?.t ?? "",
 		marked: n.marked ?? n.phrase,
+		markedAt: n.markedAt ?? undefined,
 		sentence: n.sentence ?? "",
 	}));
 	return { ...r, kept };
 }
 
+type ReadingIn = { id?: string; text: string; language: string; place?: string };
+/** The reading a page names, if it is the learner's. */
+export async function ownReading(userId: string, id: string | undefined, w: typeof db | Tx = db): Promise<string | null> {
+	if (!id) return null;
+	const [mine] = await w
+		.select({ id: reading.id })
+		.from(reading)
+		.where(and(eq(reading.id, id), eq(reading.userId, userId)));
+	return mine?.id ?? null;
+}
+
+/** The reading a page names when it is the learner's, else a new one of what they pasted. */
+export async function readingFor(userId: string, r: ReadingIn, w: typeof db | Tx = db): Promise<string> {
+	const mine = await ownReading(userId, r.id, w);
+	if (mine) return mine;
+	const [made] = await w
+		.insert(reading)
+		.values({ userId, language: r.language, text: r.text, place: r.place || null })
+		.returning({ id: reading.id });
+	return made.id;
+}
+
+/**
+ * Phrases filled in from something the learner read, each kept the moment it is: the reading first (once), then an entry
+ * for each. Returns the reading and the entries' ids, in order.
+ */
 export async function fileCollected(
 	u: WeekLearner,
-	r: { id?: string; text: string; language: string; place?: string; tutorLanguage: string },
+	r: ReadingIn & { tutorLanguage: string },
 	items: Collected[],
 	now = new Date(),
 ): Promise<{ readingId: string; ids: string[] }> {
 	return db.transaction(async (tx) => {
-		let readingId = r.id;
-		if (readingId) {
-			const [mine] = await tx
-				.select({ id: reading.id })
-				.from(reading)
-				.where(and(eq(reading.id, readingId), eq(reading.userId, u.id)));
-			if (!mine) readingId = undefined;
-		}
-		if (!readingId)
-			[{ id: readingId }] = await tx
-				.insert(reading)
-				.values({ userId: u.id, language: r.language, text: r.text, place: r.place || null })
-				.returning({ id: reading.id });
+		const readingId = await readingFor(u.id, r, tx);
 		if (!items.length) return { readingId, ids: [] };
 		// One at a time: a phrase already kept from the same words (another tab, an earlier visit) is not kept twice, and
 		// its entry's id comes back instead.
@@ -152,9 +181,10 @@ export async function fileCollected(
 					meaningLanguage: r.tutorLanguage,
 					register: it.register,
 					why: it.why || null,
-					examples: it.example ? [{ t: it.example, ...(it.span ? { span: it.span } : {}) }] : [],
+					examples: it.example ? [{ t: it.example, ...(it.span ? { span: it.span, at: it.at } : {}) }] : [],
 					sentence: it.sentence || null,
 					marked: it.marked,
+					markedAt: it.markedAt ?? null,
 					fsrs: card,
 					due: new Date(card.dueAt),
 				})
@@ -194,14 +224,12 @@ function faces(r: Row) {
 		final: r.sentence ?? undefined,
 		sentence: r.sentence ?? undefined,
 		marked: r.marked ?? undefined,
+		markedAt: r.markedAt ?? undefined,
 		examples: Examples.parse(r.examples),
 	});
 }
 /** The face a card shows now: one per review, in turn. */
-const faceOf = (r: Row) => {
-	const all = faces(r);
-	return all[((r.fsrs as StoredCard).reps ?? 0) % all.length];
-};
+const faceOf = (r: Row) => faceAt(faces(r), (r.fsrs as StoredCard).reps);
 
 /** An entry as its row in the list shows it: the phrase, its meaning, where it came from, and when it is asked next. */
 function rowView(r: Pick<Row, "id" | "phrase" | "kind" | "meaning" | "fsrs" | "pieceId" | "title">, now: Date, tz: string): NoteRow {
@@ -228,7 +256,10 @@ function view(r: Row, now: Date, tz: string): Note {
 		...(r.register ? { register: r.register as Register } : {}),
 		...((own ? r.usage : r.why) ? { usage: (own ? r.usage : r.why) ?? undefined } : {}),
 		examples: Examples.parse(r.examples) as Example[],
-		...(own ? { before: r.was ?? undefined, final: r.sentence ?? undefined } : { sentence: r.sentence ?? undefined, marked: r.marked ?? undefined }),
+		...(own ? { before: r.was ?? undefined, final: r.sentence ?? undefined } : { sentence: r.sentence ?? undefined }),
+		marked: r.marked ?? undefined,
+		markedAt: r.markedAt ?? undefined,
+		reps: (r.fsrs as StoredCard).reps ?? 0,
 		card: faceOf(r),
 	};
 }
@@ -279,8 +310,26 @@ export async function noteOf(u: Learner, id: string, now = new Date()): Promise<
 	return row ? view(rowsOf([row])[0], now, zoneOf(u)) : null;
 }
 
-export async function editNote(u: Learner, id: string, set: { phrase: string; gloss: string }) {
-	await db.update(note).set({ phrase: set.phrase, meaning: set.gloss }).where(mine(u.id, id));
+export type NoteChange = { phrase: string; gloss: string; usage: string; register: Register | null; examples: Example[] };
+/**
+ * The learner's own wording of an entry. Where it came from (their sentence, what they first wrote, what they read) is a
+ * record and stays. "How it is used" is `usage` on their own entries and `why` on collected ones; an example keeps the
+ * words its card blanks only while they are in it.
+ */
+export async function editNote(u: Learner, id: string, set: NoteChange) {
+	const own = sql`${note.kind} = 'own'`;
+	const usage = set.usage || null;
+	await db
+		.update(note)
+		.set({
+			phrase: set.phrase,
+			meaning: set.gloss,
+			usage: sql`case when ${own} then ${usage} else ${note.usage} end`,
+			why: sql`case when ${own} then ${note.why} else ${usage} end`,
+			register: set.register,
+			examples: set.examples.map(({ t, n, span, at }) => ({ t, ...(n ? { n } : {}), ...(span && around(t, span, at) ? { span, at } : {}) })),
+		})
+		.where(mine(u.id, id));
 }
 
 /** A deleted entry leaves the notebook and review; its row stays with its review history until the account goes. */

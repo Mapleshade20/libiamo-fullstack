@@ -106,6 +106,7 @@ export const enterPlace = command(
 		const s = await settingFor(input.scenarioId, input.lang);
 		if (!s) error(404, "No such scenario.");
 		const r = await openExchange(u, s, input.plan);
+		if (!r) error(404, "No such scenario.");
 		await Promise.all([placeOf({ scenarioId: input.scenarioId, lang: input.lang }).refresh(), shelves().refresh()]);
 		return r;
 	},

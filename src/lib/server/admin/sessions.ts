@@ -1,13 +1,15 @@
 import { and, asc, count, desc, eq, inArray, ne, type SQL, sql, sum } from "drizzle-orm";
 import type { CaseRow, RecordedCall, RecordedStep, SessionRow, SessionView, Signal, SignalKind } from "#lib/admin/records.ts";
+import { unmark } from "#lib/review/faces.ts";
 import { db } from "#lib/server/db/index.ts";
-import { llmCall, llmPrompt, piece, pieceStep, sessionCase, user } from "#lib/server/db/schema.ts";
+import { llmCall, llmPrompt, note, piece, pieceStep, reading, sessionCase, user } from "#lib/server/db/schema.ts";
 
 /*
  * Session records (docs/design/2026-11-11-session-records.md): every piece that went into its revision, read from its
- * tape (`piece_step`) and its calls (`llm_call`), with signals derived from them and no model call. Learners who do not
- * help improve Libiamo are not listed (their calls keep only numbers). A flag on a step is a case; while a case is
- * open, its piece's calls outlive the thirty days (server/llm/records.ts).
+ * tape (`piece_step`) and its calls (`llm_call`), with signals derived from them and no model call; and collecting from
+ * a reading, read from its calls alone while they are kept. Learners who do not help improve Libiamo are not listed
+ * (their calls keep only numbers). A flag on a piece's step is a case; while a case is open, its piece's calls outlive
+ * the thirty days (server/llm/records.ts).
  */
 type Step = typeof pieceStep.$inferSelect;
 // biome-ignore lint/suspicious/noExplicitAny: a step's body and response are the protocol's JSON, read defensively here
@@ -138,7 +140,8 @@ export function readStep(s: Pick<Step, "action" | "body" | "response">): Pick<Re
 /** Signals from the tape alone (the learner's pushback), with the calls' (the system's struggles). */
 export function signalsOf(
 	steps: Pick<Step, "action" | "body" | "response" | "ms">[],
-	o: { finished: boolean; lastAt: number; now: number; failedCalls: number; cost: number; medianCost: number },
+	/** `slowestMs`: the slowest step of a session whose steps are not given (collecting: its calls). */
+	o: { finished: boolean; lastAt: number; now: number; failedCalls: number; cost: number; medianCost: number; slowestMs?: number },
 ): Signal[] {
 	const n = (a: string) => steps.filter((s) => s.action === a).length;
 	const out: Signal[] = [];
@@ -165,7 +168,7 @@ export function signalsOf(
 	const end = steps.find((s) => s.action === "end");
 	const issues = (end?.response as Json)?.issues;
 	if (Array.isArray(issues) && issues.length) out.push({ kind: "lost" });
-	const slowest = Math.max(0, ...steps.map((s) => s.ms ?? 0));
+	const slowest = Math.max(o.slowestMs ?? 0, ...steps.map((s) => s.ms ?? 0));
 	if (slowest > SLOW_MS) out.push({ kind: "slow", n: Math.round(slowest / 1000) });
 	if (o.medianCost > 0 && o.cost > 3 * o.medianCost) out.push({ kind: "cost" });
 	return out;
@@ -178,8 +181,20 @@ const stopsOf = (response: unknown) => {
 
 const KIND: Record<string, SessionRow["kind"]> = { own: "own", scenario: "scenario", translation: "translation" };
 
+type Scope = { limit?: number; ids?: string[] };
+const median = (xs: number[]) => {
+	const sorted = xs.toSorted((a, b) => a - b);
+	return sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0;
+};
+
+/** Every session, newest first: the pieces that went into a revision, and collecting from readings. */
+export async function sessions(o: Scope = {}, now = new Date()): Promise<SessionRow[]> {
+	const [pieces, readings] = await Promise.all([pieceSessions(o, now), readingSessions(o)]);
+	return [...pieces, ...readings].toSorted((a, b) => b.at.localeCompare(a.at)).slice(0, o.limit ?? 200);
+}
+
 /** The pieces that went into a revision, newest first, from learners who help improve Libiamo. */
-export async function sessions(o: { limit?: number; ids?: string[] } = {}, now = new Date()): Promise<SessionRow[]> {
+async function pieceSessions(o: Scope, now: Date): Promise<SessionRow[]> {
 	const rows = await db
 		.select({ p: piece, learner: user.name, native: user.nativeLanguage })
 		.from(piece)
@@ -246,8 +261,7 @@ export async function sessions(o: { limit?: number; ids?: string[] } = {}, now =
 	const callsOf = new Map(calls.map((c) => [c.pieceId as string, c]));
 	const casesOf = new Map(cases.map((c) => [c.pieceId, c.n]));
 	const stepsOf = Map.groupBy(steps, (s) => s.pieceId);
-	const costs = calls.map((c) => Number(c.cost ?? 0)).sort((a, b) => a - b);
-	const medianCost = costs.length ? costs[Math.floor(costs.length / 2)] : 0;
+	const medianCost = median(calls.map((c) => Number(c.cost ?? 0)));
 	return rows.map(({ p, learner, native }) => {
 		const st = stepsOf.get(p.id) ?? [];
 		const c = callsOf.get(p.id);
@@ -277,27 +291,83 @@ export async function sessions(o: { limit?: number; ids?: string[] } = {}, now =
 	});
 }
 
-/** One session: its row, its steps as the learner saw them, every call (system prompts from `llm_prompt`). */
-export async function sessionOf(pieceId: string): Promise<SessionView | null> {
-	const [row] = await sessions({ ids: [pieceId] });
-	if (!row) return null;
-	const [steps, calls, cases] = await Promise.all([
-		db.select().from(pieceStep).where(eq(pieceStep.pieceId, pieceId)).orderBy(asc(pieceStep.seq)),
+/**
+ * Collecting from what learners read, newest first: each reading of a learner who helps improve Libiamo while it has
+ * calls kept (they go after thirty days, and the reading with them from this list). A call made while they did not help
+ * is recorded without its words but still names its reading, which is then `withheld` for good: shown, it would show
+ * what they read and kept then, from the reading and the notebook, once that call had gone.
+ */
+async function readingSessions(o: Scope): Promise<SessionRow[]> {
+	const rows = await db
+		.select({ r: reading, learner: user.name, native: user.nativeLanguage })
+		.from(reading)
+		.innerJoin(user, eq(user.id, reading.userId))
+		.where(
+			and(
+				eq(user.helpImprove, true),
+				o.ids ? inArray(reading.id, o.ids) : undefined,
+				eq(reading.withheld, false),
+				sql`exists (select 1 from ${llmCall} where ${llmCall.readingId} = ${reading.id})`,
+			),
+		)
+		.orderBy(desc(reading.createdAt))
+		.limit(o.limit ?? 200);
+	if (!rows.length) return [];
+	const ids = rows.map((r) => r.r.id);
+	const [calls, notes] = await Promise.all([
 		db
-			.select({ c: llmCall, system: llmPrompt.text })
+			.select({
+				readingId: llmCall.readingId,
+				n: count(),
+				cost: sum(llmCall.costUsd),
+				failed: sql<number>`count(*) filter (where ${llmCall.state} = 'failed')::int`,
+				kept: sql<number>`count(${llmCall.messages})::int`,
+				last: sql<string>`max(${llmCall.createdAt})`,
+				slowest: sql<number>`coalesce(max(${llmCall.latencyMs}), 0)::int`,
+			})
 			.from(llmCall)
-			.leftJoin(llmPrompt, eq(llmPrompt.hash, llmCall.promptHash))
-			.where(eq(llmCall.pieceId, pieceId))
-			.orderBy(asc(llmCall.createdAt)),
+			.where(inArray(llmCall.readingId, ids))
+			.groupBy(llmCall.readingId),
 		db
-			.select({ c: sessionCase, by: user.name })
-			.from(sessionCase)
-			.leftJoin(user, eq(user.id, sessionCase.createdBy))
-			.where(eq(sessionCase.pieceId, pieceId))
-			.orderBy(asc(sessionCase.id)),
+			.select({ readingId: note.readingId, n: count() })
+			.from(note)
+			.where(and(inArray(note.readingId, ids), sql`${note.deletedAt} is null`))
+			.groupBy(note.readingId),
 	]);
-	const t0 = steps[0]?.at.getTime() ?? 0;
-	const recorded: RecordedCall[] = calls.map(({ c, system }, i) => {
+	const callsOf = new Map(calls.map((c) => [c.readingId as string, c]));
+	const keptOf = new Map(notes.map((n) => [n.readingId as string, n.n]));
+	const medianCost = median(calls.map((c) => Number(c.cost ?? 0)));
+	return rows.map(({ r, learner, native }) => {
+		const c = callsOf.get(r.id);
+		const cost = Number(c?.cost ?? 0);
+		const last = c?.last ? new Date(c.last).getTime() : r.createdAt.getTime();
+		const line = r.text.trim().split("\n")[0] ?? "";
+		return {
+			id: r.id,
+			learner,
+			lang: r.language,
+			native: native ?? "",
+			kind: "collect" as const,
+			site: r.place ?? "Pasted",
+			title: line.length > 90 ? `${line.slice(0, 90)}…` : line,
+			at: r.createdAt.toISOString(),
+			minutes: Math.max(1, Math.round((last - r.createdAt.getTime()) / 60_000)),
+			stops: keptOf.get(r.id) ?? 0,
+			calls: c?.n ?? 0,
+			cost,
+			finished: true,
+			signals: signalsOf([], { finished: true, lastAt: last, now: last, failedCalls: c?.failed ?? 0, cost, medianCost, slowestMs: c?.slowest }),
+			callsKept: (c?.kept ?? 0) > 0,
+			sha: "",
+			cases: 0,
+		};
+	});
+}
+
+type CallRow = { c: typeof llmCall.$inferSelect; system: string | null };
+/** The calls as the session page shows them, timed from `t0`. */
+function recordedCalls(calls: CallRow[], t0: number): RecordedCall[] {
+	return calls.map(({ c, system }, i) => {
 		const messages = Array.isArray(c.messages) ? (c.messages as RecordedCall["messages"]) : [];
 		return {
 			id: i + 1,
@@ -316,6 +386,124 @@ export async function sessionOf(pieceId: string): Promise<SessionView | null> {
 			...(c.error ? { error: c.error } : {}),
 		};
 	});
+}
+
+/**
+ * One collecting call as a step: what was highlighted and what came back (server/notebook/collect.ts `explain`, whose
+ * prompt lists the highlights as `1. "words"`), or the learner's question and the answer (`ask`).
+ */
+export function readCollectCall(
+	c: Pick<typeof llmCall.$inferSelect, "tag" | "messages" | "output" | "error">,
+): Pick<RecordedStep, "label" | "lines"> {
+	const messages = (Array.isArray(c.messages) ? c.messages : []) as { role: string; content: string }[];
+	const asked = messages.findLast((m) => m.role === "user")?.content ?? "";
+	const failed = c.error ? [{ who: "card" as const, text: `Failed: ${c.error}` }] : [];
+	if (!messages.length) return { label: c.tag, lines: [{ who: "card", text: "Its words were not kept" }] };
+	if (c.tag === "collect/ask")
+		return { label: "Question", lines: [{ who: "me", text: asked }, ...(c.output ? [{ who: "tutor" as const, text: c.output }] : []), ...failed] };
+	if (c.tag !== "collect/explain")
+		return { label: c.tag, lines: [{ who: "me", text: asked }, ...(c.output ? [{ who: "tutor" as const, text: c.output }] : []), ...failed] };
+	// The list after the passage (not lines of the passage that look alike); a highlight may run over lines.
+	const head = "Highlights:\n";
+	const from = asked.lastIndexOf(head);
+	const listed = from < 0 ? "" : asked.slice(from + head.length).split("\n\nFor each highlight")[0];
+	const marked = listed
+		.split(/\n(?=\d+\. ")/)
+		.map((l) => l.match(/^\d+\. "([\s\S]*)"$/)?.[1])
+		.filter((x) => x !== undefined);
+	let items: Json[] = [];
+	try {
+		const out = c.output ?? "";
+		const parsed = JSON.parse(out.slice(out.indexOf("{"), out.lastIndexOf("}") + 1));
+		if (Array.isArray(parsed?.items)) items = parsed.items;
+	} catch {
+		// Shown as it came.
+	}
+	// The page sets each paragraph ("\n\n") apart and runs single lines together.
+	const filled = items.length
+		? items.flatMap((it) => [`${text(it.phrase)}: ${text(it.meaning)}`, text(it.why), unmark(text(it.example)).text].filter(Boolean)).join("\n\n")
+		: (c.output ?? "");
+	return {
+		label: marked.length === 1 ? "Highlighted 1" : `Highlighted ${marked.length}`,
+		lines: [
+			...(marked.length ? [{ who: "me" as const, text: marked.join(" · ") }] : []),
+			...(filled ? [{ who: "tutor" as const, text: filled }] : []),
+			...failed,
+		],
+	};
+}
+
+/** One session: its row, its steps as the learner saw them, every call (system prompts from `llm_prompt`). */
+export async function sessionOf(id: string): Promise<SessionView | null> {
+	const [row] = await sessions({ ids: [id] });
+	if (!row) return null;
+	return row.kind === "collect" ? collectingOf(row) : revisionOf(row);
+}
+
+/** Collecting from a reading: what was pasted, each call as a step, and the phrases it left in the notebook. */
+async function collectingOf(row: SessionRow): Promise<SessionView | null> {
+	const [[r], calls, notes] = await Promise.all([
+		db.select({ text: reading.text, at: reading.createdAt }).from(reading).where(eq(reading.id, row.id)),
+		db
+			.select({ c: llmCall, system: llmPrompt.text })
+			.from(llmCall)
+			.leftJoin(llmPrompt, eq(llmPrompt.hash, llmCall.promptHash))
+			.where(eq(llmCall.readingId, row.id))
+			.orderBy(asc(llmCall.createdAt)),
+		db
+			.select({ phrase: note.phrase, meaning: note.meaning, deletedAt: note.deletedAt })
+			.from(note)
+			.where(eq(note.readingId, row.id))
+			.orderBy(asc(note.id)),
+	]);
+	if (!r) return null;
+	const t0 = r.at.getTime();
+	const callRecords = recordedCalls(calls, t0);
+	const steps: RecordedStep[] = [
+		{ id: "pasted", at: 0, label: "Pasted", lines: [{ who: "me", text: r.text }], calls: [] },
+		...calls.map(({ c }, i): RecordedStep => {
+			const ms = c.latencyMs ?? 0;
+			return {
+				id: String(i + 1),
+				at: callRecords[i].at,
+				...readCollectCall(c),
+				calls: [i + 1],
+				...(ms > 1000 ? { wait: ms / 1000 } : {}),
+				...(ms > SLOW_MS ? { signals: ["slow" as const] } : {}),
+			};
+		}),
+	];
+	if (notes.length)
+		steps.push({
+			id: "kept",
+			at: callRecords.at(-1)?.at ?? 0,
+			label: "In the notebook",
+			lines: [{ who: "card", text: notes.map((n) => `${n.phrase}: ${n.meaning}${n.deletedAt ? " (removed)" : ""}`).join("\n") }],
+			calls: [],
+		});
+	return { ...row, reader: "Reader", callRecords, steps };
+}
+
+/** A piece's revision: its tape, its calls and its cases. */
+async function revisionOf(row: SessionRow): Promise<SessionView> {
+	const pieceId = row.id;
+	const [steps, calls, cases] = await Promise.all([
+		db.select().from(pieceStep).where(eq(pieceStep.pieceId, pieceId)).orderBy(asc(pieceStep.seq)),
+		db
+			.select({ c: llmCall, system: llmPrompt.text })
+			.from(llmCall)
+			.leftJoin(llmPrompt, eq(llmPrompt.hash, llmCall.promptHash))
+			.where(eq(llmCall.pieceId, pieceId))
+			.orderBy(asc(llmCall.createdAt)),
+		db
+			.select({ c: sessionCase, by: user.name })
+			.from(sessionCase)
+			.leftJoin(user, eq(user.id, sessionCase.createdBy))
+			.where(eq(sessionCase.pieceId, pieceId))
+			.orderBy(asc(sessionCase.id)),
+	]);
+	const t0 = steps[0]?.at.getTime() ?? 0;
+	const recorded = recordedCalls(calls, t0);
 	const callIds = (seq: number) => calls.flatMap(({ c }, i) => (c.stepSeq === seq ? [i + 1] : []));
 	const scene = steps.findLast((s) => s.action === "scene");
 	return {

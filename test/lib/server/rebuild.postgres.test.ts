@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { and, eq } from "drizzle-orm";
+import { readdirSync, readFileSync } from "node:fs";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import postgres from "postgres";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -10,6 +10,7 @@ const config = vi.hoisted(() => ({
 	url: process.env.TEST_POSTGRES_URL,
 	name: `libiamo_test_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
 	send: vi.fn(),
+	extractTerms: vi.fn(),
 	makeSource: vi.fn(),
 	user: { id: "learner", name: "Learner", helpImprove: true, nativeLanguage: "zh-CN", tutorLanguage: "native", timeZone: "UTC" },
 }));
@@ -33,7 +34,7 @@ vi.mock("#lib/server/llm/transport.ts", async (original) => ({
 }));
 vi.mock("#lib/server/guard.ts", () => ({ learner: () => config.user, admin: () => config.user }));
 vi.mock("#lib/server/translation/source.ts", () => ({
-	extractTerms: async () => [],
+	extractTerms: config.extractTerms,
 	makeSource: config.makeSource,
 	checkSource: async () => ({ issues: [] }),
 	repairSource: async () => [],
@@ -41,8 +42,8 @@ vi.mock("#lib/server/translation/source.ts", () => ({
 
 import { encryptKey } from "#lib/server/account/key.ts";
 import { inbox } from "#lib/server/admin/inbox.ts";
-import { adminScenario, scenarioFromSuggestion } from "#lib/server/admin/scenarios.ts";
-import { sessions } from "#lib/server/admin/sessions.ts";
+import { adminScenario, confirmSource, remakeSource, saveScenario, scenarioFromSuggestion } from "#lib/server/admin/scenarios.ts";
+import { sessionOf, sessions } from "#lib/server/admin/sessions.ts";
 import { deleteUser, users } from "#lib/server/admin/users.ts";
 import { db, sql } from "#lib/server/db/index.ts";
 import {
@@ -54,10 +55,12 @@ import {
 	piece,
 	pieceRevision,
 	pieceStep,
+	practiceDay,
 	reviewLog,
 	scenario,
 	scenarioSource,
 	sessionCase,
+	suggestion,
 	user,
 	userKey,
 } from "#lib/server/db/schema.ts";
@@ -68,7 +71,19 @@ import { settingFrom } from "#lib/server/exchange/setting.ts";
 import { Caller, type CallRecord, chat } from "#lib/server/llm/caller.ts";
 import { learnerCaller } from "#lib/server/llm/callers.ts";
 import { pruneCalls, writeRecord } from "#lib/server/llm/records.ts";
-import { fileCollected, NOTEBOOK_PAGE, notebookGlance, notebookPage, rateNote, readingOf } from "#lib/server/notebook/notes.ts";
+import {
+	addReading,
+	editNote,
+	fileCollected,
+	NOTEBOOK_PAGE,
+	notebookGlance,
+	notebookPage,
+	noteOf,
+	ownReading,
+	rateNote,
+	readingFor,
+	readingOf,
+} from "#lib/server/notebook/notes.ts";
 import { newCard } from "#lib/server/review/scheduler.ts";
 import {
 	abandon,
@@ -89,7 +104,7 @@ import { suggest, suggestionsOf } from "#lib/server/scenario/suggestions.ts";
 import { sourceIdentity } from "#lib/server/translation/identity.ts";
 import { makeSourceRow, queueSources } from "#lib/server/translation/runner.ts";
 import { saveSheet, sheetOf, translationFor } from "#lib/server/translation/sheet.ts";
-import { credit } from "#lib/server/week/days.ts";
+import { credit, reviewsDone } from "#lib/server/week/days.ts";
 import { PIECES_PAGE, piecesPage, shelvesOf } from "#lib/server/writing/pieces.ts";
 import { takeUp } from "#lib/server/writing/take-up.ts";
 import { POST as startPost } from "../../../src/routes/api/s/+server.ts";
@@ -139,7 +154,11 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 	};
 	beforeAll(async () => {
 		await admin.unsafe(`CREATE DATABASE "${config.name}"`);
-		await sql.unsafe(readFileSync("drizzle/0000_init.sql", "utf8"));
+		// Every migration in order, as production has them.
+		for (const f of readdirSync("drizzle")
+			.filter((f) => f.endsWith(".sql"))
+			.toSorted())
+			await sql.unsafe(readFileSync(`drizzle/${f}`, "utf8"));
 	});
 	afterAll(async () => {
 		try {
@@ -161,6 +180,7 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 		await db.insert(user).values({ id: learner.id, email: "learner@example.test", name: "Learner" });
 		config.send.mockReset().mockResolvedValue({ text: "OK", usage: {}, ms: 1, costUsd: 0 });
 		config.makeSource.mockReset().mockResolvedValue({ title: "菜单", source: ["汤"], glossary: [] });
+		config.extractTerms.mockReset().mockResolvedValue([]);
 	});
 
 	it("prunes the snapshots finished pieces left behind, and only those", async () => {
@@ -226,6 +246,55 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 		const left = new Set((await db.select({ id: pieceStep.pieceId }).from(pieceStep)).map((r) => r.id));
 		expect(left.has(old) || left.has(quiet) || left.has(settled)).toBe(false);
 		expect([held, recent, open, studied].every((id) => left.has(id))).toBe(true);
+	});
+
+	it("edits an entry's own words, never where it came from, and keeps an example's blank only while its words are there", async () => {
+		const base = { userId: learner.id, language: "en", meaningLanguage: "zh-CN", fsrs: newCard(new Date(), "UTC"), due: new Date() };
+		const [own, read] = await db
+			.insert(note)
+			.values([
+				{
+					...base,
+					kind: "own",
+					phrase: "frame as",
+					meaning: "m",
+					sentence: "You framed it as a choice.",
+					was: "You said it was a choice.",
+					marked: "framed … as",
+				},
+				{ ...base, kind: "collected", phrase: "out loud", meaning: "m", sentence: "Say it out loud.", marked: "out loud" },
+			])
+			.returning();
+		const set = {
+			phrase: "frame something as",
+			gloss: "把……说成",
+			usage: "Used for spin.",
+			register: "formal" as const,
+			examples: [
+				{ t: "He framed the delay as a rest.", n: "他把延误说成休息。", span: "framed … as", at: [3, 20] },
+				{ t: "Nothing of it here.", span: "framed" },
+			],
+		};
+		await editNote(learner, own.id, set);
+		await editNote(learner, read.id, { ...set, register: null });
+		const [a, b] = await db
+			.select()
+			.from(note)
+			.where(inArray(note.id, [own.id, read.id]))
+			.orderBy(note.id);
+		expect(a).toMatchObject({
+			phrase: "frame something as",
+			meaning: "把……说成",
+			usage: "Used for spin.",
+			why: null,
+			register: "formal",
+			sentence: own.sentence,
+			was: own.was,
+			marked: own.marked,
+			examples: [{ t: "He framed the delay as a rest.", n: "他把延误说成休息。", span: "framed … as", at: [3, 20] }, { t: "Nothing of it here." }],
+		});
+		// A collected entry says why it is worth taking where an own one says how it is used.
+		expect(b).toMatchObject({ usage: null, why: "Used for spin.", register: null, sentence: read.sentence, marked: read.marked });
 	});
 
 	it("reads the notebook a page at a time, newest first, filtered on the server", async () => {
@@ -461,16 +530,25 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 		expect(await ask("Ask 6", "email")).toBe(true);
 		const mine = async () => (await suggestionsOf(learner.id)).find((x) => x.id === first.id);
 		expect(await mine()).toMatchObject({ status: "pending", scenarioId: null });
-		await db.update(scenario).set({ status: "published" }).where(eq(scenario.id, id));
-		// Published, but its version in the learner's language is still hidden.
-		expect(await mine()).toMatchObject({ status: "pending", scenarioId: null });
-		const { draft: _, ...shown } = made?.versions.en ?? {};
 		await db
 			.update(scenario)
-			.set({ versions: { en: shown } })
+			.set({ status: "published", versions: { en: { ...made?.versions.en, draft: true } } })
+			.where(eq(scenario.id, id));
+		// Published, but its version in the learner's language is still a draft.
+		expect(await mine()).toMatchObject({ status: "pending", scenarioId: null });
+		await db
+			.update(scenario)
+			.set({ versions: { en: made?.versions.en } })
 			.where(eq(scenario.id, id));
 		expect(await mine()).toMatchObject({ status: "live", scenarioId: id });
 		expect((await inbox()).suggestions.find((x) => x.id === first.id)?.scenario).toMatchObject({ id, published: true });
+		// One in a language learners are offered no scenarios in waits, rather than becoming a draft nobody can save.
+		// Room in the five for one more.
+		await db.update(suggestion).set({ status: "unused" }).where(eq(suggestion.status, "pending"));
+		await suggest(learner.id, { place: "email", language: "de", situation: "Mein Vermieter antwortet nicht.", who: "", purpose: "Nachfragen" });
+		const [german] = (await inbox()).suggestions.filter((x) => x.language === "de");
+		await expect(scenarioFromSuggestion(german.id, learner.id)).rejects.toThrow("Learners of German are not offered scenarios yet");
+		expect((await inbox()).suggestions.find((x) => x.id === german.id)).toMatchObject({ status: "pending" });
 	});
 
 	it("deletes owned dynamic prompts with the account and refuses records arriving after deletion", async () => {
@@ -576,13 +654,55 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 			if (!s) throw new Error(`no ${language} setting`);
 			return s;
 		};
+		const enter = async (who: typeof u, s: Awaited<ReturnType<typeof settingIn>>) => {
+			const r = await openExchange(who, s);
+			if (!r) throw new Error("not entered");
+			return r;
+		};
 		// Entering in English twice at once (two tabs), then in Spanish: two pieces, each in its language; entering again finds each.
 		const inEn = await settingIn("en");
-		const [en, twice] = await Promise.all([openExchange(u, inEn), openExchange(u, inEn)]);
+		const [en, twice] = await Promise.all([enter(u, inEn), enter(u, inEn)]);
 		expect(twice).toEqual(en);
-		const es = await openExchange(u, await settingIn("es"));
+		const inEs = await settingIn("es");
+		const es = await enter(u, inEs);
 		expect(es.pieceId).not.toBe(en.pieceId);
 		expect(await openExchange(u, await settingIn("en"))).toEqual(en);
+		// A save taking Spanish away while someone enters it: they wait for it, then find no Spanish to start in; the one
+		// already in it goes on.
+		await db.insert(user).values({ id: "late", email: "late@example.test", name: "Late" });
+		const late = { ...u, id: "late" };
+		let entering: Promise<unknown> = Promise.resolve();
+		await db.transaction(async (tx) => {
+			await tx.select().from(scenario).where(eq(scenario.id, "imessage-thanks")).for("update");
+			entering = openExchange(late, inEs);
+			await new Promise((r) => setTimeout(r, 100));
+			await tx
+				.update(scenario)
+				.set({ versions: { en: thanks.versions.en } })
+				.where(eq(scenario.id, "imessage-thanks"));
+		});
+		expect(await entering).toBeNull();
+		expect(await openExchange(u, inEs)).toEqual(es);
+		// Nor in a scenario made a translation meanwhile: what is entered is the scenario as it is once its row is held.
+		const inEn2 = await settingIn("en");
+		await db.transaction(async (tx) => {
+			await tx.select().from(scenario).where(eq(scenario.id, "imessage-thanks")).for("update");
+			entering = openExchange(late, inEn2);
+			await new Promise((r) => setTimeout(r, 100));
+			await tx.update(scenario).set({ kind: "translation", place: "translation" }).where(eq(scenario.id, "imessage-thanks"));
+		});
+		expect(await entering).toBeNull();
+		await db.update(scenario).set({ kind: "exchange", place: "imessage" }).where(eq(scenario.id, "imessage-thanks"));
+		// Nor in a language that is a draft.
+		await db
+			.update(scenario)
+			.set({ versions: { en: thanks.versions.en, es: { ...thanks.versions.en, draft: true } } })
+			.where(eq(scenario.id, "imessage-thanks"));
+		expect(await openExchange(late, inEs)).toBeNull();
+		await db
+			.update(scenario)
+			.set({ versions: { en: thanks.versions.en, es: thanks.versions.en } })
+			.where(eq(scenario.id, "imessage-thanks"));
 		const langs = new Map((await db.select({ id: piece.id, language: piece.language }).from(piece)).map((p) => [p.id, p.language]));
 		expect([langs.get(en.pieceId), langs.get(es.pieceId)]).toEqual(["en", "es"]);
 		// A second unfinished piece in one language is refused by the database itself.
@@ -607,6 +727,65 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 		await db.update(exchange).set({ status: "completed", completedAt: new Date() });
 		expect((await afterOf(u, "imessage-thanks", "es"))?.pieceId).toBe(es.pieceId);
 		expect(await afterOf(u, "imessage-thanks", "en")).toBeNull();
+	});
+
+	it("records collecting with its reading, shows it to the admin while the learner helps improve Libiamo, and never names another's reading", async () => {
+		await db.insert(user).values({ id: "other", email: "someone@example.test", name: "Someone" });
+		const theirs = await addReading("other", "Their text.", "en");
+		// A reading id from someone else is never theirs to record under or to file into.
+		expect(await ownReading(learner.id, theirs)).toBeNull();
+		const readingId = await readingFor(learner.id, { id: theirs, text: "It was late, so I took the long way round.\nThen home.", language: "en" });
+		expect(readingId).not.toBe(theirs);
+		expect(await readingFor(learner.id, { id: readingId, text: "ignored", language: "en" })).toBe(readingId);
+
+		await writeRecord(
+			{ userId: learner.id, readingId, keepText: true },
+			{
+				...call,
+				ms: 9_000,
+				tag: "collect/explain",
+				messages: [{ role: "user", content: 'Highlights:\n1. "the long way round"\n\nFor each highlight' }],
+				output: '{"items":[{"n":1,"phrase":"take the long way round","meaning":"绕远路","why":"w","example":"e"}]}',
+			},
+		);
+		await fileCollected(learner, { id: readingId, text: "", language: "en", tutorLanguage: "zh-CN" }, [
+			{
+				phrase: "take the long way round",
+				meaning: "绕远路",
+				register: "neutral",
+				why: "w",
+				example: "e",
+				marked: "the long way round",
+				sentence: "It was late, so I took the long way round.",
+			},
+		]);
+		const row = (await sessions()).find((s) => s.id === readingId);
+		expect(row).toMatchObject({ kind: "collect", title: "It was late, so I took the long way round.", stops: 1, calls: 1, callsKept: true });
+		expect(row?.signals).toContainEqual({ kind: "slow", n: 9 });
+		const view = await sessionOf(readingId);
+		expect(view?.steps.map((s) => s.label)).toEqual(["Pasted", "Highlighted 1", "In the notebook"]);
+		expect(view?.steps[1]).toMatchObject({
+			calls: [1],
+			lines: [
+				{ who: "me", text: "the long way round" },
+				{ who: "tutor", text: "take the long way round: 绕远路\n\nw\n\ne" },
+			],
+		});
+
+		// A learner who stops helping improve Libiamo is no longer shown.
+		await db.update(user).set({ helpImprove: false }).where(eq(user.id, learner.id));
+		expect((await sessions()).some((s) => s.id === readingId)).toBe(false);
+		expect(await sessionOf(readingId)).toBeNull();
+		// A call made meanwhile is recorded without its words; helping again, the reading stays hidden, or what they read
+		// and kept then would be shown from the reading and the notebook.
+		await writeRecord({ userId: learner.id, readingId, keepText: false }, call);
+		await db.update(user).set({ helpImprove: true }).where(eq(user.id, learner.id));
+		expect((await sessions()).some((s) => s.id === readingId)).toBe(false);
+		expect(await sessionOf(readingId)).toBeNull();
+		// Nor once that call has gone after its thirty days, while the ones with words stay.
+		await db.delete(llmCall).where(and(eq(llmCall.readingId, readingId), isNull(llmCall.messages)));
+		expect(await db.select().from(llmCall).where(eq(llmCall.readingId, readingId))).toHaveLength(1);
+		expect(await sessionOf(readingId)).toBeNull();
 	});
 
 	it("marks again what was collected from a reading, and never keeps the same words twice", async () => {
@@ -644,6 +823,10 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 		expect(back.ids[0]).not.toBe(first.ids[0]);
 		// Another learner's reading is not theirs to open.
 		expect(await readingOf("other", first.readingId)).toBeNull();
+		// Words that are in their sentence twice: the ones highlighted, where they are, are marked again and asked.
+		const twice = await fileCollected(learner, { ...r, id: first.readingId }, [{ ...item("like", "I like how you like it."), markedAt: [15] }]);
+		expect((await readingOf(learner.id, first.readingId))?.kept.find((k) => k.id === twice.ids[0])?.markedAt).toEqual([15]);
+		expect((await noteOf(learner, twice.ids[0]))?.card).toMatchObject({ answer: "like", at: 15 });
 	});
 
 	it("refuses a first save if its displayed source was replaced", async () => {
@@ -666,6 +849,92 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 		const [source] = await db.select().from(scenarioSource);
 		expect(source.state).toBe("pending");
 		expect(source.inputHash).toBe(sourceIdentity({ ...version, original: "Cake" }, null));
+	});
+
+	it("leaves out what the scenario says, and keeps an admin's edit only when it fits the original", async () => {
+		config.extractTerms.mockResolvedValue([
+			{ term: "Soup", kind: "term", note: "" },
+			{ term: "Bread", kind: "term", note: "" },
+		]);
+		await importContent(db, content("Soup and bread\n\nTea"));
+		await db.update(scenario).set({ versions: { en: { ...version, original: "Soup and bread\n\nTea", leaveOut: ["bread"] } } });
+		await queueSources("menu", { natives: ["zh-CN"] });
+		const [made] = await db.select().from(scenarioSource);
+		await makeSourceRow(made.id, new Caller({ route: null }));
+		expect(config.makeSource.mock.calls[0][1].map((t: { term: string }) => t.term)).toEqual(["Soup"]);
+
+		await db.update(scenarioSource).set({ text: "汤和面包\n\n茶", state: "checked" });
+		const [src] = await db.select().from(scenarioSource);
+		const edit = { title: "菜单", text: "汤和面包\n\n茶", glossary: [{ term: "Soup", shown: "汤", gloss: "一道菜" }] };
+		const refused = (e: Partial<typeof edit>) => confirmSource(src.id, src.generation, { ...edit, ...e }).catch((x: Error) => x.message);
+		expect(await refused({ text: "汤和面包，茶" })).toBe("Keep the original's 2 paragraphs.");
+		expect(await refused({ glossary: [{ term: "Cake", shown: "汤", gloss: "x" }] })).toBe('"Cake" is not in the original.');
+		expect(await refused({ glossary: [{ term: "Soup", shown: "羹", gloss: "x" }] })).toBe('"羹" is not in the source.');
+		await confirmSource(src.id, src.generation, edit);
+		const [kept] = await db.select().from(scenarioSource);
+		expect(kept).toMatchObject({ state: "confirmed", notes: { edited: true }, text: edit.text, glossary: edit.glossary });
+		expect(kept.generation).not.toBe(src.generation);
+		// The page that loaded the old one is told; the learner's sheet has the edit.
+		expect(await refused({})).toBe("The source changed since this page loaded: look at it again.");
+		expect((await sheetOf(learner, "menu", "en"))?.scenario.situation).toMatchObject({ source: edit.text, glossary: edit.glossary });
+		// Made again, it is the model's once more.
+		await remakeSource(src.id, kept.generation);
+		expect((await db.select().from(scenarioSource))[0]).toMatchObject({ state: "pending", notes: null });
+	});
+
+	it("says what keeps a scenario from being saved, and publishes it only in a language learners are offered", async () => {
+		const draft = {
+			id: "x",
+			kind: "translation" as const,
+			place: "translation" as const,
+			status: "draft" as const,
+			minutes: Number.NaN,
+			urgency: null,
+			maxTurns: null,
+			workId: null,
+			versions: { es: { ...version, title: "" } },
+		};
+		// As the page sends it: versions as typed, checked here.
+		const saved = (d: Omit<Parameters<typeof saveScenario>[0], "versions"> & { versions: object }, publish = false, isNew = true) =>
+			saveScenario(d as Parameters<typeof saveScenario>[0], { isNew, publish, by: learner.id }).then(
+				() => "saved",
+				(e: Error) => e.message,
+			);
+		expect(await saved(draft)).toBe(
+			"Id: 2 to 60 lowercase letters, digits and hyphens\nMinutes: a whole number from 1 to 120\nSpanish: Title is empty",
+		);
+		const ok = { ...draft, id: "menu-two", minutes: 5, versions: { es: { ...version, draft: true } } };
+		// Only a language learners are offered scenarios in (lib/constants.ts SCENARIO_LANGS).
+		expect(await saved({ ...ok, versions: { de: version } })).toBe("Learners of German are not offered scenarios yet.");
+		expect(await saved(ok, true)).toBe("Every language is a draft, so no learner would find it: make one live (or withdraw the scenario).");
+		expect(await saved(ok)).toBe("saved");
+		// Live, it is published.
+		expect(await saved({ ...ok, versions: { es: version } }, true, false)).toBe("saved");
+		expect((await db.select().from(scenario).where(eq(scenario.id, "menu-two")))[0].status).toBe("published");
+		// A language learners have written in keeps its version (a draft stops offering it); one nobody has goes.
+		await db
+			.insert(piece)
+			.values({ userId: learner.id, language: "es", kind: "translation", scenarioId: "menu-two", text: "", tutorLanguage: "zh-CN" });
+		const two = { ...ok, versions: { es: version, fr: version } };
+		expect(await saved(two, false, false)).toBe("saved");
+		expect(await saved({ ...ok, versions: { fr: version } }, false, false)).toBe(
+			"Learners have written in Spanish: make it a draft instead of removing it.",
+		);
+		expect(await saved({ ...ok, versions: { es: { ...version, draft: true } } }, false, false)).toMatch(/Every language is a draft/);
+		expect(await saved({ ...ok, versions: { es: version } }, false, false)).toBe("saved");
+		expect((await adminScenario("menu-two"))?.writtenIn).toEqual(["es"]);
+	});
+
+	it("makes a source for a version saved before it could leave terms out", async () => {
+		config.extractTerms.mockResolvedValue([{ term: "Soup", kind: "term", note: "" }]);
+		await importContent(db, content());
+		// As production has the scenarios published before `leaveOut`: no such field in the version.
+		await db.update(scenario).set({ versions: { en: version } });
+		await queueSources("menu", { natives: ["zh-CN"], again: true });
+		const [made] = await db.select().from(scenarioSource);
+		await makeSourceRow(made.id, new Caller({ route: null }));
+		expect((await db.select().from(scenarioSource))[0].state).not.toBe("failed");
+		expect(config.makeSource.mock.calls[0][1].map((t: { term: string }) => t.term)).toEqual(["Soup"]);
 	});
 
 	it("a superseded generator cannot consume a new request for the same original", async () => {
@@ -794,6 +1063,37 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 		// The other half is still earned, on the same row.
 		expect(await credit(db, learner, "learned", "en", at)).toBe(true);
 		expect(await version()).not.toBe(first);
+	});
+
+	it("finds the reviews done only when there is something in the notebook and none of it is waiting", async () => {
+		const now = new Date();
+		// Nothing collected yet: nothing has been reviewed by looking.
+		expect(await reviewsDone(db, learner.id, "en", now)).toBe(false);
+		// But learning something then is the whole day: there is nothing it could have reviewed.
+		expect(await credit(db, learner, "learned", "en", now)).toBe(true);
+		expect((await db.select().from(practiceDay).where(eq(practiceDay.userId, learner.id)))[0]).toMatchObject({
+			learnedAt: now,
+			reviewedAt: now,
+		});
+		const [card] = await db
+			.insert(note)
+			.values({
+				userId: learner.id,
+				language: "en",
+				kind: "collected",
+				phrase: "hello",
+				meaning: "你好",
+				meaningLanguage: "zh-CN",
+				fsrs: newCard(now, "UTC"),
+				due: new Date(now.getTime() + 864e5),
+			})
+			.returning();
+		// A new note waits until the next local day: today's reviews are done.
+		expect(await reviewsDone(db, learner.id, "en", now)).toBe(true);
+		// Another language's notebook is its own.
+		expect(await reviewsDone(db, learner.id, "es", now)).toBe(false);
+		await db.update(note).set({ due: now }).where(eq(note.id, card.id));
+		expect(await reviewsDone(db, learner.id, "en", now)).toBe(false);
 	});
 
 	it("retired revision callbacks cannot overwrite a replacement or recreate a deleted snapshot", async () => {

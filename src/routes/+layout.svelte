@@ -36,9 +36,10 @@ const meta = $derived(metaOf(data.origin, page.error ? null : page.route.id));
  * over only for the trip they belong to: <html data-vt="from>to"> holds the trip while it runs, so a page can say
  * `html[data-vt="/>/live"] .composer { view-transition-name: card }` and nothing lingers on any other trip.
  */
-// Whether a page has the sidebar is its route group's: <html data-side="out|in"> marks a trip that leaves it or comes
-// back to it, so the bar slides away and back on every such trip (a focused page added later included).
-const focused = (id: string | null | undefined) => !!id?.startsWith("/(focus)");
+// Whether a page has the sidebar is its route group's (only the app's pages have it; the focused and the public ones do
+// not): <html data-side="out|in"> marks a trip that leaves it or comes back to it, so the bar slides away and back on
+// every such trip (a page added later in any group included).
+const sided = (id: string | null | undefined) => !!id?.startsWith("/(app)");
 /** A trip is named by its pages, not by which piece: /live/<piece> is "/live", /collect/<reading> is "/collect". */
 const trip = (path = "") => path.replace(/^\/(live|collect)\/[^/]+$/, "/$1");
 onNavigate((nav) => {
@@ -46,8 +47,8 @@ onNavigate((nav) => {
 	if (nav.from?.url?.pathname === nav.to?.url?.pathname) return;
 	const html = document.documentElement;
 	html.dataset.vt = `${trip(nav.from?.url?.pathname)}>${trip(nav.to?.url?.pathname)}`;
-	const [a, b] = [focused(nav.from?.route.id), focused(nav.to?.route.id)];
-	if (a !== b) html.dataset.side = b ? "out" : "in";
+	const [a, b] = [sided(nav.from?.route.id), sided(nav.to?.route.id)];
+	if (a !== b) html.dataset.side = a ? "out" : "in";
 	return new Promise((resolve) => {
 		const vt = document.startViewTransition(async () => {
 			resolve();

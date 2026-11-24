@@ -529,7 +529,6 @@ export const exchange = pgTable(
 		expiresAt: at("expires_at").notNull(),
 		status: text("status").notNull().default("in_progress"),
 		completionReason: text("completion_reason"),
-		lastProcessedUserMessageId: integer("last_processed_user_message_id"),
 		lastSeenAssistantMessageId: integer("last_seen_assistant_message_id"),
 		agentReadUpToMessageId: integer("agent_read_up_to_message_id"),
 		followUpCount: integer("follow_up_count").notNull().default(0),
@@ -672,6 +671,9 @@ export const reading = pgTable(
 		language: text("language").notNull(),
 		text: text("text").notNull(),
 		place: text("place"),
+		/** A call was made from it while the learner did not help improve Libiamo: the admin never sees it (its calls go
+		    after thirty days; this stays). */
+		withheld: boolean("withheld").notNull().default(false),
 		createdAt: created(),
 	},
 	(t) => [check("reading_language_check", oneOf(t.language, LEARNABLE)), index("reading_user_idx").on(t.userId)],
@@ -704,8 +706,8 @@ export const note = pgTable(
 		examples: jsonb("examples").notNull().default(sql`'[]'::jsonb`),
 		sentence: text("sentence"),
 		marked: text("marked"),
+		markedAt: integer("marked_at").array(),
 		was: text("was"),
-		also: text("also").array().default(sql`'{}'::text[]`).notNull(),
 		fsrs: jsonb("fsrs").notNull(),
 		due: at("due").notNull(),
 		deletedAt: at("deleted_at"),
@@ -782,6 +784,8 @@ export const llmCall = pgTable(
 		id: uuid("id").primaryKey().default(sql`uuidv7()`),
 		userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
 		pieceId: uuid("piece_id").references(() => piece.id, { onDelete: "cascade" }),
+		/** A collecting call's reading (what the learner pasted): its record in the admin's sessions. */
+		readingId: uuid("reading_id").references(() => reading.id, { onDelete: "cascade" }),
 		stepSeq: integer("step_seq"),
 		purpose: text("purpose").notNull(),
 		tag: text("tag").notNull(),
@@ -807,6 +811,7 @@ export const llmCall = pgTable(
 	(t) => [
 		check("llm_call_state_check", oneOf(t.state, CALL_STATES)),
 		index("llm_call_piece_idx").on(t.pieceId),
+		index("llm_call_reading_idx").on(t.readingId),
 		index("llm_call_created_idx").on(t.createdAt),
 		index("llm_call_user_created_idx").on(t.userId, t.createdAt),
 		index("llm_call_prompt_idx").on(t.promptHash),

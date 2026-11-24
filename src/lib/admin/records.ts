@@ -24,16 +24,18 @@ export const SIGNALS: Record<SignalKind, { name: string; label: (n: number) => s
 export type Signal = { kind: SignalKind; n?: number };
 
 export type SessionRow = {
-	/** The piece's id. */
+	/** The piece's id (a reading's, collecting). */
 	id: string;
 	learner: string;
 	lang: string;
 	native: string;
-	kind: "own" | "scenario" | "translation";
+	/** A piece's revision, or collecting from a reading (its id is the reading's; it has calls but no tape, and no cases). */
+	kind: "own" | "scenario" | "translation" | "collect";
 	site: string;
 	title: string;
 	at: string;
 	minutes: number;
+	/** Pass 2's stops; collecting: the phrases kept from the reading. */
 	stops: number;
 	calls: number;
 	cost: number;

@@ -7,7 +7,8 @@
 import type { Action } from "svelte/action";
 
 type Side = "top" | "bottom" | "right" | "left";
-type Opts = string | { text: string; side?: Side; tap?: boolean };
+/** `hint`: what a click does, as a quieter second line under what the control is (a term's chip: its gloss, then the hint). */
+type Opts = string | { text: string; hint?: string; side?: Side; tap?: boolean };
 const DELAY = 400;
 const WARM = 400;
 let node: HTMLDivElement | null = null;
@@ -48,18 +49,26 @@ function place(el: HTMLElement, side: Side) {
 	p.style.translate = `${Math.round(x)}px ${Math.round(y)}px`;
 	p.dataset.side = side;
 }
-function show(el: HTMLElement, text: string, side: Side) {
+function show(el: HTMLElement, text: string, side: Side, hint = "") {
 	const p = pill();
 	clearTimeout(coolTimer);
 	owner = el;
 	p.textContent = text;
+	if (hint) {
+		const h = document.createElement("span");
+		h.className = "tip-hint";
+		h.textContent = hint;
+		p.append(h);
+	}
 	// Shown again each time, so it is the newest thing in the top layer: above a dialog opened since.
 	if (p.popover) {
 		if (p.matches(":popover-open")) p.hidePopover();
 		p.showPopover();
 	}
-	// A sentence wraps in a narrow column; a name stays on one line.
-	p.classList.toggle("long", text.length > 42);
+	// A sentence wraps in a narrow column; a name stays on one line. Measured, not counted: twenty Chinese characters
+	// are as wide as forty Latin ones.
+	p.classList.remove("long");
+	p.classList.toggle("long", p.scrollWidth > p.clientWidth);
 	place(el, side);
 	p.classList.add("on");
 	warm = true;
@@ -75,11 +84,13 @@ function hide(el?: HTMLElement) {
 
 export const tip: Action<HTMLElement, Opts | undefined> = (el, opts) => {
 	let text = "";
+	let hint = "";
 	let side: Side = "bottom";
 	let tap = false;
 	let touchPress = false;
 	const set = (o: Opts | undefined) => {
 		text = typeof o === "string" ? o : (o?.text ?? "");
+		hint = typeof o === "object" ? (o?.hint ?? "") : "";
 		side = typeof o === "object" && o?.side ? o.side : "bottom";
 		tap = typeof o === "object" && !!o?.tap;
 		if (!el.hasAttribute("aria-label") || el.dataset.tipLabel) {
@@ -89,7 +100,7 @@ export const tip: Action<HTMLElement, Opts | undefined> = (el, opts) => {
 			}
 		}
 		if (owner === el) {
-			if (text) show(el, text, side);
+			if (text) show(el, text, side, hint);
 			else hide(el);
 		}
 	};
@@ -97,8 +108,8 @@ export const tip: Action<HTMLElement, Opts | undefined> = (el, opts) => {
 	const enter = (e: PointerEvent) => {
 		if (e.pointerType === "touch" || !text) return;
 		clearTimeout(timer);
-		if (warm) show(el, text, side);
-		else timer = window.setTimeout(() => show(el, text, side), DELAY);
+		if (warm) show(el, text, side, hint);
+		else timer = window.setTimeout(() => show(el, text, side, hint), DELAY);
 	};
 	const leave = () => hide(el);
 	// With `tap`, a touch toggles the tip (for an ⓘ, whose whole job is the tip).
@@ -108,11 +119,11 @@ export const tip: Action<HTMLElement, Opts | undefined> = (el, opts) => {
 		hide(el);
 	};
 	const click = () => {
-		if (tap && touchPress && text) show(el, text, side);
+		if (tap && touchPress && text) show(el, text, side, hint);
 		touchPress = false;
 	};
 	const focus = () => {
-		if (text && el.matches(":focus-visible")) show(el, text, side);
+		if (text && el.matches(":focus-visible")) show(el, text, side, hint);
 	};
 	const key = (e: KeyboardEvent) => {
 		if (e.key === "Escape") hide(el);

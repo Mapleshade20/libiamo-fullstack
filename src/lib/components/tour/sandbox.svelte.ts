@@ -33,7 +33,7 @@ export type Collected = {
 	marked?: string;
 	batch?: string;
 };
-export type NoteEdit = { phrase?: string; gloss?: string; deleted?: boolean };
+export type NoteEdit = Partial<Pick<Note, "phrase" | "gloss" | "usage" | "register" | "examples">> & { deleted?: boolean };
 type Half = "learned" | "reviewed" | "both";
 /** What the week's glass last played (Week.svelte), so a chapter can start from a glass already seen. */
 export type GlassSeen = { day: string; look: "down" | "up" | "full"; drink: string };
@@ -171,8 +171,8 @@ export function tourNotebook(): Note[] {
 		);
 	return [...read, ...own]
 		.filter((n) => !edits[n.id]?.deleted)
-		.map((n) => ({ ...n, phrase: edits[n.id]?.phrase ?? n.phrase, gloss: edits[n.id]?.gloss ?? n.gloss }))
-		.map((n) => ({ ...n, card: n.card ?? noteFaces({ ...n, kind: n.from })[0] }));
+		.map((n) => ({ ...n, ...edits[n.id] }))
+		.map((n) => ({ ...n, card: (edits[n.id] && noteFaces({ ...n, kind: n.from })[0]) || n.card || noteFaces({ ...n, kind: n.from })[0] }));
 }
 export function editTourNote(id: string, edit: NoteEdit) {
 	const s = the();

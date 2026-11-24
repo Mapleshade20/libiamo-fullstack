@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { LEARNABLE, VERDICTS } from "#lib/constants.ts";
+import { LEARNABLE, REGISTERS, VERDICTS } from "#lib/constants.ts";
 import { learner } from "#lib/server/guard.ts";
 import {
 	addReading,
@@ -42,10 +42,27 @@ export const due = query(language, async (lang): Promise<DueSummary> => dueOf(le
 /** A review sitting's cards. */
 export const reviewQueue = query(language, async (lang): Promise<ReviewCard[]> => queueOf(learner(), lang));
 
+const line = (max: number) => z.string().trim().max(max);
 export const changeNote = command(
-	z.object({ id: noteId, phrase: z.string().trim().min(1).max(120), gloss: z.string().trim().max(400) }),
-	async ({ id, phrase, gloss }) => {
-		await editNote(learner(), id, { phrase, gloss });
+	z.object({
+		id: noteId,
+		phrase: line(120).min(1),
+		gloss: line(400),
+		usage: line(600),
+		register: z.enum(REGISTERS).nullable(),
+		examples: z
+			.array(
+				z.object({
+					t: line(400).min(1),
+					n: line(400).optional(),
+					span: line(200).optional(),
+					at: z.array(z.number().int().min(0).max(400)).max(8).optional(),
+				}),
+			)
+			.max(8),
+	}),
+	async ({ id, ...set }) => {
+		await editNote(learner(), id, set);
 		// The page says which of its lists to send back changed (the entry, the notebook).
 		await Promise.all([requested(noteById, 1).refreshAll(), requested(notebook, 1).refreshAll()]);
 	},
@@ -72,9 +89,11 @@ export const rate = command(
 	},
 );
 
-/** Something pasted to collect from: kept as a reading at once, so its page (/collect/<id>) can be opened again. */
-export const startReading = command(z.object({ passage: z.string().trim().min(1).max(12_000), lang: language }), async ({ passage, lang }) =>
-	addReading(learner().id, passage, lang),
+/** Something pasted to collect from (or a scenario's text, once something in it is marked): kept as a reading at once,
+    so its page (/collect/<id>) can be opened again and its calls are recorded with it. */
+export const startReading = command(
+	z.object({ passage: z.string().trim().min(1).max(12_000), lang: language, place: z.string().max(40).optional() }),
+	async ({ passage, lang, place }) => addReading(learner().id, passage, lang, place),
 );
 
 /** A reading of theirs, to collect from. */

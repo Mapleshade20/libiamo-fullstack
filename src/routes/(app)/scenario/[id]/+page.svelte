@@ -4,7 +4,7 @@ import ArrowRight from "@lucide/svelte/icons/arrow-right";
 import { untrack } from "svelte";
 import { app } from "#lib/account/app.svelte.ts";
 import { keepLocalDraft, localDraft } from "#lib/client/drafts.ts";
-import { revalidate } from "#lib/client/refresh.ts";
+import { refreshHeld } from "#lib/client/refresh.ts";
 import Accordion from "#lib/components/common/Accordion.svelte";
 import LimitNotice from "#lib/components/common/LimitNotice.svelte";
 import { autogrow } from "#lib/components/common/motion.ts";
@@ -32,7 +32,8 @@ import { page } from "$app/state";
  * is kept on this device as it is typed, and the piece takes it when it is created.
  */
 const where = $derived({ id: page.params.id ?? "", lang: app.lang });
-revalidate(sandboxed() ? null : scenarioView({ id: page.params.id ?? "", lang: app.lang }), glanceNow());
+let { data } = $props();
+$effect(() => refreshHeld(data.opened));
 // Asked for together: a `$derived(await …)` is not begun until the one before it has its answer, and a query is not
 // asked for until it is awaited (await_waterfall).
 const [scenario, glanced] = $derived(await Promise.all([sandboxed() ? tourScenario(where.id, where.lang) : scenarioView(where), glanceNow()]));

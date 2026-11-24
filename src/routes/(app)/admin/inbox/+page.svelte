@@ -6,7 +6,7 @@ import MessageCircle from "@lucide/svelte/icons/message-circle";
 import { flip } from "svelte/animate";
 import { fade, slide } from "svelte/transition";
 import { inbox, makeScenario, markFeedbackDone, setSuggestionAside } from "#lib/admin/inbox.remote.ts";
-import { fmtDay } from "#lib/admin/records.ts";
+import { fmtDay, langEn } from "#lib/admin/records.ts";
 import Suggestion from "#lib/components/admin/Suggestion.svelte";
 import Accordion from "#lib/components/common/Accordion.svelte";
 import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
@@ -14,7 +14,7 @@ import Select from "#lib/components/common/Select.svelte";
 import { tip } from "#lib/components/common/tip.ts";
 import { toast } from "#lib/components/shell/toast.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
-import { EXCHANGE_PLACES, type ExchangePlace } from "#lib/constants.ts";
+import { EXCHANGE_PLACES, type ExchangePlace, hasScenarios } from "#lib/constants.ts";
 import { SITE_OF } from "#lib/scenario/types.ts";
 import { goto } from "$app/navigation";
 
@@ -41,9 +41,9 @@ const KIND = {
 /** Where a suggestion from elsewhere is to happen, chosen before it is made a scenario. */
 const placeOf = $state<Record<string, ExchangePlace>>({});
 async function use(id: string) {
-	const scenarioId = await makeScenario({ id, place: placeOf[id] }).catch(() => null);
-	if (!scenarioId) return toast("Could not make a scenario of it");
-	goto(`/admin/scenarios/${scenarioId}`);
+	const r = await makeScenario({ id, place: placeOf[id] }).catch(() => null);
+	if (!r?.ok) return toast(r?.error ?? "Could not make a scenario of it");
+	goto(`/admin/scenarios/${r.scenarioId}`);
 }
 async function decline(id: string) {
 	const why = reason.trim();
@@ -114,7 +114,11 @@ const feedbackDone = (id: string, done: boolean) => markFeedbackDone({ id, done 
 										/>
 									</div>
 								{/if}
-								<Button onclick={() => use(s.id)} disabled={s.place === "other" && !placeOf[s.id]}>Make a scenario</Button>
+								{#if hasScenarios(s.language)}
+									<Button onclick={() => use(s.id)} disabled={s.place === "other" && !placeOf[s.id]}>Make a scenario</Button>
+								{:else}
+									<span class="adm-meta">No scenarios in {langEn(s.language)} yet</span>
+								{/if}
 							</div>
 						{/if}
 					</li>

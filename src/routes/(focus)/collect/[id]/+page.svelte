@@ -3,7 +3,6 @@ import X from "@lucide/svelte/icons/x";
 import { onDestroy, onMount, tick } from "svelte";
 import { fly, slide } from "svelte/transition";
 import { app } from "#lib/account/app.svelte.ts";
-import { refreshQuery } from "#lib/client/refresh.ts";
 import LimitNotice from "#lib/components/common/LimitNotice.svelte";
 import { reducedMotion } from "#lib/components/common/motion.ts";
 import FocusBar from "#lib/components/shell/FocusBar.svelte";
@@ -29,10 +28,8 @@ import { page } from "$app/state";
 const currentChapter = captureTourState();
 let disposed = false;
 const active = () => !disposed && currentChapter();
-// What is kept from the reading changes on this page (collecting is an endpoint): an answer the browser still holds
-// from an earlier visit is asked again before the page marks what was kept.
+// The latest of what is kept from it: asked again before the page opens (+page.ts).
 const asked = sandboxed() ? null : readingById(page.params.id ?? "");
-if (asked?.ready) await refreshQuery(asked);
 const mine = asked ? await asked : null;
 const found = asked ? mine : tourReading(page.params.id ?? "");
 const SETUP = found ? { passage: found.passage, lang: found.lang, native: app.prefs.native, feedback: app.prefs.feedback } : null;
@@ -91,7 +88,9 @@ function markedBefore(): Mark[] {
 	for (const k of mine?.kept ?? []) {
 		const from = k.sentence ? passage.indexOf(k.sentence) : 0;
 		if (from < 0) continue;
-		const at = passage.indexOf(k.marked, from);
+		// Where it was marked, else its words (an entry kept before that was noted).
+		const was = k.markedAt?.[0];
+		const at = was !== undefined && passage.startsWith(k.marked, from + was) ? from + was : passage.indexOf(k.marked, from);
 		if (at < 0 || (k.sentence && at + k.marked.length > from + k.sentence.length)) continue;
 		const [a, b] = [segAt(at), segAt(at + k.marked.length - 1)];
 		if (a < 0 || b < 0 || out.some((m) => m.b >= a && m.a <= b)) continue;
@@ -127,9 +126,12 @@ const forget = (ids: (string | undefined)[]) => {
 	const gone = ids.filter((x): x is string => !!x && !marks.some((m) => m.id === x));
 	if (gone.length && !sandboxed()) removeNotes(gone).catch(() => {});
 };
+/** The sentence a mark is in, and where in it the mark begins. */
 function sentenceOf(m: Mark) {
 	const at = segs[m.a].index;
-	return (SENTENCES.find((x) => at >= x.index && at < x.index + x.segment.length)?.segment ?? "").trim();
+	const s = SENTENCES.find((x) => at >= x.index && at < x.index + x.segment.length);
+	const lead = s ? s.segment.length - s.segment.trimStart().length : 0;
+	return { sentence: (s?.segment ?? "").trim(), at: s ? at - s.index - lead : 0 };
 }
 /** The tour's phrases go to its sandbox (the server kept the learner's as they were filled in). */
 function store() {
@@ -148,7 +150,7 @@ function store() {
 					register: d.register,
 					example: d.example,
 					marked: textOf(m),
-					sentence: sentenceOf(m),
+					sentence: sentenceOf(m).sentence,
 				};
 			}),
 	);
@@ -174,7 +176,7 @@ async function fill() {
 		m.busy = true;
 		m.failed = false;
 	}
-	const sent = todo.map((m) => ({ n: m.n, text: textOf(m), a: m.a, b: m.b, sentence: sentenceOf(m) }));
+	const sent = todo.map((m) => ({ n: m.n, text: textOf(m), a: m.a, b: m.b, ...sentenceOf(m) }));
 	try {
 		needKey();
 		stopped = null;
@@ -292,7 +294,7 @@ async function askAbout(m: Mark, q: string) {
 		const r = await fetch("/api/collect/ask", {
 			method: "POST",
 			headers: { "content-type": "application/json" },
-			body: JSON.stringify({ ...SETUP, phrase: m.data.phrase, history: m.thread.filter((x) => x.a !== null), question: q }),
+			body: JSON.stringify({ ...SETUP, readingId, phrase: m.data.phrase, history: m.thread.filter((x) => x.a !== null), question: q }),
 		}).then((x) => answered<{ answer?: string }>(x));
 		if (!active()) return;
 		turn.a = r.answer ?? tx("colFailed");
@@ -336,7 +338,7 @@ const cls = (i: number) => {
 </script>
 
 {#if SETUP}
-	<FocusBar exit={{ label: ui("colDone"), onclick: done }} />
+	<FocusBar exit={{ label: ui("colDone"), onclick: done, kept: marks.some((m) => m.id) }} />
 	<main class="wrap" lang={htmlLang(UI)}>
 		<h1>{ui("colTitle")}</h1>
 		<p class="how">{ui(touch ? "colHowTouch" : "colHowDesk")}</p>

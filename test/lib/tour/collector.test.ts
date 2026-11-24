@@ -18,7 +18,7 @@ it("does not send a delayed tour highlight after exit or disposal", async () => 
 	vi.stubGlobal("fetch", fetch);
 	for (const stop of [invalidateTourState, (collector: Collector) => collector.dispose()]) {
 		const collector = new Collector({ lang: "en", native: "zh-CN", feedback: "native" });
-		collector.mark("reading", "A phrase.", "reading:1", "phrase", "A phrase.");
+		collector.mark("reading", "A phrase.", "reading:1", "phrase", { sentence: "A phrase.", at: 2 });
 		stop(collector);
 		await vi.advanceTimersByTimeAsync(1000);
 	}
@@ -38,7 +38,7 @@ it("cannot file an old chapter's response in a new sandbox", async () => {
 		),
 	);
 	const collector = new Collector({ lang: "en", native: "zh-CN", feedback: "native" });
-	collector.mark("reading", "A phrase.", "reading:1", "phrase", "A phrase.");
+	collector.mark("reading", "A phrase.", "reading:1", "phrase", { sentence: "A phrase.", at: 2 });
 	await vi.advanceTimersByTimeAsync(900);
 	expect(fetch).toHaveBeenCalledOnce();
 	invalidateTourState();

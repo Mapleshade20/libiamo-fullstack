@@ -27,10 +27,9 @@ export function blankVersion(kind: "exchange", place: ExchangePlace, title?: str
 export function blankVersion(kind: "translation", place: "translation", title?: string): TranslationVersion;
 export function blankVersion(kind: ScenarioKind, place: string, title?: string): ExchangeVersion | TranslationVersion;
 export function blankVersion(kind: ScenarioKind, place: string, title = "Untitled"): ExchangeVersion | TranslationVersion {
-	if (kind === "translation") return { draft: true, title, line: "", introduction: "", original: "…", where: "", readers: "", terms: [] };
+	if (kind === "translation") return { title, line: "", introduction: "", original: "…", where: "", readers: "", terms: [], leaveOut: [] };
 	const p = place as ExchangePlace;
 	return {
-		draft: true,
 		title,
 		line: "",
 		you: "",

@@ -150,7 +150,8 @@ $effect(() => {
 									class="chip"
 									onmousedown={(e) => e.preventDefault()}
 									onclick={() => insert(g.term)}
-									use:tip={{ text: tx("trInsertTip", { gloss: g.gloss }), side: "top" }}
+									aria-label={`${g.shown !== g.term ? `${g.shown} ` : ""}${g.term}: ${g.gloss}`}
+									use:tip={{ text: g.gloss, hint: tx("trInsertTip"), side: "top" }}
 								>
 									{#if g.shown !== g.term}
 										<span class="shown">{g.shown}</span>

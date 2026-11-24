@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { and, eq, lt, not, sql } from "drizzle-orm";
 import { db } from "#lib/server/db/index.ts";
-import { llmCall, llmPrompt, sessionCase, user } from "#lib/server/db/schema.ts";
+import { llmCall, llmPrompt, reading, sessionCase, user } from "#lib/server/db/schema.ts";
 import type { CallRecord, Recorder } from "./caller.ts";
 
 /*
@@ -9,7 +9,7 @@ import type { CallRecord, Recorder } from "./caller.ts";
  * messages and the reply only while the learner helps improve Libiamo (`help_improve`). A system prompt is stored once
  * in `llm_prompt` and named by its hash.
  */
-export type RecordScope = { userId: string | null; pieceId?: string | null; keepText: boolean };
+export type RecordScope = { userId: string | null; pieceId?: string | null; readingId?: string | null; keepText: boolean };
 
 export function recorder(scope: RecordScope): Recorder {
 	return (r) => {
@@ -41,6 +41,7 @@ export async function writeRecord(scope: RecordScope, r: CallRecord) {
 		await tx.insert(llmCall).values({
 			userId: scope.userId,
 			pieceId: scope.pieceId ?? null,
+			readingId: scope.readingId ?? null,
 			stepSeq: r.step,
 			purpose: r.purpose,
 			tag: r.tag,
@@ -61,6 +62,7 @@ export async function writeRecord(scope: RecordScope, r: CallRecord) {
 			costUsd: r.costUsd ?? null,
 			latencyMs: r.ms ?? null,
 		});
+		if (scope.readingId && !keepText) await tx.update(reading).set({ withheld: true }).where(eq(reading.id, scope.readingId));
 	});
 }
 

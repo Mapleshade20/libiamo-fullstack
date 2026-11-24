@@ -20,7 +20,7 @@ import { page } from "$app/state";
 /*
  * One session as its record has it (docs/design/2026-11-11-session-records.md): on the left what the learner saw and
  * did, step by step, with how long they waited and the calls each step made; on the right every call of the session
- * by when it started, or the one opened. Any step can be flagged with a note, which makes the session a case and keeps
+ * by when it started, or the one opened. Any step of a revision can be flagged with a note, which makes the session a case and keeps
  * its calls past 30 days. The command copies what Claude Code runs to reproduce it locally.
  */
 // Asked for together: a `$derived(await …)` is not begun until the one before it has its answer, and a query is not
@@ -44,7 +44,9 @@ const who = $derived({
 	reader: { name: row?.reader ?? "Reader", color: "var(--reader-who)", icon: "reader" },
 	me: { name: row?.learner ?? "Learner", color: "var(--me)", icon: "person" },
 });
-const KIND = { own: "Free writing", scenario: "Scenario", translation: "Translation" };
+const KIND = { own: "Free writing", scenario: "Scenario", translation: "Translation", collect: "Collecting" };
+// Collecting has no tape: nothing to pull or replay, and a case belongs to a piece.
+const piece = $derived(row?.kind !== "collect");
 function show(c: RecordedCall) {
 	open = c;
 	last = c;
@@ -104,9 +106,11 @@ const caseOf = (n: number) => cases.find((c) => c.id === n);
 					<div class="sigs"><Signals signals={row.signals} labels /></div>
 				{/if}
 			</div>
-			<div class="acts">
-				<Button variant="secondary" onclick={copyCommand}><Terminal aria-hidden="true" />Copy pull command</Button>
-			</div>
+			{#if piece}
+				<div class="acts">
+					<Button variant="secondary" onclick={copyCommand}><Terminal aria-hidden="true" />Copy pull command</Button>
+				</div>
+			{/if}
 		</header>
 
 		{#if !wide}
@@ -136,7 +140,7 @@ const caseOf = (n: number) => cases.find((c) => c.id === n);
 										<span class="adm-tag" class:warn={s.wait > 8}>waited {s.wait.toFixed(0)} s</span>
 									{/if}
 									<span class="grow"></span>
-									{#if !s.flag}
+									{#if piece && !s.flag}
 										<button
 											type="button"
 											class="adm-icon flag-btn"

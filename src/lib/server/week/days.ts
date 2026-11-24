@@ -7,7 +7,7 @@ import type { DayKind, HistoryWeek, WeekView } from "#lib/week/types.ts";
 
 /*
  * The learner's week (design §5.2): a day counts when both halves are set, learning something (a piece finished, one
- * written again) and clearing the reviews (a rating that leaves the queue empty, or a visit that finds it empty). Each
+ * written again) and clearing the reviews (a rating that leaves the queue empty, or a visit that finds it empty with something in the notebook). Each
  * half is written only in the transaction that earned it, by an upsert that keeps the first time: never a
  * read-modify-write. Days are the learner's, in their time zone; weeks start on Monday and keep the aim they were held
  * to. The queue that counts is the one of the language the learner is working in: the one they see.
@@ -34,6 +34,19 @@ export async function queueEmpty(w: Writer, userId: string, language: string, at
 		)
 		.limit(1);
 	return rows.length === 0;
+}
+
+/**
+ * Whether a visit finds the reviews done: there are notes in the language, and none is waiting. A learner with nothing
+ * in their notebook yet has reviewed nothing, so a visit earns them no half (their glass stays empty until they learn).
+ */
+export async function reviewsDone(w: Writer, userId: string, language: string, at = new Date()): Promise<boolean> {
+	const [any] = await w
+		.select({ one: sql<number>`1` })
+		.from(note)
+		.where(and(eq(note.userId, userId), eq(note.language, language), isNull(note.deletedAt)))
+		.limit(1);
+	return !!any && (await queueEmpty(w, userId, language, at));
 }
 
 /**

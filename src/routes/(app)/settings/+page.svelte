@@ -91,11 +91,13 @@ function dropLanguage(l: string) {
 let emailOpen = $state(false);
 let pwOpen = $state(false);
 let deleteOpen = $state(false);
-// Appearance: kept on the account, like every setting.
-const backdrop = $derived(app.look.backdrop);
+// Appearance: kept on the account, like every setting. The dark theme shows no painting, and the setting says what is
+// shown (none) while the painting stays the choice the light theme comes back to.
+const paintingHidden = $derived(app.dark && app.look.backdrop === "painting");
+const backdrop = $derived(paintingHidden ? "none" : app.look.backdrop);
 // The day's picture, chosen on the server for the learner's day (server/backdrop/today.ts).
 const today = $derived(backdrop === "image" || backdrop === "painting" ? page.data.pictures?.[backdrop] : undefined);
-const backdropHelp = $derived(app.dark && backdrop === "painting" ? tx("paintingLightOnly") : today ? tx("bgToday", { credit: today.credit }) : "");
+const backdropHelp = $derived(paintingHidden ? tx("paintingLightOnly") : today ? tx("bgToday", { credit: today.credit }) : "");
 
 onMount(() => {
 	document.title = `${tx("navSettings")} · ${tx("homeTitle")}`;
@@ -233,7 +235,7 @@ onMount(() => {
 			{#snippet backdropCtl()}
 				<SegmentedControl
 					label={tx("backdropLabel")}
-					value={app.look.backdrop}
+					value={backdrop}
 					onValueChange={(v) => {
 						keep(app.saveLook({ backdrop: v as Backdrop }));
 					}}

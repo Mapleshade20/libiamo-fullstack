@@ -15,15 +15,21 @@ import type { Tape } from "./tape";
  * has no content for yet is shown on the English one.
  */
 const TAPES = import.meta.glob<Tape>("./tapes/*.json", { import: "default" });
-let starting = false;
+let starting = $state(false);
 // ?tour starts it once: leaving it must not start it again while the address still says so.
 let fromUrl = false;
 $effect(() => {
+	// Everything it waits on is read on every run, never behind an early return: a run that stopped at `starting` or
+	// `director.on` depends on nothing else, and the end of the last tour (written while the home page remounts) has been
+	// seen not to wake it, so the menu's ask could never start the tour again.
 	const asked = dev ? page.url.searchParams.get("tour") : null;
+	const wanted = onboarding.tour;
+	const busy = starting || director.on;
+	const home = page.url.pathname === "/";
 	if (!asked) fromUrl = false;
-	if (starting || director.on || !(onboarding.tour || (asked && !fromUrl))) return;
+	if (busy || !(wanted || (asked && !fromUrl))) return;
 	if (asked) fromUrl = true;
-	if (page.url.pathname !== "/") return;
+	if (!home) return;
 	starting = true;
 	onboarding.tour = false;
 	// The tour runs on content for the language being learned and a tape for the tutor's language; without them, in

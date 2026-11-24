@@ -18,20 +18,21 @@ function distance(a: string, b: string) {
 	return d[a.length][b.length];
 }
 /** `own` cards may be said another way just as well: only the learner can tell, so another answer is "other", not wrong. */
-export function verdictOf(card: { kind: "own" | "collected"; answer: string; also?: string[] }, given: string): Verdict {
+export function verdictOf(card: { kind: "own" | "collected"; answer: string }, given: string): Verdict {
 	if (!given.trim()) return "none";
 	const g = norm(given);
-	const all = [card.answer, ...(card.also ?? [])].map(norm);
-	if (all.includes(g)) return "exact";
-	const best = Math.min(...all.map((a) => distance(a, g) / Math.max(a.length, 1)));
+	const a = norm(card.answer);
+	if (a === g) return "exact";
+	const best = distance(a, g) / Math.max(a.length, 1);
 	if (best <= 0.2) return "close";
 	return card.kind === "own" ? "other" : "miss";
 }
 /** The rating the result suggests (none for "other": the learner judges it). */
 export const SUGGEST: Record<Verdict, string | null> = { exact: "good", close: "hard", other: null, miss: "again", none: "again" };
-/** The first letter of each word, the rest dotted: a hint that keeps the length. */
-export const hintOf = (answer: string) =>
-	answer
+const dotted = (text: string) =>
+	text
 		.split(/(\s+)/)
 		.map((w) => (/\s/.test(w) ? w : w[0] + w.slice(1).replace(/\p{L}/gu, "·")))
 		.join("");
+/** The first letter of each word, the rest dotted: a hint that keeps the length (the words the card gives stay whole). */
+export const hintOf = (answer: string, given: string[] = []) => given.reduce((hint, g) => hint.replace(dotted(g), g), dotted(answer));

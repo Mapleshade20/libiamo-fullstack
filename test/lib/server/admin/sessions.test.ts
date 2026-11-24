@@ -3,7 +3,7 @@ import { test, vi } from "vitest";
 
 vi.mock("$app/env/private", () => ({}));
 vi.mock("#lib/server/db/index.ts", () => ({ db: {} }));
-const { readStep, signalsOf } = await import("#lib/server/admin/sessions.ts");
+const { readCollectCall, readStep, signalsOf } = await import("#lib/server/admin/sessions.ts");
 
 const step = (action: string, body: unknown = {}, response: unknown = {}, ms = 500) => ({ action, body, response, ms });
 
@@ -46,4 +46,44 @@ test("signals come from the tape and the calls, with no model", () => {
 		{ kind: "cost" },
 	]);
 	assert.deepEqual(signalsOf([step("end", {}, { issues: [] })], { finished: true, lastAt: 0, now: 1, failedCalls: 0, cost: 0, medianCost: 0 }), []);
+});
+
+test("a collecting call reads as what was highlighted or asked, and what came back", () => {
+	const explain = readCollectCall({
+		tag: "collect/explain",
+		// The passage has a line like a highlight's; a highlight runs over two lines; the example is marked.
+		messages: [
+			{
+				role: "user",
+				content: 'A learner of English…\n\n<<<\n1. "not this"\n>>>\n\nHighlights:\n1. "a far cry"\n2. "to\nboot"\n\nFor each highlight, in order:',
+			},
+		],
+		output:
+			'```json\n{"items":[{"n":1,"phrase":"a far cry from something","meaning":"远不如","why":"w","example":"It is <m>a far cry</m> from it."}]}\n```',
+		error: null,
+	});
+	assert.deepEqual(explain, {
+		label: "Highlighted 2",
+		lines: [
+			{ who: "me", text: "a far cry · to\nboot" },
+			{ who: "tutor", text: "a far cry from something: 远不如\n\nw\n\nIt is a far cry from it." },
+		],
+	});
+	// A question: the last thing the learner asked, and the answer; a failure is said.
+	const ask = readCollectCall({
+		tag: "collect/ask",
+		messages: [
+			{ role: "user", content: "first?" },
+			{ role: "assistant", content: "yes" },
+			{ role: "user", content: "and formal?" },
+		],
+		output: null,
+		error: "timeout",
+	});
+	assert.deepEqual(ask.lines, [
+		{ who: "me", text: "and formal?" },
+		{ who: "card", text: "Failed: timeout" },
+	]);
+	// Words not kept (the learner did not help improve Libiamo then).
+	assert.equal(readCollectCall({ tag: "collect/ask", messages: null, output: null, error: null }).lines[0].who, "card");
 });

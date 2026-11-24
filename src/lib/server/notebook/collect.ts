@@ -3,6 +3,7 @@
 // own to imitate); a second answers their questions about one of them. Nothing here writes for the learner.
 import { z } from "zod";
 import { REGISTERS } from "#lib/constants.ts";
+import { unmark } from "#lib/review/faces.ts";
 import { type Caller, chat, chatJson } from "#lib/server/llm/caller.ts";
 import { LANG_NAMES } from "#lib/server/revision/draft.ts";
 
@@ -21,10 +22,11 @@ const Item = z.object({
 		.transform((r) => ((REGISTERS as readonly string[]).includes(r.toLowerCase()) ? (r.toLowerCase() as (typeof REGISTERS)[number]) : "neutral")),
 	why: z.string(),
 	example: z.string(),
-	/** The words of the example that are the phrase as used there, so a review card can blank them. */
+	/** The words of the example that are the phrase as used there, so a review card can blank them ("framed … as"). */
 	span: z.string().optional(),
 });
-export type Explained = z.infer<typeof Item>;
+/** `at`: where `span` begins in the example. */
+export type Explained = z.infer<typeof Item> & { at?: number[] };
 
 /** The tutor's language: the learner's own, or the one they read in, as they chose. */
 const tutorOf = (d: CollectInput) => NAME[d.feedback === "native" ? d.native : d.lang] ?? "English";
@@ -53,9 +55,8 @@ export async function explain(d: CollectInput, given: Highlight[], retry = 0): P
 		`- meaning: in ${F}, what it means here, in a few words (not a dictionary list).`,
 		"- register: neutral, casual, formal, slang, literary or technical.",
 		`- why: in ${F}, one sentence on what makes it worth taking: the specific choice a learner of ${T} would not make on their own (contrast with the plainer way they would say it). Concrete; never just "more natural".`,
-		`- example: one short new sentence in ${T} using the phrase in an everyday situation unlike the passage's.`,
-		"- span: the words of your example that are the phrase as used there, copied exactly (same spelling and case).",
-		`Reply with JSON only: {"items":[{"n":1,"phrase":"","meaning":"","register":"neutral","why":"","example":"","span":""}]}`,
+		`- example: one short new sentence in ${T} using the phrase in an everyday situation unlike the passage's, with the phrase as used there marked by a tag (<m>…</m>): the words that are the phrase, as they are inflected there, and not words that only fill a slot in it; when other words come between its parts, each part is marked on its own.`,
+		`Reply with JSON only: {"items":[{"n":1,"phrase":"","meaning":"","register":"neutral","why":"","example":""}]}`,
 	].join("\n");
 	const { value } = await chatJson([{ role: "user", content: user }], z.object({ items: z.array(Item) }), {
 		ai: d.ai,
@@ -63,7 +64,14 @@ export async function explain(d: CollectInput, given: Highlight[], retry = 0): P
 		tag: "collect/explain",
 		sample: retry,
 	});
-	return matchExplained(given, value.items);
+	// The example as the learner reads it, and where the phrase is in it (a recorded reply may still give span apart).
+	return matchExplained(
+		given,
+		value.items.map((it) => {
+			const m = unmark(it.example);
+			return { ...it, example: m.text, span: m.span ?? it.span, at: m.at };
+		}),
+	);
 }
 
 /** The answers, under the page's own numbers: by the 1..k numbering the prompt used, else by order when counts agree. */

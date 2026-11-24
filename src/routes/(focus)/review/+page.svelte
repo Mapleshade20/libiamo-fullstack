@@ -262,7 +262,7 @@ onMount(() => {
 									type="button"
 									use:tip={tx("rvHint")}
 									onclick={() => {
-										placeholder = hintOf(card.answer);
+										placeholder = hintOf(card.answer, card.given);
 										input?.focus();
 									}}
 								>

@@ -107,8 +107,8 @@ function changes() {
 }
 onMount(() => {
 	changes();
-	// Nothing to review is the reviews done: a visit that finds the queue empty earns today's half (once: a day that has
-	// it already is not asked about again on every page).
+	// Nothing left to review is the reviews done: a visit that finds the queue empty (with notes in the notebook) earns
+	// today's half (once: a day that has it already is not asked about again on every page).
 	if (!sandboxed() && kind !== "reviewed" && kind !== "full") lookAtReviews(lang()).catch(() => {});
 });
 // A day earned while this stays on the page (the reviews found empty, the tour): play it too.

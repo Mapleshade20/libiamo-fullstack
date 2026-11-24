@@ -5,7 +5,7 @@ import Circle from "@lucide/svelte/icons/circle";
 import { onDestroy, tick } from "svelte";
 import { fly } from "svelte/transition";
 import { app } from "#lib/account/app.svelte.ts";
-import { revalidate } from "#lib/client/refresh.ts";
+import { refreshHeld } from "#lib/client/refresh.ts";
 import { Collector } from "#lib/components/collect/collector.svelte.ts";
 import Accordion from "#lib/components/common/Accordion.svelte";
 import LimitNotice from "#lib/components/common/LimitNotice.svelte";
@@ -28,7 +28,8 @@ import { page } from "$app/state";
  * time are marked where they came back. It makes a light day of the week, as review does.
  */
 const id = $derived(page.params.id ?? "");
-revalidate(sandboxed() ? null : pieceById(page.params.id ?? ""));
+let { data } = $props();
+$effect(() => refreshHeld(data.opened));
 const w = $derived(sandboxed() ? tourPiece(id) : await pieceById(id));
 const r = $derived(w?.result);
 const scenario = $derived(w?.scenarioId ? await scenarioView({ id: w.scenarioId, lang: w.lang }) : null);
