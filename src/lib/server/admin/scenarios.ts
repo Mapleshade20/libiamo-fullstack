@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
-import type { ExchangePlace, Place, ScenarioKind, ScenarioStatus, SourceState, Urgency } from "#lib/constants.ts";
+import { type ExchangePlace, langName, type Place, type ScenarioKind, type ScenarioStatus, type SourceState, type Urgency } from "#lib/constants.ts";
 import { blankVersion } from "#lib/scenario/blank.ts";
 import { SITE_OF } from "#lib/scenario/types.ts";
-import { type TranslationVersion, type Version, versionsSchema } from "#lib/scenario/versions.ts";
+import { live, type TranslationVersion, type Version, versionProblems, versionsSchema } from "#lib/scenario/versions.ts";
 import { type InboxSuggestion, suggestionFor } from "#lib/server/admin/inbox.ts";
 import { db } from "#lib/server/db/index.ts";
 import { issueScenario, piece, scenario, scenarioSource, suggestion, work } from "#lib/server/db/schema.ts";
@@ -158,12 +158,18 @@ export class ScenarioError extends Error {}
 
 /**
  * Saves a scenario whole. `publish` publishes it (a translation's missing sources are queued); a published scenario
- * saved stays published. A new id must be free; an existing scenario with pieces keeps its kind and place.
+ * saved stays published, and either needs a language learners are offered it in. A new id must be free; an existing
+ * scenario with pieces keeps its kind and place. What is wrong is said a line each, in the page's words.
  */
 export async function saveScenario(input: ScenarioDraft, opts: { isNew: boolean; publish: boolean; by: string }) {
+	const problems = [
+		...(/^[a-z0-9-]{2,60}$/.test(input.id) ? [] : ["Id: 2 to 60 lowercase letters, digits and hyphens"]),
+		...(Number.isInteger(input.minutes) && input.minutes >= 1 && input.minutes <= 120 ? [] : ["Minutes: a whole number from 1 to 120"]),
+	];
 	const versions = versionsSchema(input.kind, input.place).safeParse(input.versions);
-	if (!versions.success) throw new ScenarioError(versions.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
-	if (!Object.keys(versions.data).length) throw new ScenarioError("A scenario needs at least one version.");
+	if (!versions.success) problems.push(...versionProblems(versions.error.issues, (l) => langName(l, "en")));
+	if (problems.length || !versions.success) throw new ScenarioError(problems.join("\n"));
+	if (!Object.keys(versions.data).length) throw new ScenarioError("A scenario needs at least one language.");
 	if ((input.kind === "translation") !== (input.place === "translation"))
 		throw new ScenarioError("A translation happens on the sheet, and only a translation does.");
 	const [was] = await db.select().from(scenario).where(eq(scenario.id, input.id));
@@ -176,6 +182,8 @@ export async function saveScenario(input: ScenarioDraft, opts: { isNew: boolean;
 		: (was?.status as ScenarioStatus | undefined) === "published"
 			? "published"
 			: (input.status ?? "draft");
+	if (status === "published" && !Object.values(versions.data).some(live))
+		throw new ScenarioError("Every language is a draft, so no learner would find it: make one live (or withdraw the scenario).");
 	const set = {
 		kind: input.kind,
 		place: input.place,

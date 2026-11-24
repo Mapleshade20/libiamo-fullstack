@@ -42,7 +42,7 @@ vi.mock("#lib/server/translation/source.ts", () => ({
 
 import { encryptKey } from "#lib/server/account/key.ts";
 import { inbox } from "#lib/server/admin/inbox.ts";
-import { adminScenario, confirmSource, remakeSource, scenarioFromSuggestion } from "#lib/server/admin/scenarios.ts";
+import { adminScenario, confirmSource, remakeSource, saveScenario, scenarioFromSuggestion } from "#lib/server/admin/scenarios.ts";
 import { sessionOf, sessions } from "#lib/server/admin/sessions.ts";
 import { deleteUser, users } from "#lib/server/admin/users.ts";
 import { db, sql } from "#lib/server/db/index.ts";
@@ -529,13 +529,15 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 		expect(await ask("Ask 6", "email")).toBe(true);
 		const mine = async () => (await suggestionsOf(learner.id)).find((x) => x.id === first.id);
 		expect(await mine()).toMatchObject({ status: "pending", scenarioId: null });
-		await db.update(scenario).set({ status: "published" }).where(eq(scenario.id, id));
-		// Published, but its version in the learner's language is still hidden.
-		expect(await mine()).toMatchObject({ status: "pending", scenarioId: null });
-		const { draft: _, ...shown } = made?.versions.en ?? {};
 		await db
 			.update(scenario)
-			.set({ versions: { en: shown } })
+			.set({ status: "published", versions: { en: { ...made?.versions.en, draft: true } } })
+			.where(eq(scenario.id, id));
+		// Published, but its version in the learner's language is still a draft.
+		expect(await mine()).toMatchObject({ status: "pending", scenarioId: null });
+		await db
+			.update(scenario)
+			.set({ versions: { en: made?.versions.en } })
 			.where(eq(scenario.id, id));
 		expect(await mine()).toMatchObject({ status: "live", scenarioId: id });
 		expect((await inbox()).suggestions.find((x) => x.id === first.id)?.scenario).toMatchObject({ id, published: true });
@@ -824,6 +826,35 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 		// Made again, it is the model's once more.
 		await remakeSource(src.id, kept.generation);
 		expect((await db.select().from(scenarioSource))[0]).toMatchObject({ state: "pending", notes: null });
+	});
+
+	it("says what keeps a scenario from being saved, and publishes it only in a language learners are offered", async () => {
+		const draft = {
+			id: "x",
+			kind: "translation" as const,
+			place: "translation" as const,
+			status: "draft" as const,
+			minutes: Number.NaN,
+			urgency: null,
+			maxTurns: null,
+			workId: null,
+			versions: { es: { ...version, title: "" } },
+		};
+		// As the page sends it: versions as typed, checked here.
+		const saved = (d: Omit<Parameters<typeof saveScenario>[0], "versions"> & { versions: object }, publish = false, isNew = true) =>
+			saveScenario(d as Parameters<typeof saveScenario>[0], { isNew, publish, by: learner.id }).then(
+				() => "saved",
+				(e: Error) => e.message,
+			);
+		expect(await saved(draft)).toBe(
+			"Id: 2 to 60 lowercase letters, digits and hyphens\nMinutes: a whole number from 1 to 120\nSpanish: Title is empty",
+		);
+		const ok = { ...draft, id: "menu-two", minutes: 5, versions: { es: { ...version, draft: true } } };
+		expect(await saved(ok, true)).toBe("Every language is a draft, so no learner would find it: make one live (or withdraw the scenario).");
+		expect(await saved(ok)).toBe("saved");
+		// Live, it is published.
+		expect(await saved({ ...ok, versions: { es: version } }, true, false)).toBe("saved");
+		expect((await db.select().from(scenario).where(eq(scenario.id, "menu-two")))[0].status).toBe("published");
 	});
 
 	it("makes a source for a version saved before it could leave terms out", async () => {

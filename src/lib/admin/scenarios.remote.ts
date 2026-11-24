@@ -26,12 +26,13 @@ export const scenarioOne = query(z.string().max(60), async (id) => {
 	return adminScenario(id);
 });
 
+// What the admin can get wrong (the id, the minutes, the versions) is checked in saveScenario, which says what it is.
 const Draft = z.object({
-	id: z.string().regex(/^[a-z0-9-]{2,60}$/, "An id is 2 to 60 lowercase letters, digits and hyphens."),
+	id: z.string().max(200),
 	kind: z.enum(SCENARIO_KINDS),
 	place: z.enum(PLACES),
 	status: z.enum(SCENARIO_STATUSES),
-	minutes: z.number().int().min(1).max(120),
+	minutes: z.number().nullable(),
 	urgency: z.enum(URGENCIES).nullable(),
 	maxTurns: z.number().int().min(1).max(100).nullable(),
 	workId: z.string().max(60).nullable(),

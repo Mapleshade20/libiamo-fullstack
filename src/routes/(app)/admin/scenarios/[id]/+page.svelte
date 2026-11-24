@@ -20,7 +20,6 @@ import CaptureImport from "#lib/components/admin/CaptureImport.svelte";
 import OpeningEditor from "#lib/components/admin/OpeningEditor.svelte";
 import Suggestion from "#lib/components/admin/Suggestion.svelte";
 import Accordion from "#lib/components/common/Accordion.svelte";
-import Checkbox from "#lib/components/common/Checkbox.svelte";
 import FloatingPanel from "#lib/components/common/FloatingPanel.svelte";
 import ModalDialog from "#lib/components/common/ModalDialog.svelte";
 import { autogrow } from "#lib/components/common/motion.ts";
@@ -154,6 +153,17 @@ function versionsOut(): Record<string, Version> {
 	);
 }
 
+/** A place of the other kind (a translation, or a conversation) starts every language again: asked first. */
+function choosePlace(p: string) {
+	if (p === d.place) return;
+	if ((p === "translation") === translate) return setPlace(p);
+	ask({
+		title: p === "translation" ? "Make it a translation?" : "Make it a conversation?",
+		text: `It is written differently: ${langEn(lang)} starts again with only its title, and every other language goes.`,
+		act: "Change it",
+		go: () => setPlace(p),
+	});
+}
 function setPlace(p: string) {
 	const place = p as Place;
 	const toTranslation = place === "translation";
@@ -168,17 +178,32 @@ function setPlace(p: string) {
 	if (isThreaded(place)) for (const l of Object.keys(d.versions)) threads[l] = [];
 	d.place = place;
 }
-function addLanguage(l: string) {
-	d.versions[l] = blankVersion(d.kind, d.place, "");
-	if (isThreaded(d.place)) threads[l] = [];
+/** The language being added, while the admin says what it starts from. */
+let adding = $state("");
+let addOpen = $state(false);
+/**
+ * A new language: a copy of one already written (to translate) or blank. Once learners may find the scenario it waits
+ * as a draft until it is written; before, it is published with the others.
+ */
+function addLanguage(l: string, from?: string) {
+	const base = from ? structuredClone($state.snapshot(d.versions[from])) : blankVersion(d.kind, d.place, "");
+	d.versions[l] = { ...base, draft: d.status === "draft" ? undefined : true };
+	if (isThreaded(d.place)) threads[l] = from ? structuredClone($state.snapshot(threads[from] ?? [])) : [];
 	lang = l;
 	view = "edit";
 }
-function removeLanguage() {
+function removeLanguage(l: string) {
 	if (Object.keys(d.versions).length < 2) return;
-	delete d.versions[lang];
-	delete threads[lang];
+	delete d.versions[l];
+	delete threads[l];
 	lang = Object.keys(d.versions)[0];
+}
+/** A new scenario's only language, before it is saved, can be another: its version is moved there. */
+function moveLanguage(to: string) {
+	if (to === lang || d.versions[to]) return;
+	d.versions = { [to]: d.versions[lang] };
+	threads = { [to]: threads[lang] ?? [] };
+	lang = to;
 }
 /** A new scenario's id follows its first title until the admin writes one. */
 const slug = (t: string) =>
@@ -197,7 +222,10 @@ async function save(publish: boolean) {
 	saving = true;
 	problem = "";
 	const draft = { ...$state.snapshot(d), versions: versionsOut() };
-	const r = await saveOne({ draft, isNew, publish }).catch((e) => ({ ok: false as const, error: (e as Error).message || "Could not save." }));
+	const r = await saveOne({ draft, isNew, publish }).catch((e) => ({
+		ok: false as const,
+		error: (e as { body?: { message?: string } }).body?.message || (e as Error).message || "Could not save.",
+	}));
 	saving = false;
 	if (!r.ok) {
 		problem = r.error;
@@ -451,7 +479,7 @@ async function saveEdit(r: AdminSource) {
 	{/if}
 
 	<section class="adm-section" class:first={!from} aria-labelledby="h-place">
-		<h2 id="h-place">Place</h2>
+		<h2 id="h-place">Place <span class="sub">Every language</span></h2>
 		<div class="adm-paper pad adm-grid place" class:tr={translate}>
 			<div class="adm-field">
 				<span class="l" id="where-l"
@@ -465,7 +493,7 @@ async function saveEdit(r: AdminSource) {
 				{#if locked}
 					<input class="adm-input" value={SITES.find((x) => x.value === d.place)?.label} disabled aria-labelledby="where-l">
 				{:else}
-					<Select aria-label="Where" value={d.place} onValueChange={setPlace} items={SITES} />
+					<Select aria-label="Where" bind:value={() => d.place, choosePlace} items={SITES} />
 				{/if}
 			</div>
 			<label class="adm-field">
@@ -511,25 +539,44 @@ async function saveEdit(r: AdminSource) {
 
 	<section class="adm-section" aria-labelledby="h-ver">
 		<div class="ver-head">
-			<h2 id="h-ver">{translate ? "Original" : "Versions"}</h2>
-			<span class="grow"></span>
-			{#if Object.keys(d.versions).length > 1}
-				<SegmentedControl
-					label="Learning language"
-					size="sm"
-					bind:value={lang}
-					items={Object.keys(d.versions).map((l) => ({ value: l, label: langEn(l) }))}
-				/>
+			<h2 id="h-ver">Languages</h2>
+			<span class="sub"
+				>{translate ? "Each has its own original, and a source for each learner language" : "Each has its own version of all below"}</span
+			>
+		</div>
+		<div class="langs">
+			{#if isNew && Object.keys(d.versions).length === 1}
+				<div class="w-44">
+					<Select
+						aria-label="Language"
+						size="sm"
+						bind:value={() => lang, moveLanguage}
+						items={LEARNABLE.map((l) => ({ value: l, label: langEn(l) }))}
+					/>
+				</div>
+			{:else}
+				<div class="tabs" role="tablist" aria-label="Learning languages">
+					{#each Object.keys(d.versions) as l (l)}
+						<button type="button" role="tab" class="tab" aria-selected={l === lang} onclick={() => (lang = l)}>
+							{langEn(l)}<span class="state" class:live={!d.versions[l].draft}>{d.versions[l].draft ? "Draft" : "Live"}</span>
+						</button>
+					{/each}
+				</div>
 			{/if}
 			{#if missing.length}
-				<div class="w-40">
+				<div class="w-44">
 					<Select
 						aria-label="Add a language"
 						size="sm"
 						variant="ghost"
 						placeholder="Add a language"
-						value=""
-						onValueChange={addLanguage}
+						bind:value={
+							() => "",
+							(l) => {
+	adding = l;
+	addOpen = true;
+}
+						}
 						items={missing.map((l) => ({ value: l, label: langEn(l) }))}
 					/>
 				</div>
@@ -537,6 +584,22 @@ async function saveEdit(r: AdminSource) {
 		</div>
 		<div class="adm-paper">
 			<div class="ver-bar">
+				<h3 class="ver-name">{langEn(lang)}</h3>
+				{#if v}
+					<span
+						use:tip={`Live: learners of ${langEn(lang)} find it${d.status === "published" ? "" : " once the scenario is published"}. Draft: they do not.`}
+					>
+						<SegmentedControl
+							label="{langEn(lang)} for learners"
+							size="sm"
+							bind:value={() => (v.draft ? "draft" : "live"), (x) => (v.draft = x === "draft" || undefined)}
+							items={[
+								{ value: "live", label: "Live" },
+								{ value: "draft", label: "Draft" },
+							]}
+						/>
+					</span>
+				{/if}
 				{#if !translate}
 					<SegmentedControl
 						label="View"
@@ -548,18 +611,24 @@ async function saveEdit(r: AdminSource) {
 						]}
 					/>
 				{/if}
-				{#if v}
-					<!-- biome-ignore lint/a11y/noLabelWithoutControl: Checkbox renders a native checkbox inside the label -->
-					<label class="hide"
-						><Checkbox bind:checked={() => !!v.draft, (x) => (v.draft = x || undefined)} /><span>Draft in {langEn(lang)}</span></label
-					>
-				{/if}
 				<span class="grow"></span>
 				{#if ["ao3", "reddit", "discord"].includes(d.place)}
 					<Button variant="ghost" size="sm" onclick={() => (importing = true)}><ClipboardPaste aria-hidden="true" />Import a capture</Button>
 				{/if}
 				{#if Object.keys(d.versions).length > 1}
-					<Button variant="ghost" size="sm" onclick={removeLanguage}><X aria-hidden="true" />Remove {langEn(lang)}</Button>
+					{@const l = lang}
+					<Button
+						variant="ghost"
+						size="sm"
+						onclick={() =>
+							ask({
+								title: `Remove ${langEn(l)}?`,
+								text: `Its ${translate ? "original and terms go" : "title, opening and conversation go"} once you save.`,
+								act: "Remove",
+								go: () => removeLanguage(l),
+							})}
+						><Trash2 aria-hidden="true" />Remove {langEn(l)}</Button
+					>
 				{/if}
 			</div>
 			{#if view === "preview" && ev && preview}
@@ -772,7 +841,7 @@ async function saveEdit(r: AdminSource) {
 		{/if}
 	{:else if ev}
 		<section class="adm-section" aria-labelledby="h-sim">
-			<h2 id="h-sim">Conversation{Object.keys(d.versions).length > 1 ? ` · ${langEn(lang)}` : ""}</h2>
+			<h2 id="h-sim">Conversation <span class="sub">{langEn(lang)}</span></h2>
 			<div class="adm-paper pad adm-grid">
 				<label class="adm-field full"
 					><span class="l">The learner is</span>
@@ -905,6 +974,30 @@ async function saveEdit(r: AdminSource) {
 	</div>
 </ModalDialog>
 
+<ModalDialog bind:open={addOpen} labelledby="add-h">
+	<h2 id="add-h" class="mb-2">Add {langEn(adding)}</h2>
+	<p class="imp-p">Start from a copy of {langEn(lang)} to translate, or from blank.</p>
+	<div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+		<Button variant="secondary" onclick={() => (addOpen = false)}>Cancel</Button>
+		<Button
+			variant="secondary"
+			onclick={() => {
+				addOpen = false;
+				addLanguage(adding);
+			}}
+			>Blank</Button
+		>
+		<Button
+			data-initial-focus
+			onclick={() => {
+				addOpen = false;
+				addLanguage(adding, lang);
+			}}
+			>Copy {langEn(lang)}</Button
+		>
+	</div>
+</ModalDialog>
+
 <ModalDialog bind:open={askOpen} labelledby="ask-h">
 	<h2 id="ask-h" class="mb-2">{asking.title}</h2>
 	<p class="imp-p">{asking.text}</p>
@@ -930,14 +1023,6 @@ async function saveEdit(r: AdminSource) {
 	color: var(--warn);
 	font-size: 14px;
 	white-space: pre-line;
-}
-.hide {
-	display: inline-flex;
-	align-items: center;
-	gap: 8px;
-	margin-left: 12px;
-	font-size: 13px;
-	color: var(--muted);
 }
 .src-why {
 	margin: 6px 0 0;
@@ -1136,6 +1221,69 @@ async function saveEdit(r: AdminSource) {
 }
 .grow {
 	flex: 1;
+}
+.sub {
+	margin-left: 6px;
+	font: 13px var(--font-sans-stack);
+	color: var(--muted);
+}
+.ver-head .sub {
+	margin: 0;
+}
+.langs {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 10px;
+}
+.tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+.tab {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	height: 32px;
+	padding: 0 10px;
+	border: 1px solid var(--line-soft);
+	border-radius: 6px;
+	background: transparent;
+	color: var(--muted);
+	font-size: 14px;
+	cursor: pointer;
+	transition:
+		background-color 150ms,
+		color 150ms,
+		border-color 150ms;
+}
+.tab:hover {
+	background: var(--hover);
+	color: var(--ink);
+}
+.tab[aria-selected="true"] {
+	border-color: var(--line);
+	background: var(--raised);
+	color: var(--ink);
+	box-shadow: var(--paper-lift);
+}
+.tab:focus-visible {
+	outline: none;
+	box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring-c) 60%, transparent);
+}
+.state {
+	font-size: 12px;
+	color: var(--muted);
+}
+.state.live {
+	color: var(--ok);
+}
+.ver-name {
+	margin: 0 4px 0 2px;
+	font-size: 15px;
+	font-weight: 500;
 }
 .ver-bar {
 	display: flex;
