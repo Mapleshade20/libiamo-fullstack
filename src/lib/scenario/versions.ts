@@ -42,6 +42,8 @@ export const TranslationVersion = z.object({
 	readers: short,
 	/** Names and terms the source must give. */
 	terms: z.array(short.min(1)).max(60).default([]),
+	/** Names and terms the source must not give, whatever the model picks: what the learner is there to learn. */
+	leaveOut: z.array(short.min(1)).max(60).default([]),
 });
 export type TranslationVersion = z.infer<typeof TranslationVersion>;
 

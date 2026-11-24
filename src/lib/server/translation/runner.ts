@@ -27,11 +27,12 @@ const SWEEP_MS = 30_000;
 const unnumbered = (p: string) => p.replace(/^\s*\[\d+\]\s*/, "").trim();
 
 /**
- * The names and terms a reader of the original needs: what the model finds, with every term the scenario says the source
- * must give.
+ * The names and terms a reader of the original needs: what the model finds, less what the scenario leaves out, with
+ * every term it says the source must give (giving wins over leaving out).
  */
 async function termsFor(v: TranslationVersion, language: Lang, ai: Caller): Promise<Term[]> {
-	const found = await extractTerms(v.original, language, `${v.where}, read by ${v.readers}`, ai);
+	const out = new Set(v.leaveOut.map((t) => t.toLowerCase()));
+	const found = (await extractTerms(v.original, language, `${v.where}, read by ${v.readers}`, ai)).filter((f) => !out.has(f.term.toLowerCase()));
 	const given = v.terms.filter((t) => !found.some((f) => f.term === t)).map((term): Term => ({ term, kind: "term", note: "" }));
 	return [...found, ...given];
 }

@@ -9,6 +9,7 @@ import { db } from "#lib/server/db/index.ts";
 import { issueScenario, piece, scenario, scenarioSource, suggestion, work } from "#lib/server/db/schema.ts";
 import { sourceIdentity } from "#lib/server/translation/identity.ts";
 import { kickSources, queueSources } from "#lib/server/translation/runner.ts";
+import { isByLine, unitsOf } from "#lib/translation/blocks.ts";
 
 /*
  * Scenarios as the admin edits them: the row whole, its versions validated by kind and place on every save, a
@@ -226,12 +227,54 @@ export async function remakeSource(sourceId: string, generation: string) {
 	kickSources();
 }
 
-/** The admin has read the source and vouches for it. */
-export async function confirmSource(sourceId: string, generation: string) {
-	await db
+export type SourceEdit = Pick<AdminSource, "title" | "text" | "glossary">;
+
+/**
+ * The admin has read the source and vouches for it, in their own wording when they edited it: kept under a new
+ * generation (a sheet showing the old one is refused when sent, and reloads) and marked edited, so making it again warns.
+ */
+export async function confirmSource(sourceId: string, generation: string, edit?: SourceEdit) {
+	if (edit) await checkEdit(sourceId, edit);
+	const [done] = await db
 		.update(scenarioSource)
-		.set({ state: "confirmed" })
-		.where(and(eq(scenarioSource.id, sourceId), eq(scenarioSource.generation, generation), inArray(scenarioSource.state, ["checked", "notes"])));
+		.set(edit ? { ...edit, state: "confirmed", notes: { edited: true }, generation: randomUUID() } : { state: "confirmed" })
+		.where(
+			and(
+				eq(scenarioSource.id, sourceId),
+				eq(scenarioSource.generation, generation),
+				inArray(scenarioSource.state, ["checked", "notes", "confirmed"]),
+			),
+		)
+		.returning({ id: scenarioSource.id });
+	if (!done) throw new ScenarioError("The source changed since this page loaded: look at it again.");
+}
+
+/** An edited source keeps the original's layout (the sheet pairs them), and each term is in both texts. */
+async function checkEdit(sourceId: string, e: SourceEdit) {
+	const [row] = await db
+		.select({ src: scenarioSource, s: scenario })
+		.from(scenarioSource)
+		.innerJoin(scenario, eq(scenario.id, scenarioSource.scenarioId))
+		.where(eq(scenarioSource.id, sourceId));
+	const v = row && (row.s.versions as Record<string, TranslationVersion>)[row.src.language];
+	if (!row?.src.text || !v || row.src.inputHash !== sourceIdentity(v, row.s.workId))
+		throw new ScenarioError("This source is not current: make it again.");
+	const byLine = isByLine(v.original);
+	const n = unitsOf(v.original).units.length;
+	const problems = [
+		e.title ? "" : "It needs a title.",
+		isByLine(e.text) === byLine && unitsOf(e.text).units.length === n ? "" : `Keep the original's ${n} ${byLine ? "lines" : "paragraphs"}.`,
+		...e.glossary.map((g) =>
+			!g.term || !g.shown || !g.gloss
+				? "Each term needs how the source shows it and what it means."
+				: !v.original.toLowerCase().includes(g.term.toLowerCase())
+					? `"${g.term}" is not in the original.`
+					: e.text.includes(g.shown)
+						? ""
+						: `"${g.shown}" is not in the source.`,
+		),
+	].filter(Boolean);
+	if (problems.length) throw new ScenarioError([...new Set(problems)].join(" "));
 }
 
 /** A free scenario id from a title: its words, lowercased, numbered when taken. */

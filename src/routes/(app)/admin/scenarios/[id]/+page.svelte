@@ -6,6 +6,7 @@ import Ellipsis from "@lucide/svelte/icons/ellipsis";
 import ExternalLink from "@lucide/svelte/icons/external-link";
 import FileUp from "@lucide/svelte/icons/file-up";
 import Lock from "@lucide/svelte/icons/lock";
+import Pencil from "@lucide/svelte/icons/pencil";
 import Plus from "@lucide/svelte/icons/plus";
 import RotateCcw from "@lucide/svelte/icons/rotate-ccw";
 import Trash2 from "@lucide/svelte/icons/trash-2";
@@ -35,6 +36,7 @@ import { openingNames, situationOf } from "#lib/exchange/opening.ts";
 import { blankOpening, blankVersion } from "#lib/scenario/blank.ts";
 import { SITE_OF } from "#lib/scenario/types.ts";
 import type { ExchangeVersion, TranslationVersion, Version } from "#lib/scenario/versions.ts";
+import type { AdminSource, SourceEdit } from "#lib/server/admin/scenarios.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
 
@@ -94,6 +96,7 @@ function take(src: Draft) {
 			threads[l] = flattenComments(copy.place, op.previousComments);
 			delete op.previousComments;
 		}
+	if (copy.kind === "translation") for (const x of Object.values(copy.versions)) (x as TranslationVersion).leaveOut ??= [];
 	d = copy;
 	lang = Object.keys(copy.versions)[0] ?? "en";
 	problem = "";
@@ -129,8 +132,14 @@ const suggested = $derived(from && parseCapture(from.situation)?.platform === d.
 let menu = $state(false);
 let jsonOpen = $state(false);
 let json = $state("");
-let withdrawing = $state(false);
-let deleting = $state(false);
+/** A step that cannot be undone, waiting on the admin's word (kept while the dialog closes, so its words stay). */
+type Ask = { title: string; text: string; act: string; go: () => void };
+let asking = $state<Ask>({ title: "", text: "", act: "", go: () => {} });
+let askOpen = $state(false);
+const ask = (a: Ask) => {
+	asking = a;
+	askOpen = true;
+};
 
 /** The opening as stored: a thread's comments nested again. */
 function openingOf(l: string, x: ExchangeVersion) {
@@ -199,12 +208,10 @@ async function save(publish: boolean) {
 	if (isNew) goto(`/admin/scenarios/${draft.id}`, { replace: true });
 }
 async function withdraw() {
-	withdrawing = false;
 	await withdrawOne(d.id).catch(() => toast("Could not withdraw it"));
 	d.status = "withdrawn";
 }
 async function remove() {
-	deleting = false;
 	const ok = await deleteOne(d.id)
 		.then(() => true)
 		.catch(() => false);
@@ -268,7 +275,7 @@ const STATE: Record<SourceState, { label: string; tone: string }> = {
 	failed: { label: "Failed", tone: "warn" },
 };
 type Issue = { paragraph: number; kind: string; original: string; source: string; note: string };
-const notesOf = (n: unknown) => (n ?? {}) as { issues?: Issue[]; names?: string[]; error?: string };
+const notesOf = (n: unknown) => (n ?? {}) as { issues?: Issue[]; names?: string[]; error?: string; edited?: boolean };
 const sources = $derived(loaded?.sources ?? []);
 // While sources are being made, the page asks again now and then.
 $effect(() => {
@@ -276,8 +283,49 @@ $effect(() => {
 	const t = setInterval(() => scenarioOne(d.id).refresh(), 10_000);
 	return () => clearInterval(t);
 });
-const sourceAct = (fn: typeof remake, sourceId: string, generation: string) =>
-	fn({ scenarioId: d.id, sourceId, generation }).catch(() => toast("Could not do that"));
+const sourceAct = (fn: typeof remake, r: AdminSource) =>
+	fn({ scenarioId: d.id, sourceId: r.id, generation: r.generation }).catch(() => toast("Could not do that"));
+// A source the admin edited is made again only once they agree to lose the edits: by "Make again", or by a save that
+// changes its version (or the work), which queues it again.
+function guarded(lost: AdminSource[], go: () => void) {
+	if (!lost.length) return go();
+	ask({
+		title: "Lose the edits?",
+		text: `The source for ${lost.map((r) => langEn(r.native)).join(", ")} is made again, and what you wrote in it goes.`,
+		act: "Make it again",
+		go,
+	});
+}
+const sig = (x: Version | undefined) =>
+	JSON.stringify({ ...x, leaveOut: (x as TranslationVersion)?.leaveOut?.length ? (x as TranslationVersion).leaveOut : undefined });
+const trySave = (publish: boolean) =>
+	guarded(
+		translate && loaded && (publish || d.status === "published")
+			? sources.filter(
+					(r) => notesOf(r.notes).edited && (d.workId !== loaded.workId || sig(d.versions[r.language]) !== sig(loaded.versions[r.language])),
+				)
+			: [],
+		() => save(publish),
+	);
+let editing = $state<(SourceEdit & { id: string }) | null>(null);
+const GLOSS = [
+	["term", "Term, as in the original"],
+	["shown", "As the source shows it"],
+	["gloss", "What it means"],
+] as const;
+let editProblem = $state("");
+const edit = (r: AdminSource) => {
+	editing = { id: r.id, title: r.title, text: r.text, glossary: structuredClone(r.glossary) };
+	editProblem = "";
+};
+async function saveEdit(r: AdminSource) {
+	if (!editing) return;
+	const { id: _, ...e } = $state.snapshot(editing);
+	await confirm({ scenarioId: d.id, sourceId: r.id, generation: r.generation, edit: e }).then(
+		() => (editing = null),
+		(err) => (editProblem = err?.body?.message ?? "Could not save it."),
+	);
+}
 </script>
 
 <div class="adm-page">
@@ -337,7 +385,12 @@ const sourceAct = (fn: typeof remake, sourceId: string, generation: string) =>
 						class="floating-menu-item"
 						onclick={() => {
 							menu = false;
-							withdrawing = true;
+							ask({
+								title: "Withdraw this scenario?",
+								text: "Learners stop finding it on the shelf and in the library. Pieces already written from it stay theirs.",
+								act: "Withdraw",
+								go: withdraw,
+							});
 						}}
 					>
 						<Undo2 class="size-4 text-muted-foreground" aria-hidden="true" />Withdraw
@@ -349,7 +402,12 @@ const sourceAct = (fn: typeof remake, sourceId: string, generation: string) =>
 						class="floating-menu-item"
 						onclick={() => {
 							menu = false;
-							deleting = true;
+							ask({
+								title: "Delete this draft?",
+								text: "Nobody has written in it. It is gone for good, and leaves any issue it was in.",
+								act: "Delete",
+								go: remove,
+							});
 						}}
 					>
 						<Trash2 class="size-4 text-muted-foreground" aria-hidden="true" />Delete
@@ -357,10 +415,10 @@ const sourceAct = (fn: typeof remake, sourceId: string, generation: string) =>
 				{/if}
 			</FloatingPanel>
 			{#if d.status === "published"}
-				<Button onclick={() => save(false)} disabled={saving}>Save</Button>
+				<Button onclick={() => trySave(false)} disabled={saving}>Save</Button>
 			{:else}
-				<Button variant="secondary" onclick={() => save(false)} disabled={saving}>Save draft</Button>
-				<Button onclick={() => save(true)} disabled={saving}>{d.status === "withdrawn" ? "Publish again" : "Publish"}</Button>
+				<Button variant="secondary" onclick={() => trySave(false)} disabled={saving}>Save draft</Button>
+				<Button onclick={() => trySave(true)} disabled={saving}>{d.status === "withdrawn" ? "Publish again" : "Publish"}</Button>
 			{/if}
 		</div>
 	</header>
@@ -559,29 +617,33 @@ const sourceAct = (fn: typeof remake, sourceId: string, generation: string) =>
 		</div>
 	</section>
 
-	{#if tv}
-		<section class="adm-section" aria-labelledby="h-terms">
-			<h2 id="h-terms">Terms the source must give <span class="n">{tv.terms.length}</span></h2>
+	{#snippet termList(list: string[], id: string, heading: string, hint: string)}
+		<section class="adm-section" aria-labelledby={id}>
+			<h2 {id}>{heading} <span class="n">{list.length}</span></h2>
 			<div class="adm-paper">
-				{#if tv.terms.length}
+				{#if list.length}
 					<ul class="adm-rows">
-						{#each tv.terms as _, i (i)}
+						{#each list as _, i (i)}
 							<li class="term">
-								<input class="adm-input plain" bind:value={tv.terms[i]} aria-label="Term" placeholder="Term, as in the original" {lang}>
-								<button type="button" class="adm-icon" aria-label="Remove {tv.terms[i]}" use:tip={"Remove"} onclick={() => tv.terms.splice(i, 1)}>
+								<input class="adm-input plain" bind:value={list[i]} aria-label="Term" placeholder="Term, as in the original" {lang}>
+								<button type="button" class="adm-icon" aria-label="Remove {list[i]}" use:tip={"Remove"} onclick={() => list.splice(i, 1)}>
 									<X class="size-4" aria-hidden="true" />
 								</button>
 							</li>
 						{/each}
 					</ul>
 				{/if}
-				<div class="foot" class:only={!tv.terms.length}>
-					<Button variant="ghost" size="sm" onclick={() => tv.terms.push("")}><Plus aria-hidden="true" />Add a term</Button>
-					<span class="h grow">The model finds the others; what each means is written with each source.</span>
+				<div class="foot" class:only={!list.length}>
+					<Button variant="ghost" size="sm" onclick={() => list.push("")}><Plus aria-hidden="true" />Add a term</Button>
+					<span class="h grow">{hint}</span>
 					<a class="text-link" href="/admin/names">How names are written</a>
 				</div>
 			</div>
 		</section>
+	{/snippet}
+	{#if tv}
+		{@render termList(tv.terms, "h-terms", "Terms the source must give", "The model finds the others; what each means is written with each source.")}
+		{@render termList(tv.leaveOut, "h-out", "Terms it must not give", "What the learner is here to learn, which the model would give otherwise.")}
 
 		{#if !isNew}
 			<section class="adm-section" aria-labelledby="h-src">
@@ -594,21 +656,26 @@ const sourceAct = (fn: typeof remake, sourceId: string, generation: string) =>
 								<li class="src">
 									<div class="src-head">
 										<span class="nm">{langEn(r.native)}{Object.keys(d.versions).length > 1 ? ` → ${langEn(r.language)}` : ""}</span>
-										<span class="adm-tag {STATE[r.state].tone}">{STATE[r.state].label}</span>
+										<span class="adm-tag {STATE[r.state].tone}">{STATE[r.state].label}{n.edited ? ", edited" : ""}</span>
 										<span class="grow"></span>
+										{#if r.text && r.state !== "pending" && editing?.id !== r.id}
+											<button type="button" class="adm-icon" aria-label="Edit" use:tip={"Edit"} onclick={() => edit(r)}>
+												<Pencil class="size-4" aria-hidden="true" />
+											</button>
+										{/if}
 										{#if r.state !== "pending"}
 											<button
 												type="button"
 												class="adm-icon"
 												aria-label="Make again"
 												use:tip={"Make again"}
-												onclick={() => sourceAct(remake, r.id, r.generation)}
+												onclick={() => guarded(n.edited ? [r] : [], () => sourceAct(remake, r))}
 											>
 												<RotateCcw class="size-4" aria-hidden="true" />
 											</button>
 										{/if}
 										{#if r.state === "checked" || (r.state === "notes" && !n.names?.length)}
-											<Button size="sm" onclick={() => sourceAct(confirm, r.id, r.generation)}>Confirm</Button>
+											<Button size="sm" onclick={() => sourceAct(confirm, r)}>Confirm</Button>
 										{/if}
 									</div>
 									{#if n.names?.length}
@@ -619,7 +686,52 @@ const sourceAct = (fn: typeof remake, sourceId: string, generation: string) =>
 									{:else if n.error}
 										<p class="src-why">{n.error}</p>
 									{/if}
-									{#if n.issues?.length || r.text}
+									{#if editing?.id === r.id}
+										<div class="src-edit">
+											<input class="adm-input" bind:value={editing.title} aria-label="Title" lang={r.native}>
+											<textarea
+												class="adm-input"
+												rows="6"
+												use:autogrow={editing.text}
+												bind:value={editing.text}
+												aria-label="Source"
+												lang={r.native}
+											></textarea>
+											{#each editing.glossary as g, i (i)}
+												<div class="gl">
+													{#each GLOSS as [k, label]}
+														<input
+															class="adm-input"
+															bind:value={g[k]}
+															aria-label={label}
+															placeholder={label}
+															lang={k === "term" ? r.language : r.native}
+														>
+													{/each}
+													<button
+														type="button"
+														class="adm-icon"
+														aria-label="Remove {g.term}"
+														use:tip={"Remove"}
+														onclick={() => editing?.glossary.splice(i, 1)}
+													>
+														<X class="size-4" aria-hidden="true" />
+													</button>
+												</div>
+											{/each}
+											{#if editProblem}
+												<p class="src-why" role="alert">{editProblem}</p>
+											{/if}
+											<div class="foot only">
+												<Button variant="ghost" size="sm" onclick={() => editing?.glossary.push({ term: "", shown: "", gloss: "" })}
+													><Plus aria-hidden="true" />Add a term</Button
+												>
+												<span class="grow"></span>
+												<Button variant="secondary" size="sm" onclick={() => (editing = null)}>Cancel</Button>
+												<Button size="sm" onclick={() => saveEdit(r)}>Confirm as edited</Button>
+											</div>
+										</div>
+									{:else if n.issues?.length || r.text}
 										<Accordion
 											variant="plain"
 											title={n.issues?.length ? `${n.issues.length} ${n.issues.length > 1 ? "notes" : "note"} from the check` : "The source"}
@@ -637,6 +749,13 @@ const sourceAct = (fn: typeof remake, sourceId: string, generation: string) =>
 											{/if}
 											{#if r.text}
 												<p class="src-text" lang={r.native}>{r.text}</p>
+											{/if}
+											{#if r.glossary.length}
+												<ul class="notes">
+													{#each r.glossary as g}
+														<li><span lang={r.language}>{g.term}</span> → <span lang={r.native}>{g.shown}</span>: {g.gloss}</li>
+													{/each}
+												</ul>
 											{/if}
 										</Accordion>
 									{/if}
@@ -784,21 +903,19 @@ const sourceAct = (fn: typeof remake, sourceId: string, generation: string) =>
 	</div>
 </ModalDialog>
 
-<ModalDialog bind:open={withdrawing} labelledby="wd-h">
-	<h2 id="wd-h" class="mb-2">Withdraw this scenario?</h2>
-	<p class="imp-p">Learners stop finding it on the shelf and in the library. Pieces already written from it stay theirs.</p>
+<ModalDialog bind:open={askOpen} labelledby="ask-h">
+	<h2 id="ask-h" class="mb-2">{asking.title}</h2>
+	<p class="imp-p">{asking.text}</p>
 	<div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-		<Button variant="secondary" onclick={() => (withdrawing = false)} data-initial-focus>Cancel</Button>
-		<Button variant="destructive-solid" onclick={withdraw}>Withdraw</Button>
-	</div>
-</ModalDialog>
-
-<ModalDialog bind:open={deleting} labelledby="del-h">
-	<h2 id="del-h" class="mb-2">Delete this draft?</h2>
-	<p class="imp-p">Nobody has written in it. It is gone for good, and leaves any issue it was in.</p>
-	<div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-		<Button variant="secondary" onclick={() => (deleting = false)} data-initial-focus>Cancel</Button>
-		<Button variant="destructive-solid" onclick={remove}>Delete</Button>
+		<Button variant="secondary" onclick={() => (askOpen = false)} data-initial-focus>Cancel</Button>
+		<Button
+			variant="destructive-solid"
+			onclick={() => {
+				askOpen = false;
+				asking.go();
+			}}
+			>{asking.act}</Button
+		>
 	</div>
 </ModalDialog>
 
@@ -1102,6 +1219,17 @@ const sourceAct = (fn: typeof remake, sourceId: string, generation: string) =>
 }
 .src-head .nm {
 	font-size: 15px;
+}
+.src-edit {
+	display: grid;
+	gap: 8px;
+	margin: 6px 0 10px;
+}
+.gl {
+	display: grid;
+	grid-template-columns: 1fr 1fr 2fr auto;
+	gap: 6px;
+	align-items: center;
 }
 .src :global(.src-acc) {
 	margin-top: 4px;

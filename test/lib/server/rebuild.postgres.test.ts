@@ -10,6 +10,7 @@ const config = vi.hoisted(() => ({
 	url: process.env.TEST_POSTGRES_URL,
 	name: `libiamo_test_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
 	send: vi.fn(),
+	extractTerms: vi.fn(),
 	makeSource: vi.fn(),
 	user: { id: "learner", name: "Learner", helpImprove: true, nativeLanguage: "zh-CN", tutorLanguage: "native", timeZone: "UTC" },
 }));
@@ -33,7 +34,7 @@ vi.mock("#lib/server/llm/transport.ts", async (original) => ({
 }));
 vi.mock("#lib/server/guard.ts", () => ({ learner: () => config.user, admin: () => config.user }));
 vi.mock("#lib/server/translation/source.ts", () => ({
-	extractTerms: async () => [],
+	extractTerms: config.extractTerms,
 	makeSource: config.makeSource,
 	checkSource: async () => ({ issues: [] }),
 	repairSource: async () => [],
@@ -41,7 +42,7 @@ vi.mock("#lib/server/translation/source.ts", () => ({
 
 import { encryptKey } from "#lib/server/account/key.ts";
 import { inbox } from "#lib/server/admin/inbox.ts";
-import { adminScenario, scenarioFromSuggestion } from "#lib/server/admin/scenarios.ts";
+import { adminScenario, confirmSource, remakeSource, scenarioFromSuggestion } from "#lib/server/admin/scenarios.ts";
 import { sessionOf, sessions } from "#lib/server/admin/sessions.ts";
 import { deleteUser, users } from "#lib/server/admin/users.ts";
 import { db, sql } from "#lib/server/db/index.ts";
@@ -176,6 +177,7 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 		await db.insert(user).values({ id: learner.id, email: "learner@example.test", name: "Learner" });
 		config.send.mockReset().mockResolvedValue({ text: "OK", usage: {}, ms: 1, costUsd: 0 });
 		config.makeSource.mockReset().mockResolvedValue({ title: "菜单", source: ["汤"], glossary: [] });
+		config.extractTerms.mockReset().mockResolvedValue([]);
 	});
 
 	it("prunes the snapshots finished pieces left behind, and only those", async () => {
@@ -728,6 +730,37 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 		const [source] = await db.select().from(scenarioSource);
 		expect(source.state).toBe("pending");
 		expect(source.inputHash).toBe(sourceIdentity({ ...version, original: "Cake" }, null));
+	});
+
+	it("leaves out what the scenario says, and keeps an admin's edit only when it fits the original", async () => {
+		config.extractTerms.mockResolvedValue([
+			{ term: "Soup", kind: "term", note: "" },
+			{ term: "Bread", kind: "term", note: "" },
+		]);
+		await importContent(db, content("Soup and bread\n\nTea"));
+		await db.update(scenario).set({ versions: { en: { ...version, original: "Soup and bread\n\nTea", leaveOut: ["bread"] } } });
+		await queueSources("menu", { natives: ["zh-CN"] });
+		const [made] = await db.select().from(scenarioSource);
+		await makeSourceRow(made.id, new Caller({ route: null }));
+		expect(config.makeSource.mock.calls[0][1].map((t: { term: string }) => t.term)).toEqual(["Soup"]);
+
+		await db.update(scenarioSource).set({ text: "汤和面包\n\n茶", state: "checked" });
+		const [src] = await db.select().from(scenarioSource);
+		const edit = { title: "菜单", text: "汤和面包\n\n茶", glossary: [{ term: "Soup", shown: "汤", gloss: "一道菜" }] };
+		const refused = (e: Partial<typeof edit>) => confirmSource(src.id, src.generation, { ...edit, ...e }).catch((x: Error) => x.message);
+		expect(await refused({ text: "汤和面包，茶" })).toBe("Keep the original's 2 paragraphs.");
+		expect(await refused({ glossary: [{ term: "Cake", shown: "汤", gloss: "x" }] })).toBe('"Cake" is not in the original.');
+		expect(await refused({ glossary: [{ term: "Soup", shown: "羹", gloss: "x" }] })).toBe('"羹" is not in the source.');
+		await confirmSource(src.id, src.generation, edit);
+		const [kept] = await db.select().from(scenarioSource);
+		expect(kept).toMatchObject({ state: "confirmed", notes: { edited: true }, text: edit.text, glossary: edit.glossary });
+		expect(kept.generation).not.toBe(src.generation);
+		// The page that loaded the old one is told; the learner's sheet has the edit.
+		expect(await refused({})).toBe("The source changed since this page loaded: look at it again.");
+		expect((await sheetOf(learner, "menu", "en"))?.scenario.situation).toMatchObject({ source: edit.text, glossary: edit.glossary });
+		// Made again, it is the model's once more.
+		await remakeSource(src.id, kept.generation);
+		expect((await db.select().from(scenarioSource))[0]).toMatchObject({ state: "pending", notes: null });
 	});
 
 	it("a superseded generator cannot consume a new request for the same original", async () => {

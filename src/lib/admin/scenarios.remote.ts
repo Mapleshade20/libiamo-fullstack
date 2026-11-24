@@ -78,11 +78,29 @@ export const remake = command(
 	},
 );
 
+const line = (max: number) => z.string().trim().max(max);
+/** Confirms a source, as the admin edited it when `edit` is given (refused with what to fix). */
 export const confirm = command(
-	z.object({ scenarioId: z.string().max(60), sourceId: z.uuid(), generation: z.uuid() }),
-	async ({ scenarioId, sourceId, generation }) => {
+	z.object({
+		scenarioId: z.string().max(60),
+		sourceId: z.uuid(),
+		generation: z.uuid(),
+		edit: z
+			.object({
+				title: line(200),
+				text: line(20_000).min(1),
+				glossary: z.array(z.object({ term: line(120), shown: line(120), gloss: line(400) })).max(80),
+			})
+			.optional(),
+	}),
+	async ({ scenarioId, sourceId, generation, edit }) => {
 		admin();
-		await confirmSource(sourceId, generation);
+		try {
+			await confirmSource(sourceId, generation, edit);
+		} catch (e) {
+			if (e instanceof ScenarioError) error(400, e.message);
+			throw e;
+		}
 		await Promise.all([scenarioOne(scenarioId).refresh(), scenarioList().refresh(), waiting().refresh()]);
 	},
 );
