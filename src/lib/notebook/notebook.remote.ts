@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { LEARNABLE, VERDICTS } from "#lib/constants.ts";
+import { LEARNABLE, REGISTERS, VERDICTS } from "#lib/constants.ts";
 import { learner } from "#lib/server/guard.ts";
 import {
 	addReading,
@@ -42,10 +42,18 @@ export const due = query(language, async (lang): Promise<DueSummary> => dueOf(le
 /** A review sitting's cards. */
 export const reviewQueue = query(language, async (lang): Promise<ReviewCard[]> => queueOf(learner(), lang));
 
+const line = (max: number) => z.string().trim().max(max);
 export const changeNote = command(
-	z.object({ id: noteId, phrase: z.string().trim().min(1).max(120), gloss: z.string().trim().max(400) }),
-	async ({ id, phrase, gloss }) => {
-		await editNote(learner(), id, { phrase, gloss });
+	z.object({
+		id: noteId,
+		phrase: line(120).min(1),
+		gloss: line(400),
+		usage: line(600),
+		register: z.enum(REGISTERS).nullable(),
+		examples: z.array(z.object({ t: line(400).min(1), n: line(400).optional(), span: line(200).optional() })).max(8),
+	}),
+	async ({ id, ...set }) => {
+		await editNote(learner(), id, set);
 		// The page says which of its lists to send back changed (the entry, the notebook).
 		await Promise.all([requested(noteById, 1).refreshAll(), requested(notebook, 1).refreshAll()]);
 	},

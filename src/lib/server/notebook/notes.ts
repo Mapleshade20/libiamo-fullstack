@@ -3,7 +3,7 @@ import { and, asc, desc, eq, inArray, isNull, lt, lte, or, sql } from "drizzle-o
 import { z } from "zod";
 import type { Register, Verdict } from "#lib/constants.ts";
 import type { DueSummary, Example, Note, NotebookGlance, NotebookPage, NoteFrom, NoteRow, ReviewCard } from "#lib/notebook/types.ts";
-import { noteFaces } from "#lib/review/faces.ts";
+import { around, noteFaces } from "#lib/review/faces.ts";
 import type { RatingName } from "#lib/review/types.ts";
 import { db } from "#lib/server/db/index.ts";
 import { note, piece, reading, reviewLog } from "#lib/server/db/schema.ts";
@@ -294,8 +294,26 @@ export async function noteOf(u: Learner, id: string, now = new Date()): Promise<
 	return row ? view(rowsOf([row])[0], now, zoneOf(u)) : null;
 }
 
-export async function editNote(u: Learner, id: string, set: { phrase: string; gloss: string }) {
-	await db.update(note).set({ phrase: set.phrase, meaning: set.gloss }).where(mine(u.id, id));
+export type NoteChange = { phrase: string; gloss: string; usage: string; register: Register | null; examples: Example[] };
+/**
+ * The learner's own wording of an entry. Where it came from (their sentence, what they first wrote, what they read) is a
+ * record and stays. "How it is used" is `usage` on their own entries and `why` on collected ones; an example keeps the
+ * words its card blanks only while they are in it.
+ */
+export async function editNote(u: Learner, id: string, set: NoteChange) {
+	const own = sql`${note.kind} = 'own'`;
+	const usage = set.usage || null;
+	await db
+		.update(note)
+		.set({
+			phrase: set.phrase,
+			meaning: set.gloss,
+			usage: sql`case when ${own} then ${usage} else ${note.usage} end`,
+			why: sql`case when ${own} then ${note.why} else ${usage} end`,
+			register: set.register,
+			examples: set.examples.map(({ t, n, span }) => ({ t, ...(n ? { n } : {}), ...(span && around(t, span) ? { span } : {}) })),
+		})
+		.where(mine(u.id, id));
 }
 
 /** A deleted entry leaves the notebook and review; its row stays with its review history until the account goes. */

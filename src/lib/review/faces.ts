@@ -24,23 +24,28 @@ export const fixedPart = (phrase: string) =>
 		.map((x) => x.trim().replace(/^[,;]\s*|[,;]$/g, ""))
 		.sort((a, b) => b.length - a.length)[0] ?? "";
 
+/** Where each piece of a span ("framed … as") is in a sentence, in order and whatever the case; null when one is not. */
+export function spanRanges(text: string, span: string): [number, number][] | null {
+	const low = text.toLowerCase();
+	const out: [number, number][] = [];
+	for (const piece of span.split(/\s*…\s*/).filter(Boolean)) {
+		const at = low.indexOf(piece.toLowerCase(), out.at(-1)?.[1] ?? 0);
+		if (at < 0) return null;
+		out.push([at, at + piece.length]);
+	}
+	return out.length ? out : null;
+}
+
 /**
  * A sentence split around the words that matter in it, for marking or blanking them; null when they are not in it. A
  * span in pieces ("framed … as") is the stretch from the first to the last, with the words between them `given`.
  */
 export function around(text: string, part: string) {
-	const low = text.toLowerCase();
-	const given: string[] = [];
-	let from = -1;
-	let to = 0;
-	for (const piece of part.split(/\s*…\s*/).filter(Boolean)) {
-		const at = low.indexOf(piece.toLowerCase(), to);
-		if (at < 0) return null;
-		if (from < 0) from = at;
-		else given.push(text.slice(to, at).trim());
-		to = at + piece.length;
-	}
-	return from < 0 ? null : { before: text.slice(0, from), part: text.slice(from, to), after: text.slice(to), given };
+	const r = spanRanges(text, part);
+	if (!r) return null;
+	const [from, to] = [r[0][0], r[r.length - 1][1]];
+	const given = r.slice(1).map(([at], i) => text.slice(r[i][1], at).trim());
+	return { before: text.slice(0, from), part: text.slice(from, to), after: text.slice(to), given };
 }
 
 /** What a card asks of a sentence found `around` its span: the stretch, and the words in it the learner is given. */

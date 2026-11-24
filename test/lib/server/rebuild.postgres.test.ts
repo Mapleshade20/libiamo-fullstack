@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import postgres from "postgres";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -72,6 +72,7 @@ import { learnerCaller } from "#lib/server/llm/callers.ts";
 import { pruneCalls, writeRecord } from "#lib/server/llm/records.ts";
 import {
 	addReading,
+	editNote,
 	fileCollected,
 	NOTEBOOK_PAGE,
 	notebookGlance,
@@ -243,6 +244,55 @@ describe.skipIf(!config.url)("rebuild boundaries on PostgreSQL", () => {
 		const left = new Set((await db.select({ id: pieceStep.pieceId }).from(pieceStep)).map((r) => r.id));
 		expect(left.has(old) || left.has(quiet) || left.has(settled)).toBe(false);
 		expect([held, recent, open, studied].every((id) => left.has(id))).toBe(true);
+	});
+
+	it("edits an entry's own words, never where it came from, and keeps an example's blank only while its words are there", async () => {
+		const base = { userId: learner.id, language: "en", meaningLanguage: "zh-CN", fsrs: newCard(new Date(), "UTC"), due: new Date() };
+		const [own, read] = await db
+			.insert(note)
+			.values([
+				{
+					...base,
+					kind: "own",
+					phrase: "frame as",
+					meaning: "m",
+					sentence: "You framed it as a choice.",
+					was: "You said it was a choice.",
+					marked: "framed … as",
+				},
+				{ ...base, kind: "collected", phrase: "out loud", meaning: "m", sentence: "Say it out loud.", marked: "out loud" },
+			])
+			.returning();
+		const set = {
+			phrase: "frame something as",
+			gloss: "把……说成",
+			usage: "Used for spin.",
+			register: "formal" as const,
+			examples: [
+				{ t: "He framed the delay as a rest.", n: "他把延误说成休息。", span: "framed … as" },
+				{ t: "Nothing of it here.", span: "framed" },
+			],
+		};
+		await editNote(learner, own.id, set);
+		await editNote(learner, read.id, { ...set, register: null });
+		const [a, b] = await db
+			.select()
+			.from(note)
+			.where(inArray(note.id, [own.id, read.id]))
+			.orderBy(note.id);
+		expect(a).toMatchObject({
+			phrase: "frame something as",
+			meaning: "把……说成",
+			usage: "Used for spin.",
+			why: null,
+			register: "formal",
+			sentence: own.sentence,
+			was: own.was,
+			marked: own.marked,
+			examples: [{ t: "He framed the delay as a rest.", n: "他把延误说成休息。", span: "framed … as" }, { t: "Nothing of it here." }],
+		});
+		// A collected entry says why it is worth taking where an own one says how it is used.
+		expect(b).toMatchObject({ usage: null, why: "Used for spin.", register: null, sentence: read.sentence, marked: read.marked });
 	});
 
 	it("reads the notebook a page at a time, newest first, filtered on the server", async () => {
